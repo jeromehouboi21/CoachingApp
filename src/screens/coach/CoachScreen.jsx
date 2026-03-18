@@ -42,13 +42,14 @@ export function CoachScreen() {
     if (!msgs || msgs.length < 3) return
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/post-conversation`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             messages: msgs.map(m => ({ role: m.role, content: m.content })),

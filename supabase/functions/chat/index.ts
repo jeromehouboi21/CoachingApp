@@ -1,4 +1,4 @@
-import Anthropic from 'npm:@anthropic-ai/sdk';
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
 
 function createLogger(fn: string) {
   const ts = () => new Date().toISOString();

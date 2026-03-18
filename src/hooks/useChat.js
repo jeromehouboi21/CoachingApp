@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES } from '../lib/prompts'
 
-async function fetchRagContext(firstMessage, session) {
+async function fetchRagContext(firstMessage, accessToken) {
   try {
     const response = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rag-search`,
@@ -10,7 +10,7 @@ async function fetchRagContext(firstMessage, session) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ firstMessage }),
       }
@@ -75,13 +75,18 @@ export function useChat(userId, memory) {
       })
     }
 
+    const { data: { session } } = await supabase.auth.getSession()
+    const accessToken = session?.access_token
+    if (!accessToken) {
+      setIsLoading(false)
+      return
+    }
+
     // RAG-Suche beim ersten Nutzer-Input (fire-and-forget, parallel zum Streaming)
     if (isFirstUserMessageRef.current) {
       isFirstUserMessageRef.current = false
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        fetchRagContext(content, session).then(ctx => {
-          ragContextRef.current = ctx
-        })
+      fetchRagContext(content, accessToken).then(ctx => {
+        ragContextRef.current = ctx
       })
     }
 
@@ -89,14 +94,13 @@ export function useChat(userId, memory) {
     setMessages(prev => [...prev, assistantMessage])
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
@@ -165,13 +169,14 @@ export function useChat(userId, memory) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) return null
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
             messages: messages.map(m => ({ role: m.role, content: m.content })),
