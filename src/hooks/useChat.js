@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES } from '../lib/prompts'
 
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 async function fetchRagContext(firstMessage, accessToken) {
   try {
     const response = await fetch(
@@ -10,6 +12,7 @@ async function fetchRagContext(firstMessage, accessToken) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'apikey': ANON_KEY,
           'Authorization': `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ firstMessage }),
@@ -100,6 +103,7 @@ export function useChat(userId, memory) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
             'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
@@ -176,6 +180,7 @@ export function useChat(userId, memory) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
             'Authorization': `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
