@@ -1,20 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
+import { useMemory } from '../../hooks/useMemory'
 import { ChatBubble } from '../../components/coach/ChatBubble'
 import { TypingIndicator } from '../../components/coach/TypingIndicator'
 import { ChatInput } from '../../components/coach/ChatInput'
 import { QuickReplies } from '../../components/coach/QuickReplies'
-import { ScaleSlider } from '../../components/ui/ScaleSlider'
+import { ConversationEndModal } from '../../components/coach/ConversationEndModal'
 import { Badge } from '../../components/ui/Badge'
+import { supabase } from '../../lib/supabase'
 
 export function CoachScreen() {
   const { user, profile } = useAuth()
-  const { messages, isLoading, startNewConversation, sendMessage } = useChat(user?.id)
+  const { memory, updateMemory } = useMemory(user?.id)
+  const { messages, isLoading, conversationId, startNewConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
   const bottomRef = useRef(null)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
+  const [endModal, setEndModal] = useState(null) // { content, category }
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
   useEffect(() => {
@@ -25,17 +29,92 @@ export function CoachScreen() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
-  const handleSend = async (content) => {
+  const handleSend = async (content, inputMode = 'text') => {
     if (profile?.plan === 'free' && sessionsLeft <= 0) {
       setShowLimitModal(true)
       return
     }
     setShowQuickReplies(false)
-    await sendMessage(content)
+    await sendMessage(content, inputMode)
   }
 
-  const handleScaleSubmit = (value) => {
-    handleSend(`Ich würde sagen: ${value} von 10.`)
+  const runPostConversation = useCallback(async (msgs, convId) => {
+    if (!msgs || msgs.length < 3) return
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/post-conversation`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: msgs.map(m => ({ role: m.role, content: m.content })),
+            conversationId: convId,
+          }),
+        }
+      )
+    } catch {
+      // Fire-and-forget — Fehler nicht an den Nutzer weiterleiten
+    }
+  }, [])
+
+  const handleNewConversation = async () => {
+    // Gedächtnis extrahieren bevor neues Gespräch startet
+    if (messages.length >= 3) {
+      // Post-processing fire-and-forget (RAG + Selbstreflexion)
+      runPostConversation(messages, conversationId)
+
+      const extracted = await extractMemoryAndInsight()
+      if (extracted) {
+        // Memory im Hintergrund aktualisieren
+        if (extracted.themes || extracted.patterns || extracted.strengths || extracted.context) {
+          await updateMemory({
+            themes: extracted.themes || memory?.themes || [],
+            patterns: extracted.patterns || memory?.patterns || [],
+            strengths: extracted.strengths || memory?.strengths || [],
+            context: { ...(memory?.context || {}), ...(extracted.context || {}) },
+          })
+        }
+        // Conversation-Summary speichern
+        if (conversationId && extracted.key_insight) {
+          await supabase
+            .from('conversations')
+            .update({ key_insight: extracted.key_insight, memory_updated: true })
+            .eq('id', conversationId)
+        }
+        // Erkenntnis vorschlagen
+        if (extracted.suggested_insight?.content) {
+          setEndModal(extracted.suggested_insight)
+          return // Modal zeigen, neues Gespräch danach
+        }
+      }
+    }
+    startNewConversation()
+    setShowQuickReplies(true)
+  }
+
+  const handleInsightConfirm = async (insight) => {
+    if (user) {
+      await supabase.from('insights').insert({
+        user_id: user.id,
+        conversation_id: conversationId,
+        content: insight.content,
+        category: insight.category,
+        source: 'auto',
+      })
+    }
+    setEndModal(null)
+    startNewConversation()
+    setShowQuickReplies(true)
+  }
+
+  const handleInsightSkip = () => {
+    setEndModal(null)
+    startNewConversation()
+    setShowQuickReplies(true)
   }
 
   return (
@@ -48,8 +127,9 @@ export function CoachScreen() {
             <p className="text-[13px] text-ink-3">Fragen, die dich anders denken lassen</p>
           </div>
           <button
-            onClick={() => startNewConversation()}
-            className="flex items-center gap-1.5 bg-surface-2 text-ink text-[13px] font-medium px-3 py-1.5 rounded-full border border-[var(--color-border)] hover:bg-accent-light hover:text-accent transition-all"
+            onClick={handleNewConversation}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 bg-surface-2 text-ink text-[13px] font-medium px-3 py-1.5 rounded-full border border-[var(--color-border)] hover:bg-accent-light hover:text-accent transition-all disabled:opacity-50"
           >
             <Plus size={14} />
             Neues Gespräch
@@ -88,6 +168,15 @@ export function CoachScreen() {
       <div className="sticky bottom-0">
         <ChatInput onSend={handleSend} disabled={isLoading} />
       </div>
+
+      {/* Gesprächs-Abschluss Modal */}
+      {endModal && (
+        <ConversationEndModal
+          suggestion={endModal}
+          onConfirm={handleInsightConfirm}
+          onSkip={handleInsightSkip}
+        />
+      )}
 
       {/* Limit Modal */}
       {showLimitModal && (

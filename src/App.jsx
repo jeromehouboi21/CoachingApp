@@ -1,10 +1,14 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { AppShell } from './components/layout/AppShell'
-import { OnboardingFlow } from './screens/onboarding/OnboardingFlow'
+import { LandingScreen } from './screens/landing/LandingScreen'
+import { AuthScreen } from './screens/landing/AuthScreen'
+import { WelcomeScreen } from './screens/landing/WelcomeScreen'
 import { HomeScreen } from './screens/home/HomeScreen'
 import { CoachScreen } from './screens/coach/CoachScreen'
+import { MirrorScreen } from './screens/mirror/MirrorScreen'
 import { ProfileScreen } from './screens/profile/ProfileScreen'
+import { HowItWorksScreen } from './screens/howto/HowItWorksScreen'
 
 function LoadingScreen() {
   return (
@@ -21,42 +25,37 @@ function LoadingScreen() {
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <LoadingScreen />
-  if (!user) return <Navigate to="/onboarding" replace />
+  if (!user) return <Navigate to="/landing" replace />
   return children
 }
 
 export default function App() {
-  const { user, profile, loading } = useAuth()
+  const { user, loading } = useAuth()
 
   if (loading) return <LoadingScreen />
 
   return (
     <Routes>
-      <Route
-        path="/onboarding"
-        element={user ? <Navigate to="/home" replace /> : <OnboardingFlow />}
-      />
+      {/* Öffentliche Einstiegs-Screens */}
+      <Route path="/landing" element={user ? <Navigate to="/home" replace /> : <LandingScreen />} />
+      <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <AuthScreen />} />
+      <Route path="/welcome" element={<ProtectedRoute><WelcomeScreen /></ProtectedRoute>} />
+
+      {/* "Wie es funktioniert" — kein AppShell, eigenes Layout */}
+      <Route path="/howto" element={<ProtectedRoute><HowItWorksScreen /></ProtectedRoute>} />
+
+      {/* Haupt-App mit BottomNav */}
       <Route element={<AppShell />}>
-        <Route
-          path="/home"
-          element={<ProtectedRoute><HomeScreen /></ProtectedRoute>}
-        />
-        <Route
-          path="/coach"
-          element={<ProtectedRoute><CoachScreen /></ProtectedRoute>}
-        />
-        <Route
-          path="/profile"
-          element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>}
-        />
+        <Route path="/home" element={<ProtectedRoute><HomeScreen /></ProtectedRoute>} />
+        <Route path="/coach" element={<ProtectedRoute><CoachScreen /></ProtectedRoute>} />
+        <Route path="/mirror" element={<ProtectedRoute><MirrorScreen /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
       </Route>
+
+      {/* Fallback */}
       <Route
         path="*"
-        element={
-          loading ? <LoadingScreen /> :
-          user ? <Navigate to="/home" replace /> :
-          <Navigate to="/onboarding" replace />
-        }
+        element={user ? <Navigate to="/home" replace /> : <Navigate to="/landing" replace />}
       />
     </Routes>
   )

@@ -1,12 +1,24 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 export function ProfileScreen() {
   const { profile, user, signOut } = useAuth()
   const navigate = useNavigate()
+  const [insightCount, setInsightCount] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('insights')
+      .select('id', { count: 'exact' })
+      .eq('user_id', user.id)
+      .then(({ count }) => setInsightCount(count || 0))
+  }, [user])
   const name = profile?.display_name || user?.email?.split('@')[0] || 'Unbekannt'
 
   const handleSignOut = async () => {
@@ -26,14 +38,18 @@ export function ProfileScreen() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-8">
+      <div className="grid grid-cols-3 gap-3 mb-8">
         <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
           <p className="text-[24px] font-display text-ink">{profile?.streak_count || 0}</p>
           <p className="text-[12px] text-ink-3">Tage Streak</p>
         </div>
         <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
           <p className="text-[24px] font-display text-ink">{profile?.sessions_used_this_month || 0}</p>
-          <p className="text-[12px] text-ink-3">Gespräche diesen Monat</p>
+          <p className="text-[12px] text-ink-3">Gespräche</p>
+        </div>
+        <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
+          <p className="text-[24px] font-display text-ink">{insightCount}</p>
+          <p className="text-[12px] text-ink-3">Erkenntnisse</p>
         </div>
       </div>
 
@@ -42,7 +58,7 @@ export function ProfileScreen() {
         <div className="absolute right-0 top-0 w-24 h-24 bg-white/5 rounded-full translate-x-6 -translate-y-6" />
         <p className="text-[11px] text-white/70 uppercase tracking-[0.08em] mb-2">Echtes Coaching</p>
         <h2 className="font-display text-[20px] text-white leading-[1.3] mb-2">Bereit für den nächsten Schritt?</h2>
-        <p className="text-[13px] text-white/80 mb-4">Arbeite persönlich mit Jerome — zertifizierter systemischer Coach.</p>
+        <p className="text-[13px] text-white/80 mb-4">Arbeite persönlich mit Jerome — zertifizierter systemischer Coach · Paracelsus · 160 Unterrichtsstunden.</p>
         <a
           href="https://www.friedensstifter.coach/contact/"
           target="_blank"
@@ -57,6 +73,7 @@ export function ProfileScreen() {
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         {[
           { icon: User, label: 'Profil bearbeiten', action: null },
+          { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           { icon: CreditCard, label: 'Plan & Abonnement', action: null },
           { icon: Shield, label: 'Datenschutzerklärung', action: null },
         ].map(({ icon: Icon, label, action }) => (

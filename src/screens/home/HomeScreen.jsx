@@ -1,10 +1,12 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Card } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
 import { getDailyImpulse } from '../../lib/prompts'
-import { Compass, Scale, Flame, BookOpen } from 'lucide-react'
+import { Compass, Scale, Flame, BookOpen, Info, ChevronRight } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 const TOOL_CARDS = [
   {
@@ -13,7 +15,7 @@ const TOOL_CARDS = [
     iconBg: 'bg-accent-light',
     iconColor: 'var(--color-accent)',
     title: 'KI-Coach',
-    desc: 'Gespräch starten',
+    desc: 'Systemisches Gespräch',
     to: '/coach',
     badge: null,
   },
@@ -63,6 +65,22 @@ export function HomeScreen() {
   const impulse = getDailyImpulse()
   const name = profile?.display_name || user?.email?.split('@')[0] || 'Du'
   const streak = profile?.streak_count || 0
+  const [conversationCount, setConversationCount] = useState(null)
+
+  useEffect(() => {
+    if (!user) return
+    supabase
+      .from('conversations')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .then(({ count }) => setConversationCount(count ?? 0))
+  }, [user])
+
+  const accountAgeDays = profile?.created_at
+    ? Math.floor((Date.now() - new Date(profile.created_at)) / 86400000)
+    : 0
+  const isNewUser = accountAgeDays < 7 || conversationCount === 0
+  const isExperienced = !isNewUser && conversationCount !== null
 
   return (
     <div className="px-5 pt-12 pb-6">
@@ -78,6 +96,26 @@ export function HomeScreen() {
           <Avatar name={name} size="md" />
         </button>
       </div>
+
+      {/* Wie es funktioniert — Zustand A: neue Nutzer (vor Tagesimpuls) */}
+      {isNewUser && (
+        <div className="bg-surface border-[1.5px] border-[var(--color-accent)] rounded-xl p-5 mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Info size={16} color="var(--color-accent)" />
+            <span className="text-[11px] text-accent uppercase tracking-[0.06em] font-medium">Neu hier?</span>
+          </div>
+          <h2 className="font-display text-[18px] text-ink mb-1">Erfahre wie die App funktioniert</h2>
+          <p className="text-[13px] text-ink-2 mb-4">
+            Stelle dem Coach deine ersten Fragen — bevor du dein erstes Gespräch beginnst.
+          </p>
+          <button
+            onClick={() => navigate('/howto')}
+            className="w-full bg-accent text-white text-[13px] font-medium px-4 py-2.5 rounded-full hover:bg-accent-2 transition-colors"
+          >
+            Wie funktioniert das? →
+          </button>
+        </div>
+      )}
 
       {/* Tagesimpuls Card */}
       <div
@@ -144,6 +182,18 @@ export function HomeScreen() {
           ))}
         </div>
       </div>
+
+      {/* Wie es funktioniert — Zustand B: erfahrene Nutzer (nach Streak) */}
+      {isExperienced && (
+        <button
+          onClick={() => navigate('/howto')}
+          className="w-full flex items-center gap-2 mt-5 text-left"
+        >
+          <Info size={14} color="var(--color-ink-3)" />
+          <span className="flex-1 text-[13px] text-ink-3">Wie funktioniert die App?</span>
+          <ChevronRight size={12} color="var(--color-ink-3)" />
+        </button>
+      )}
     </div>
   )
 }

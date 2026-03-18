@@ -9,6 +9,10 @@ export const DAILY_IMPULSE_QUESTIONS = [
   "Welches Muster erkennst du immer wieder — in der Arbeit, in Beziehungen?",
   "Was schützt du, wenn du dich zurückziehst?",
   "Wer oder was gibt dir gerade Kraft — auch wenn es klein erscheint?",
+  "Wenn du nur auf das schaust, was du selbst beeinflussen kannst — was wäre das?",
+  "Was wäre, wenn die Situation bleibt wie sie ist — was könnte sich trotzdem in dir verändern?",
+  "Was kostet es dich, die Dinge so zu sehen, wie du sie siehst?",
+  "Wann hast du das letzte Mal gespürt, dass etwas wirklich in deiner Hand lag?",
 ]
 
 export const OPENING_MESSAGES = [
