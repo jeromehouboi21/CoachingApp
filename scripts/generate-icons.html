@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <title>Friedensstifter – Icon Generator</title>
+  <style>
+    body { font-family: sans-serif; background: #F5F3EF; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; gap: 24px; }
+    h1 { color: #1A1916; font-size: 22px; margin: 0; }
+    p { color: #5C5A54; font-size: 14px; margin: 0; }
+    .icons { display: flex; gap: 32px; align-items: flex-end; flex-wrap: wrap; justify-content: center; }
+    .icon-group { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    canvas { border-radius: 22%; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    button {
+      background: #2D5A4E; color: white; border: none; padding: 10px 20px;
+      border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 500;
+    }
+    button:hover { background: #4A8C7A; }
+    label { font-size: 12px; color: #9A9890; }
+  </style>
+</head>
+<body>
+  <h1>Friedensstifter Icons</h1>
+  <p>Klicke auf "Herunterladen" und speichere die Dateien in <code>public/icons/</code></p>
+
+  <div class="icons">
+    <div class="icon-group">
+      <label>192 × 192</label>
+      <canvas id="c192" width="192" height="192"></canvas>
+      <button onclick="download('c192', 'icon-192.png')">Herunterladen</button>
+    </div>
+    <div class="icon-group">
+      <label>512 × 512</label>
+      <canvas id="c512" width="512" height="512"></canvas>
+      <button onclick="download('c512', 'icon-512.png')">Herunterladen</button>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(canvasId) {
+      const canvas = document.getElementById(canvasId)
+      const size = canvas.width
+      const ctx = canvas.getContext('2d')
+      const pad = size * 0.12
+      const r = size * 0.22
+
+      // Background
+      ctx.fillStyle = '#2D5A4E'
+      ctx.beginPath()
+      roundRect(ctx, 0, 0, size, size, r)
+      ctx.fill()
+
+      // Subtle circle decoration (top right)
+      ctx.fillStyle = 'rgba(255,255,255,0.06)'
+      ctx.beginPath()
+      ctx.arc(size * 0.82, size * 0.18, size * 0.28, 0, Math.PI * 2)
+      ctx.fill()
+
+      // Letter "F" — DM Serif Display style
+      const fontSize = size * 0.52
+      ctx.fillStyle = '#FFFFFF'
+      ctx.font = `normal ${fontSize}px Georgia, "Times New Roman", serif`
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillText('F', size / 2, size / 2 + size * 0.03)
+
+      // Small dot accent (bottom right of letter area)
+      ctx.fillStyle = 'rgba(255,255,255,0.4)'
+      ctx.beginPath()
+      ctx.arc(size * 0.62, size * 0.62, size * 0.04, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.moveTo(x + r, y)
+      ctx.lineTo(x + w - r, y)
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+      ctx.lineTo(x + w, y + h - r)
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+      ctx.lineTo(x + r, y + h)
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+      ctx.lineTo(x, y + r)
+      ctx.quadraticCurveTo(x, y, x + r, y)
+      ctx.closePath()
+    }
+
+    function download(canvasId, filename) {
+      const canvas = document.getElementById(canvasId)
+      const link = document.createElement('a')
+      link.download = filename
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    }
+
+    drawIcon('c192')
+    drawIcon('c512')
+  </script>
+</body>
+</html>
