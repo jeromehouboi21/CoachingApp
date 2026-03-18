@@ -1,4 +1,5 @@
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
+import { createClient } from 'npm:@supabase/supabase-js';
 
 function createLogger(fn: string) {
   const ts = () => new Date().toISOString();
@@ -212,6 +213,32 @@ Deno.serve(async (req) => {
   }
 
   logger.log('request received', { method: req.method });
+
+  // Manuelle JWT-Verifikation (kompatibel mit ES256 und HS256)
+  const authHeader = req.headers.get('Authorization');
+  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) {
+    logger.warn('missing authorization header');
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false },
+  });
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+  if (authError || !user) {
+    logger.warn('invalid token', { error: authError?.message });
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+    });
+  }
+  logger.log('auth ok', { userId: user.id });
 
   try {
     const body = await req.json();
