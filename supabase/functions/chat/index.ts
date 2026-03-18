@@ -1,5 +1,17 @@
 import Anthropic from 'npm:@anthropic-ai/sdk';
 
+function createLogger(fn: string) {
+  const ts = () => new Date().toISOString();
+  return {
+    log: (msg: string, data?: Record<string, unknown>) =>
+      console.log(JSON.stringify({ ts: ts(), fn, level: 'info', msg, data })),
+    warn: (msg: string, data?: Record<string, unknown>) =>
+      console.warn(JSON.stringify({ ts: ts(), fn, level: 'warn', msg, data })),
+    error: (msg: string, data?: Record<string, unknown>) =>
+      console.error(JSON.stringify({ ts: ts(), fn, level: 'error', msg, data })),
+  };
+}
+
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
 
@@ -187,6 +199,8 @@ ${supervisionNote}
   return prompt;
 }
 
+const logger = createLogger('chat');
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -197,12 +211,34 @@ Deno.serve(async (req) => {
     });
   }
 
+  logger.log('request received', { method: req.method });
+
   try {
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote } = await req.json();
-    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
+    const body = await req.json();
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote } = body;
+
+    logger.log('request parsed', {
+      mode: extractMemory ? 'extractMemory' : howtoMode ? 'howto' : 'chat',
+      messageCount: messages?.length ?? 0,
+      hasMemory: !!memory,
+      hasRag: !!(ragContext?.length),
+      hasSupervision: !!supervisionNote,
+    });
+
+    const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!apiKey) {
+      logger.error('ANTHROPIC_API_KEY not set');
+      return new Response(JSON.stringify({ error: 'API key not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
+    const anthropic = new Anthropic({ apiKey });
 
     // Gedächtnis-Extraktion nach Gesprächsende (kein Streaming, schnell via Haiku)
     if (extractMemory) {
+      logger.log('starting memory extraction', { messageCount: messages.length });
       const conversationText = messages
         .map((m: any) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
         .join('\n');
@@ -219,10 +255,12 @@ Deno.serve(async (req) => {
       const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
       try {
         const extracted = JSON.parse(text);
+        logger.log('memory extraction complete');
         return new Response(JSON.stringify(extracted), {
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
       } catch {
+        logger.warn('memory extraction JSON parse failed', { raw: text.slice(0, 100) });
         return new Response('{}', {
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
@@ -233,6 +271,8 @@ Deno.serve(async (req) => {
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
       : buildSystemPrompt(memory, ragContext, supervisionNote);
+
+    logger.log('starting stream', { model: 'claude-sonnet-4-5', systemPromptLength: systemPrompt.length });
 
     const stream = await anthropic.messages.stream({
       model: 'claude-sonnet-4-5',
@@ -247,15 +287,25 @@ Deno.serve(async (req) => {
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
-        for await (const chunk of stream) {
-          if (chunk.type === 'content_block_delta' &&
-              chunk.delta.type === 'text_delta') {
-            const data = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`;
-            controller.enqueue(encoder.encode(data));
+        let chunkCount = 0;
+        try {
+          for await (const chunk of stream) {
+            if (chunk.type === 'content_block_delta' &&
+                chunk.delta.type === 'text_delta') {
+              chunkCount++;
+              const data = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            }
           }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          logger.log('stream complete', { chunkCount });
+        } catch (streamError: unknown) {
+          const msg = streamError instanceof Error ? streamError.message : 'stream error';
+          logger.error('stream error', { error: msg, chunkCount });
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } finally {
+          controller.close();
         }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        controller.close();
       }
     });
 
@@ -269,9 +319,10 @@ Deno.serve(async (req) => {
 
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    logger.error('unhandled error', { error: message });
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }
 });
