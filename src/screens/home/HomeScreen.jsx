@@ -89,7 +89,7 @@ export function HomeScreen() {
         <div>
           <p className="text-[13px] text-ink-3 mb-1">{getGreeting()}</p>
           <h1 className="font-display text-[26px] text-ink leading-[1.2]">
-            Was bewegt <em>heute?</em>
+            Was bewegt dich <em>heute?</em>
           </h1>
         </div>
         <button onClick={() => navigate('/profile')}>
