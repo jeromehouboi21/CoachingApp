@@ -16,7 +16,6 @@ export function CoachScreen() {
   const { user, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
   const { memory, updateMemory } = useMemory(user?.id)
   const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
   const bottomRef = useRef(null)
@@ -26,9 +25,7 @@ export function CoachScreen() {
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
   useEffect(() => {
-    // State sofort bereinigen, damit Back-Navigation keinen Doppel-Trigger auslöst
-    window.history.replaceState({}, '')
-    const wc = wellnessCheckRef.current
+    const wc = location.state?.wellnessCheck ?? null
     if (wc) {
       startWellnessConversation(wc)
     } else {

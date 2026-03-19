@@ -32,6 +32,7 @@ export function WellnessCheckScreen() {
     const context = contextParts.join(', ')
 
     navigate('/coach', {
+      replace: true,
       state: {
         wellnessCheck: { score, label, emoji, context }
       }
