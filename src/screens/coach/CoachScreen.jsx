@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
@@ -13,6 +14,10 @@ import { supabase } from '../../lib/supabase'
 
 export function CoachScreen() {
   const { user, profile } = useAuth()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const wellnessCheck = location.state?.wellnessCheck ?? null
+  const wellnessSentRef = useRef(false)
   const { memory, updateMemory } = useMemory(user?.id)
   const { messages, isLoading, conversationId, startNewConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
   const bottomRef = useRef(null)
@@ -24,6 +29,18 @@ export function CoachScreen() {
   useEffect(() => {
     startNewConversation()
   }, [])
+
+  // Wellness-Check: erste Nachricht automatisch senden sobald Gespräch bereit
+  useEffect(() => {
+    if (!wellnessCheck || wellnessSentRef.current) return
+    if (!conversationId) return
+    wellnessSentRef.current = true
+    const msg = `Ich fühle mich gerade ${wellnessCheck.score}/10 – ${wellnessCheck.label} ${wellnessCheck.emoji}.`
+      + (wellnessCheck.context ? ` Kontext: ${wellnessCheck.context}` : '')
+    // State bereinigen damit ein Zurück-Navigieren keinen Doppel-Trigger auslöst
+    window.history.replaceState({}, '')
+    handleSend(msg)
+  }, [conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -187,7 +204,7 @@ export function CoachScreen() {
             <h3 className="font-display text-[22px] text-ink mb-2">Alle 3 Gespräche für diesen Monat genutzt</h3>
             <p className="text-[14px] text-ink-2 mb-5">Upgrade auf Premium für unbegrenzte Gespräche — oder buche ein persönliches Gespräch mit Jerome.</p>
             <div className="flex flex-col gap-3">
-              <button className="w-full bg-accent text-white py-3 rounded-full font-medium">Premium entdecken</button>
+              <button onClick={() => navigate('/premium')} className="w-full bg-accent text-white py-3 rounded-full font-medium">Premium entdecken</button>
               <a href="https://www.friedensstifter.coach/contact/" className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium text-center">Mit Jerome sprechen</a>
               <button onClick={() => setShowLimitModal(false)} className="text-[13px] text-ink-3 text-center">Schließen</button>
             </div>

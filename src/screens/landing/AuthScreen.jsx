@@ -17,6 +17,7 @@ export function AuthScreen() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [magicSent, setMagicSent] = useState(false)
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -157,7 +158,7 @@ export function AuthScreen() {
 
             <p className="text-[12px] text-ink-3 text-center mt-1">
               Mit der Registrierung stimmst du unserer{' '}
-              <span className="underline cursor-pointer">Datenschutzerklärung</span> zu.
+              <span className="underline cursor-pointer" onClick={() => setShowPrivacyModal(true)}>Datenschutzerklärung</span> zu.
             </p>
 
             <button
@@ -170,6 +171,39 @@ export function AuthScreen() {
           </form>
         )}
       </div>
+
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+            <h3 className="font-display text-[22px] text-ink mb-4">Datenschutzerklärung</h3>
+            <div className="bg-accent-light rounded-xl p-4 mb-5">
+              <ul className="flex flex-col gap-2">
+                {[
+                  'Deine Gespräche werden nur für dich gespeichert.',
+                  'Keine Weitergabe an Dritte — niemals.',
+                  'Keine Werbung, kein Tracking deines Verhaltens.',
+                  'Deine Daten werden nicht zum Training von KI-Modellen verwendet.',
+                  'Du kannst dein Konto und alle Daten jederzeit löschen.',
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2 text-[14px] text-ink-2">
+                    <span className="text-accent mt-0.5">·</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-[13px] text-ink-2 mb-5 leading-relaxed">
+              Diese App speichert deine Konversationen und Erkenntnisse in einer sicheren Datenbank (Supabase, EU-Server), die ausschließlich dir zugänglich ist. Der KI-Coach wird über die Anthropic API betrieben. Deine Inhalte werden nicht für das Training von KI-Modellen verwendet. Bei Fragen: info@friedensstifter.coach
+            </p>
+            <button
+              onClick={() => setShowPrivacyModal(false)}
+              className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors"
+            >
+              Verstanden
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

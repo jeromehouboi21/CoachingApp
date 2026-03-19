@@ -35,3 +35,28 @@ export const getDailyImpulse = () => {
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000)
   return DAILY_IMPULSE_QUESTIONS[dayOfYear % DAILY_IMPULSE_QUESTIONS.length]
 }
+
+export const WELLNESS_SCORES = {
+  1:  { label: 'Sehr schlecht', emoji: '😔', color: '#C4593A' },
+  2:  { label: 'Schlecht',      emoji: '😟', color: '#C4593A' },
+  3:  { label: 'Nicht gut',     emoji: '😕', color: '#C4845A' },
+  4:  { label: 'So lala',       emoji: '🙁', color: '#C4A85A' },
+  5:  { label: 'Okay',          emoji: '😐', color: '#8B9E5A' },
+  6:  { label: 'Ganz gut',      emoji: '🙂', color: '#5A9E6A' },
+  7:  { label: 'Gut',           emoji: '😊', color: '#4A8C7A' },
+  8:  { label: 'Sehr gut',      emoji: '😄', color: '#2D5A4E' },
+  9:  { label: 'Großartig',     emoji: '🤩', color: '#2D5A4E' },
+  10: { label: 'Fantastisch',   emoji: '🌟', color: '#2D5A4E' },
+}
+
+export const WELLNESS_CONTEXT_CHIPS = {
+  low:    ['Stress bei der Arbeit', 'Streit mit jemandem', 'Bin erschöpft', 'Fühle mich überfordert'],
+  medium: ['Gewöhnlicher Tag', 'Ein bisschen Stress', 'Müde aber okay', 'Gemischte Gefühle'],
+  high:   ['Schöner Moment', 'Etwas ist gut gelaufen', 'Fühle mich klar', 'Dankbar heute'],
+}
+
+export function getWellnessRange(score) {
+  if (score <= 3) return 'low'
+  if (score <= 6) return 'medium'
+  return 'high'
+}

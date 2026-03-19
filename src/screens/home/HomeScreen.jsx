@@ -26,7 +26,7 @@ const TOOL_CARDS = [
     iconColor: 'var(--color-coral)',
     title: 'Wie geht\'s dir?',
     desc: 'Auf einer Skala 1–10',
-    to: '/coach',
+    to: '/wellness',
     badge: null,
   },
   {

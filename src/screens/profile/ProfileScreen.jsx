@@ -7,9 +7,12 @@ import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle } from 'luci
 import { supabase } from '../../lib/supabase'
 
 export function ProfileScreen() {
-  const { profile, user, signOut } = useAuth()
+  const { profile, user, signOut, updateProfile } = useAuth()
   const navigate = useNavigate()
   const [insightCount, setInsightCount] = useState(0)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -72,10 +75,10 @@ export function ProfileScreen() {
       {/* Settings */}
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         {[
-          { icon: User, label: 'Profil bearbeiten', action: null },
+          { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
-          { icon: CreditCard, label: 'Plan & Abonnement', action: null },
-          { icon: Shield, label: 'Datenschutzerklärung', action: null },
+          { icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') },
+          { icon: Shield, label: 'Datenschutzerklärung', action: () => setShowPrivacyModal(true) },
         ].map(({ icon: Icon, label, action }) => (
           <button
             key={label}
@@ -97,6 +100,73 @@ export function ProfileScreen() {
       </div>
 
       <p className="text-[11px] text-ink-3 text-center mt-6">Alles, was du hier teilst, bleibt bei dir.</p>
+
+      {/* Profil bearbeiten Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
+            <h3 className="font-display text-[22px] text-ink mb-4">Profil bearbeiten</h3>
+            <label className="text-[13px] text-ink-3 mb-1 block">Anzeigename</label>
+            <input
+              value={editName}
+              onChange={e => setEditName(e.target.value)}
+              className="w-full border border-[var(--color-border)] rounded-xl px-4 py-3 text-[15px] text-ink bg-bg mb-5 focus:outline-none focus:border-[var(--color-accent)] transition-colors"
+            />
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={async () => {
+                  if (editName.trim()) await updateProfile({ display_name: editName.trim() })
+                  setShowEditModal(false)
+                }}
+                className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors"
+              >
+                Speichern
+              </button>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-[13px] text-ink-3 text-center"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Datenschutzerklärung Modal */}
+      {showPrivacyModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
+            <h3 className="font-display text-[22px] text-ink mb-4">Datenschutzerklärung</h3>
+            <div className="bg-accent-light rounded-xl p-4 mb-5">
+              <p className="text-[14px] text-ink font-medium mb-3">Dein Raum gehört dir</p>
+              <ul className="flex flex-col gap-2">
+                {[
+                  'Deine Gespräche werden nur für dich gespeichert.',
+                  'Keine Weitergabe an Dritte — niemals.',
+                  'Keine Werbung, kein Tracking deines Verhaltens.',
+                  'Deine Daten werden nicht zum Training von KI-Modellen verwendet.',
+                  'Du kannst dein Konto und alle Daten jederzeit löschen.',
+                ].map(item => (
+                  <li key={item} className="flex items-start gap-2 text-[14px] text-ink-2">
+                    <span className="text-accent mt-0.5">·</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p className="text-[13px] text-ink-2 mb-5 leading-relaxed">
+              Diese App speichert deine Konversationen und Erkenntnisse in einer sicheren Datenbank (Supabase, EU-Server), die ausschließlich dir zugänglich ist. Der KI-Coach wird über die Anthropic API betrieben. Deine Inhalte werden nicht für das Training von KI-Modellen verwendet. Bei Fragen: info@friedensstifter.coach
+            </p>
+            <button
+              onClick={() => setShowPrivacyModal(false)}
+              className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors"
+            >
+              Verstanden
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

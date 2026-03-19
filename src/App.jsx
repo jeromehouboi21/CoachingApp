@@ -9,6 +9,8 @@ import { CoachScreen } from './screens/coach/CoachScreen'
 import { MirrorScreen } from './screens/mirror/MirrorScreen'
 import { ProfileScreen } from './screens/profile/ProfileScreen'
 import { HowItWorksScreen } from './screens/howto/HowItWorksScreen'
+import { WellnessCheckScreen } from './screens/wellness/WellnessCheckScreen'
+import { PremiumScreen } from './screens/premium/PremiumScreen'
 
 function LoadingScreen() {
   return (
@@ -43,6 +45,8 @@ export default function App() {
 
       {/* "Wie es funktioniert" — kein AppShell, eigenes Layout */}
       <Route path="/howto" element={<ProtectedRoute><HowItWorksScreen /></ProtectedRoute>} />
+      <Route path="/wellness" element={<ProtectedRoute><WellnessCheckScreen /></ProtectedRoute>} />
+      <Route path="/premium" element={<ProtectedRoute><PremiumScreen /></ProtectedRoute>} />
 
       {/* Haupt-App mit BottomNav */}
       <Route element={<AppShell />}>

@@ -166,7 +166,7 @@ export function HowItWorksScreen() {
                 </li>
               ))}
             </ul>
-            <button className="text-[13px] text-ink-3 hover:text-ink-2 mt-2 hover:underline">
+            <button onClick={() => navigate('/profile')} className="text-[13px] text-ink-3 hover:text-ink-2 mt-2 hover:underline">
               Datenschutzerklärung lesen →
             </button>
           </div>
