@@ -16,10 +16,9 @@ export function CoachScreen() {
   const { user, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
-  const wellnessCheck = location.state?.wellnessCheck ?? null
-  const wellnessSentRef = useRef(false)
+  const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
   const { memory, updateMemory } = useMemory(user?.id)
-  const { messages, isLoading, conversationId, startNewConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
   const bottomRef = useRef(null)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
@@ -27,20 +26,15 @@ export function CoachScreen() {
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
   useEffect(() => {
-    startNewConversation()
-  }, [])
-
-  // Wellness-Check: erste Nachricht automatisch senden sobald Gespräch bereit
-  useEffect(() => {
-    if (!wellnessCheck || wellnessSentRef.current) return
-    if (!conversationId) return
-    wellnessSentRef.current = true
-    const msg = `Ich fühle mich gerade ${wellnessCheck.score}/10 – ${wellnessCheck.label} ${wellnessCheck.emoji}.`
-      + (wellnessCheck.context ? ` Kontext: ${wellnessCheck.context}` : '')
-    // State bereinigen damit ein Zurück-Navigieren keinen Doppel-Trigger auslöst
+    // State sofort bereinigen, damit Back-Navigation keinen Doppel-Trigger auslöst
     window.history.replaceState({}, '')
-    handleSend(msg)
-  }, [conversationId]) // eslint-disable-line react-hooks/exhaustive-deps
+    const wc = wellnessCheckRef.current
+    if (wc) {
+      startWellnessConversation(wc)
+    } else {
+      startNewConversation()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

@@ -19,15 +19,15 @@ export const OPENING_MESSAGES = [
 ]
 
 export const SCALING_HINTS = {
-  1:  "Was hält dich davon ab, dieses Thema loszulassen?",
-  2:  "Was wäre der kleinste denkbare Schritt nach vorne?",
-  3:  "Wann war das zuletzt anders? Was war da anders?",
-  4:  "Was wäre anders, wenn du bei einer 6 wärst?",
-  5:  "Du bist genau in der Mitte. Was zieht dich nach oben — was nach unten?",
-  6:  "Was hat dich schon von 5 auf 6 gebracht?",
-  7:  "Was brauchst du, um bei einer 8 zu sein?",
-  8:  "Was macht diese Situation gerade besser?",
-  9:  "Was würde eine 10 von einer 9 unterscheiden?",
+  1:  "Was hält dich gerade noch aufrecht — auch wenn es wenig ist?",
+  2:  "Was wäre der kleinste denkbare Schritt, der sich heute noch möglich anfühlt?",
+  3:  "Wann war das zuletzt anders? Was war in diesem Moment anders als jetzt?",
+  4:  "Was wäre anders für dich, wenn du dich bei einer 6 fühlen würdest?",
+  5:  "Du bist genau in der Mitte. Was zieht dich gerade nach oben — und was nach unten?",
+  6:  "Was hat dich schon von einer 5 auf eine 6 gebracht — auch wenn es klein war?",
+  7:  "Was bräuchtest du, um dich bei einer 8 zu fühlen?",
+  8:  "Was macht diesen Moment gerade besser als sonst?",
+  9:  "Was würde eine 10 von dieser 9 unterscheiden?",
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 }
 

@@ -157,7 +157,27 @@ interface UserMemory {
   context?: Record<string, string>;
 }
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string): string {
+interface WellnessCheck {
+  score: number;
+  label: string;
+  emoji: string;
+  context?: string;
+}
+
+const SCALING_HINTS: Record<number, string> = {
+  1:  "Was hält dich gerade noch aufrecht — auch wenn es wenig ist?",
+  2:  "Was wäre der kleinste denkbare Schritt, der sich heute noch möglich anfühlt?",
+  3:  "Wann war das zuletzt anders? Was war in diesem Moment anders als jetzt?",
+  4:  "Was wäre anders für dich, wenn du dich bei einer 6 fühlen würdest?",
+  5:  "Du bist genau in der Mitte. Was zieht dich gerade nach oben — und was nach unten?",
+  6:  "Was hat dich schon von einer 5 auf eine 6 gebracht — auch wenn es klein war?",
+  7:  "Was bräuchtest du, um dich bei einer 8 zu fühlen?",
+  8:  "Was macht diesen Moment gerade besser als sonst?",
+  9:  "Was würde eine 10 von dieser 9 unterscheiden?",
+  10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
+};
+
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck): string {
   let prompt = BASE_SYSTEM_PROMPT;
 
   // Nutzer-spezifisches Gedächtnis
@@ -195,6 +215,43 @@ Zitiere sie nie direkt. Lass sie deine Fragen informieren.
     prompt += `\n\n--- AKTUELLE COACH-EMPFEHLUNG (diese Woche) ---
 ${supervisionNote}
 --- ENDE ---`;
+  }
+
+  // Wellness-Check: ersetzt die Standard-Eröffnung
+  if (wellnessCheck) {
+    const { score, label, emoji, context } = wellnessCheck;
+    const followUpQuestion = SCALING_HINTS[score] ?? SCALING_HINTS[5];
+
+    const toneInstruction =
+      score <= 3
+        ? `Sei besonders behutsam. Kein Druck, keine direkte Problemlösung. Gib zuerst Raum — der Mensch soll sich gehört fühlen, bevor irgendetwas exploriert wird. Deine erste Antwort darf kurz sein. Manchmal reicht ein einziger Satz des Ankommens, bevor du fragst.`
+        : score <= 6
+        ? `Bleib ruhig und neugierig. Der Mensch ist in einem mittleren Zustand — weder in einer Krise noch besonders gut drauf. Deine Aufgabe ist es, herauszufinden, was gerade wirklich da ist. Stelle eine öffnende Frage.`
+        : `Der Mensch geht es gut. Nutze diesen Zustand, um Ressourcen oder Muster zu erkunden, die in schwierigeren Momenten verblassen. Frag nach, was diesen guten Zustand trägt — das ist systemisch wertvolles Material.`;
+
+    const contextNote = context
+      ? `Der Mensch hat seinen Zustand mit folgenden Worten beschrieben: "${context}". Beziehe dich auf diese Worte — nicht wortwörtlich, aber spürbar. Zeig, dass du zugehört hast.`
+      : `Der Mensch hat keinen weiteren Kommentar gegeben. Frag offen, was hinter der Einschätzung steckt.`;
+
+    prompt += `\n\n--- WELLNESS-CHECK KONTEXT ---
+Der Mensch hat sich vor dem Gespräch selbst mit ${score}/10 eingeschätzt (${label} ${emoji}).
+
+${contextNote}
+
+DEINE ERSTE ANTWORT — PFLICHTSTRUKTUR:
+1. Nimm die Einschätzung kurz auf. Spiegele das Gefühl dahinter — nenne die Zahl NICHT nochmals. Statt "Du hast dich mit 6 eingeschätzt" lieber: "Ein mittlerer Tag — das klingt nach mehr als 'okay'." Sei konkret auf den genannten Kontext (wenn vorhanden).
+2. Stelle GENAU DIESE eine Folgefrage: "${followUpQuestion}"
+   Du darfst die Frage leicht umformulieren, wenn es natürlicher klingt — aber der Kern muss erhalten bleiben.
+3. Stelle danach KEINE weitere Frage. Warte auf die Antwort.
+
+TON:
+${toneInstruction}
+
+WICHTIG:
+- Maximal 3 Sätze insgesamt in dieser ersten Antwort.
+- Kein "Hallo", kein "Schön, dass du da bist". Du bist bereits im Gespräch.
+- Keine Ratschläge, keine Einschätzungen, keine Erklärungen.
+--- ENDE WELLNESS-CHECK ---`;
   }
 
   return prompt;
@@ -242,7 +299,7 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote } = body;
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck } = body;
 
     logger.log('request parsed', {
       mode: extractMemory ? 'extractMemory' : howtoMode ? 'howto' : 'chat',
@@ -250,6 +307,7 @@ Deno.serve(async (req) => {
       hasMemory: !!memory,
       hasRag: !!(ragContext?.length),
       hasSupervision: !!supervisionNote,
+      hasWellness: !!wellnessCheck,
     });
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -297,18 +355,25 @@ Deno.serve(async (req) => {
     // Normaler Chat — Streaming
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote);
+      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck);
 
-    logger.log('starting stream', { model: 'claude-sonnet-4-5', systemPromptLength: systemPrompt.length });
+    // Anthropic erfordert: messages muss mit user-Role beginnen und nicht leer sein.
+    // Bei Wellness-Start ist messages leer oder beginnt mit assistant → synthetischen Trigger einfügen.
+    let apiMessages: { role: string; content: string }[] = (messages ?? []).map((m: any) => ({
+      role: m.role,
+      content: m.content,
+    }));
+    if (apiMessages.length === 0 || apiMessages[0].role !== 'user') {
+      apiMessages = [{ role: 'user', content: '.' }, ...apiMessages];
+    }
+
+    logger.log('starting stream', { model: 'claude-sonnet-4-5', systemPromptLength: systemPrompt.length, apiMessageCount: apiMessages.length });
 
     const stream = await anthropic.messages.stream({
       model: 'claude-sonnet-4-5',
       max_tokens: 400,
       system: systemPrompt,
-      messages: messages.map((m: any) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: apiMessages,
     });
 
     const encoder = new TextEncoder();

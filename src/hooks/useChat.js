@@ -34,6 +34,99 @@ export function useChat(userId, memory) {
   const ragContextRef = useRef(null)
   const isFirstUserMessageRef = useRef(true)
 
+  // Wellness-Start: kein sichtbarer User-Turn, Coach antwortet direkt aus dem System-Prompt
+  const startWellnessConversation = useCallback(async (wellnessCheck) => {
+    setMessages([])
+    setConversationId(null)
+    ragContextRef.current = null
+    isFirstUserMessageRef.current = false
+
+    let convId = null
+    if (userId) {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .insert({ user_id: userId, title: 'Wellness-Check' })
+        .select()
+        .single()
+      if (conv) {
+        convId = conv.id
+        setConversationId(convId)
+      }
+    }
+
+    setIsLoading(true)
+    const assistantMessage = { role: 'assistant', content: '', id: Date.now() }
+    setMessages([assistantMessage])
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const accessToken = session?.access_token
+      if (!accessToken) { setIsLoading(false); return }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            messages: [],
+            conversationId: convId,
+            memory: memory || null,
+            ragContext: null,
+            wellnessCheck,
+          }),
+        }
+      )
+
+      if (!response.ok) throw new Error('API error')
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') break
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.text) {
+                fullContent += parsed.text
+                setMessages([{ ...assistantMessage, content: fullContent }])
+              }
+            } catch {}
+          }
+        }
+      }
+
+      if (userId && convId && fullContent) {
+        await supabase.from('messages').insert({
+          conversation_id: convId,
+          role: 'assistant',
+          content: fullContent,
+        })
+      }
+    } catch {
+      setMessages([{
+        role: 'assistant',
+        content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
+        isError: true,
+        id: Date.now(),
+      }])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [userId, memory])
+
   const startNewConversation = useCallback(async () => {
     const opening = OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
     const firstMessage = { role: 'assistant', content: opening, id: Date.now() }
@@ -201,6 +294,7 @@ export function useChat(userId, memory) {
     isLoading,
     conversationId,
     startNewConversation,
+    startWellnessConversation,
     sendMessage,
     extractMemoryAndInsight,
     setMessages,
