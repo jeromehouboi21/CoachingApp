@@ -11,6 +11,9 @@ import { QuickReplies } from '../../components/coach/QuickReplies'
 import { ConversationEndModal } from '../../components/coach/ConversationEndModal'
 import { Badge } from '../../components/ui/Badge'
 import { supabase } from '../../lib/supabase'
+import { createLogger } from '../../lib/logger'
+
+const logger = createLogger('CoachScreen')
 
 export function CoachScreen() {
   const { user, profile } = useAuth()
@@ -27,8 +30,10 @@ export function CoachScreen() {
   useEffect(() => {
     const wc = location.state?.wellnessCheck ?? null
     if (wc) {
+      logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
       startWellnessConversation(wc)
     } else {
+      logger.debug('CoachScreen mounted — standard entry')
       startNewConversation()
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

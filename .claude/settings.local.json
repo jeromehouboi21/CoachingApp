@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm run:*)",
-      "Bash(supabase functions:*)"
+      "Bash(supabase functions:*)",
+      "Bash(find /f/OneDrive/Documents/GitHub/CoachingApp/src/screens -name *ellness* -o -name *screen*)"
     ]
   }
 }

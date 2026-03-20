@@ -1,8 +1,14 @@
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES } from '../lib/prompts'
+import { createLogger } from '../lib/logger'
 
+const logger = createLogger('useChat')
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+function generateRequestId() {
+  return crypto.randomUUID().slice(0, 8)
+}
 
 async function fetchRagContext(firstMessage, accessToken) {
   try {
@@ -54,15 +60,31 @@ export function useChat(userId, memory) {
       }
     }
 
+    logger.info('Conversation started', {
+      conversationId: convId,
+      hasWellnessCheck: true,
+      wellnessScore: wellnessCheck.score,
+    })
+    logger.info('WellnessCheck context applied', {
+      score: wellnessCheck.score,
+      hasContext: !!wellnessCheck.context,
+      label: wellnessCheck.label,
+    })
+
     setIsLoading(true)
     const assistantMessage = { role: 'assistant', content: '', id: Date.now() }
     setMessages([assistantMessage])
+
+    const requestId = generateRequestId()
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const accessToken = session?.access_token
       if (!accessToken) { setIsLoading(false); return }
 
+      logger.info('API request dispatched', { requestId, messageCount: 0, hasWellnessCheck: true })
+
+      const streamStart = Date.now()
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
@@ -78,15 +100,21 @@ export function useChat(userId, memory) {
             memory: memory || null,
             ragContext: null,
             wellnessCheck,
+            requestId,
           }),
         }
       )
 
-      if (!response.ok) throw new Error('API error')
+      if (!response.ok) {
+        logger.error('API request failed', { requestId, status: response.status, error: response.statusText })
+        throw new Error('API error')
+      }
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
+      let firstToken = true
+      let totalChunks = 0
 
       while (true) {
         const { done, value } = await reader.read()
@@ -100,12 +128,23 @@ export function useChat(userId, memory) {
             try {
               const parsed = JSON.parse(data)
               if (parsed.text) {
+                if (firstToken) {
+                  logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
+                  firstToken = false
+                }
+                totalChunks++
                 fullContent += parsed.text
                 setMessages([{ ...assistantMessage, content: fullContent }])
               }
             } catch {}
           }
         }
+      }
+
+      if (!fullContent) {
+        logger.warn('Stream completed but response was empty', { requestId, conversationId: convId })
+      } else {
+        logger.info('Stream completed', { requestId, totalChunks, duration_ms: Date.now() - streamStart })
       }
 
       if (userId && convId && fullContent) {
@@ -115,7 +154,10 @@ export function useChat(userId, memory) {
           content: fullContent,
         })
       }
-    } catch {
+
+      logger.debug('WellnessCheck state cleared')
+    } catch (err) {
+      logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
       setMessages([{
         role: 'assistant',
         content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
@@ -143,6 +185,7 @@ export function useChat(userId, memory) {
         .single()
       if (conv) {
         setConversationId(conv.id)
+        logger.info('Conversation started', { conversationId: conv.id, hasWellnessCheck: false })
         await supabase.from('messages').insert({
           conversation_id: conv.id,
           role: 'assistant',
@@ -161,6 +204,9 @@ export function useChat(userId, memory) {
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
     setIsLoading(true)
+
+    const messageIndex = updatedMessages.filter(m => m.role === 'user').length
+    logger.info('Message sent', { conversationId, messageIndex })
 
     if (userId && conversationId) {
       await supabase.from('messages').insert({
@@ -189,7 +235,16 @@ export function useChat(userId, memory) {
     const assistantMessage = { role: 'assistant', content: '', id: Date.now() + 1 }
     setMessages(prev => [...prev, assistantMessage])
 
+    const requestId = generateRequestId()
+
     try {
+      logger.info('API request dispatched', {
+        requestId,
+        messageCount: updatedMessages.length,
+        hasWellnessCheck: false,
+      })
+
+      const streamStart = Date.now()
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
@@ -204,15 +259,21 @@ export function useChat(userId, memory) {
             conversationId,
             memory: memory || null,
             ragContext: ragContextRef.current || null,
+            requestId,
           }),
         }
       )
 
-      if (!response.ok) throw new Error('API error')
+      if (!response.ok) {
+        logger.error('API request failed', { requestId, status: response.status, error: response.statusText })
+        throw new Error('API error')
+      }
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
+      let firstToken = true
+      let totalChunks = 0
 
       while (true) {
         const { done, value } = await reader.read()
@@ -226,6 +287,11 @@ export function useChat(userId, memory) {
             try {
               const parsed = JSON.parse(data)
               if (parsed.text) {
+                if (firstToken) {
+                  logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
+                  firstToken = false
+                }
+                totalChunks++
                 fullContent += parsed.text
                 setMessages(prev => {
                   const updated = [...prev]
@@ -238,6 +304,12 @@ export function useChat(userId, memory) {
         }
       }
 
+      if (!fullContent) {
+        logger.warn('Stream completed but response was empty', { requestId, conversationId })
+      } else {
+        logger.info('Stream completed', { requestId, totalChunks, duration_ms: Date.now() - streamStart })
+      }
+
       if (userId && conversationId && fullContent) {
         await supabase.from('messages').insert({
           conversation_id: conversationId,
@@ -245,7 +317,8 @@ export function useChat(userId, memory) {
           content: fullContent,
         })
       }
-    } catch {
+    } catch (err) {
+      logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
       setMessages(prev => {
         const updated = [...prev]
         updated[updated.length - 1] = {
@@ -279,6 +352,7 @@ export function useChat(userId, memory) {
           body: JSON.stringify({
             messages: messages.map(m => ({ role: m.role, content: m.content })),
             extractMemory: true,
+            requestId: generateRequestId(),
           }),
         }
       )

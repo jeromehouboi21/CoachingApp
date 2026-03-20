@@ -1,17 +1,6 @@
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
-
-function createLogger(fn: string) {
-  const ts = () => new Date().toISOString();
-  return {
-    log: (msg: string, data?: Record<string, unknown>) =>
-      console.log(JSON.stringify({ ts: ts(), fn, level: 'info', msg, data })),
-    warn: (msg: string, data?: Record<string, unknown>) =>
-      console.warn(JSON.stringify({ ts: ts(), fn, level: 'warn', msg, data })),
-    error: (msg: string, data?: Record<string, unknown>) =>
-      console.error(JSON.stringify({ ts: ts(), fn, level: 'error', msg, data })),
-  };
-}
+import { createLogger } from '../_shared/logger.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -257,8 +246,6 @@ WICHTIG:
   return prompt;
 }
 
-const logger = createLogger('chat');
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -269,7 +256,8 @@ Deno.serve(async (req) => {
     });
   }
 
-  logger.log('request received', { method: req.method });
+  // Logger ohne requestId/userId für die Auth-Phase
+  let logger = createLogger('chat');
 
   // Manuelle JWT-Verifikation (kompatibel mit ES256 und HS256)
   const authHeader = req.headers.get('Authorization');
@@ -295,24 +283,37 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
   }
-  logger.log('auth ok', { userId: user.id });
 
   try {
-    const body = await req.json();
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck } = body;
+    let body: Record<string, unknown>;
+    try {
+      body = await req.json();
+    } catch (parseError: unknown) {
+      logger.error('Failed to parse request body', parseError instanceof Error ? parseError : undefined);
+      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
 
-    logger.log('request parsed', {
-      mode: extractMemory ? 'extractMemory' : howtoMode ? 'howto' : 'chat',
-      messageCount: messages?.length ?? 0,
-      hasMemory: !!memory,
-      hasRag: !!(ragContext?.length),
-      hasSupervision: !!supervisionNote,
-      hasWellness: !!wellnessCheck,
-    });
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, requestId } = body as any;
+
+    // Jetzt logger mit requestId + userId neu erstellen — alle weiteren Logs sind korrelierbar
+    logger = createLogger('chat', requestId ?? undefined, user.id);
+
+    logger.info('Request received', { requestId, messageCount: messages?.length ?? 0 });
+
+    if (!Array.isArray(messages) && !extractMemory && !howtoMode && !wellnessCheck) {
+      logger.error('Missing or invalid messages array', { received: typeof messages });
+      return new Response(JSON.stringify({ error: 'Invalid messages' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      logger.error('ANTHROPIC_API_KEY not set');
+      logger.error('ANTHROPIC_API_KEY not configured', { requestId });
       return new Response(JSON.stringify({ error: 'API key not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -323,7 +324,7 @@ Deno.serve(async (req) => {
 
     // Gedächtnis-Extraktion nach Gesprächsende (kein Streaming, schnell via Haiku)
     if (extractMemory) {
-      logger.log('starting memory extraction', { messageCount: messages.length });
+      logger.info('Anthropic API call started', { requestId, model: 'claude-haiku-4-5-20251001', messageCount: messages.length });
       const conversationText = messages
         .map((m: any) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
         .join('\n');
@@ -340,7 +341,6 @@ Deno.serve(async (req) => {
       const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
       try {
         const extracted = JSON.parse(text);
-        logger.log('memory extraction complete');
         return new Response(JSON.stringify(extracted), {
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
@@ -357,6 +357,11 @@ Deno.serve(async (req) => {
       ? HOWTO_SYSTEM_PROMPT
       : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck);
 
+    if (wellnessCheck) {
+      const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';
+      logger.info('WellnessCheck context injected into prompt', { requestId, score: wellnessCheck.score, tone });
+    }
+
     // Anthropic erfordert: messages muss mit user-Role beginnen und nicht leer sein.
     // Bei Wellness-Start ist messages leer oder beginnt mit assistant → synthetischen Trigger einfügen.
     let apiMessages: { role: string; content: string }[] = (messages ?? []).map((m: any) => ({
@@ -367,8 +372,9 @@ Deno.serve(async (req) => {
       apiMessages = [{ role: 'user', content: '.' }, ...apiMessages];
     }
 
-    logger.log('starting stream', { model: 'claude-sonnet-4-5', systemPromptLength: systemPrompt.length, apiMessageCount: apiMessages.length });
+    logger.info('Anthropic API call started', { requestId, model: 'claude-sonnet-4-5', messageCount: apiMessages.length });
 
+    const streamStart = Date.now();
     const stream = await anthropic.messages.stream({
       model: 'claude-sonnet-4-5',
       max_tokens: 400,
@@ -379,21 +385,20 @@ Deno.serve(async (req) => {
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
-        let chunkCount = 0;
+        let tokenCount = 0;
         try {
           for await (const chunk of stream) {
             if (chunk.type === 'content_block_delta' &&
                 chunk.delta.type === 'text_delta') {
-              chunkCount++;
+              tokenCount++;
               const data = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`;
               controller.enqueue(encoder.encode(data));
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          logger.log('stream complete', { chunkCount });
+          logger.info('Stream completed', { requestId, tokenCount, duration_ms: Date.now() - streamStart });
         } catch (streamError: unknown) {
-          const msg = streamError instanceof Error ? streamError.message : 'stream error';
-          logger.error('stream error', { error: msg, chunkCount });
+          logger.error('Stream error', streamError instanceof Error ? streamError : new Error(String(streamError)));
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         } finally {
           controller.close();
@@ -410,8 +415,8 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    logger.error('Unhandled error in chat function', error instanceof Error ? error : new Error(String(error)));
     const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('unhandled error', { error: message });
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }

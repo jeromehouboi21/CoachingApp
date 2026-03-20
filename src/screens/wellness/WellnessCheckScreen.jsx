@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { WELLNESS_SCORES, WELLNESS_CONTEXT_CHIPS, getWellnessRange } from '../../lib/prompts'
+import { createLogger } from '../../lib/logger'
+
+const logger = createLogger('WellnessCheckScreen')
 
 export function WellnessCheckScreen() {
   const navigate = useNavigate()
@@ -30,6 +33,13 @@ export function WellnessCheckScreen() {
       freeText.trim() || null,
     ].filter(Boolean)
     const context = contextParts.join(', ')
+
+    logger.info('WellnessCheck submitted', {
+      score,
+      label,
+      hasContext: contextParts.length > 0,
+      chipSelected: selectedChips.length > 0,
+    })
 
     navigate('/coach', {
       replace: true,
