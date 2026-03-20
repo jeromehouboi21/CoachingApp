@@ -6,8 +6,8 @@ import { createLogger } from '../lib/logger'
 async function getFreshAccessToken() {
   // refreshSession() holt immer einen frischen Token — getSession() kann gecachten (abgelaufenen) Token zurückgeben
   const { data, error } = await supabase.auth.refreshSession()
-  if (!error && data.session?.access_token) {
-    return data.session.access_token
+  if (!error && data?.access_token) {
+    return data.access_token
   }
   // Fallback: getSession() als letzte Chance
   const { data: sessionData } = await supabase.auth.getSession()
