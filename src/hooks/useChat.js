@@ -106,8 +106,11 @@ export function useChat(userId, memory) {
       )
 
       if (!response.ok) {
-        logger.error('API request failed', { requestId, status: response.status, error: response.statusText })
-        throw new Error('API error')
+        let errorBody = response.statusText
+        try { errorBody = await response.text() } catch {}
+        console.error('[useChat] Wellness API request failed', { requestId, status: response.status, body: errorBody })
+        logger.error('API request failed', { requestId, status: response.status, error: errorBody })
+        throw new Error(`API error ${response.status}: ${errorBody}`)
       }
 
       const reader = response.body.getReader()
@@ -157,6 +160,7 @@ export function useChat(userId, memory) {
 
       logger.debug('WellnessCheck state cleared')
     } catch (err) {
+      console.error('[useChat] startWellnessConversation catch:', err)
       logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
       setMessages([{
         role: 'assistant',
@@ -265,8 +269,11 @@ export function useChat(userId, memory) {
       )
 
       if (!response.ok) {
-        logger.error('API request failed', { requestId, status: response.status, error: response.statusText })
-        throw new Error('API error')
+        let errorBody = response.statusText
+        try { errorBody = await response.text() } catch {}
+        console.error('[useChat] API request failed', { requestId, status: response.status, body: errorBody })
+        logger.error('API request failed', { requestId, status: response.status, error: errorBody })
+        throw new Error(`API error ${response.status}: ${errorBody}`)
       }
 
       const reader = response.body.getReader()
@@ -318,6 +325,7 @@ export function useChat(userId, memory) {
         })
       }
     } catch (err) {
+      console.error('[useChat] sendMessage catch:', err)
       logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
       setMessages(prev => {
         const updated = [...prev]
