@@ -299,11 +299,11 @@ Deno.serve(async (req) => {
     });
   }
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false },
-  });
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  global: { headers: { Authorization: `Bearer ${token}` } },
+  auth: { persistSession: false },
+})
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) {
     logger.warn('invalid token', { error: authError?.message });
