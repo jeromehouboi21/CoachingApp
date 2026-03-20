@@ -4,8 +4,14 @@ import { OPENING_MESSAGES } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 
 async function getFreshAccessToken() {
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token ?? null
+  // refreshSession() holt immer einen frischen Token — getSession() kann gecachten (abgelaufenen) Token zurückgeben
+  const { data, error } = await supabase.auth.refreshSession()
+  if (!error && data.session?.access_token) {
+    return data.session.access_token
+  }
+  // Fallback: getSession() als letzte Chance
+  const { data: sessionData } = await supabase.auth.getSession()
+  return sessionData.session?.access_token ?? null
 }
 
 const logger = createLogger('useChat')
@@ -84,7 +90,17 @@ export function useChat(userId, memory) {
 
     try {
       const accessToken = await getFreshAccessToken()
-      if (!accessToken) { setIsLoading(false); return }
+      if (!accessToken) {
+        logger.error('No access token available — aborting wellness start', { requestId })
+        setIsLoading(false)
+        setMessages([{
+          role: 'assistant',
+          content: 'Deine Sitzung ist abgelaufen. Bitte melde dich kurz ab und wieder an.',
+          isError: true,
+          id: Date.now(),
+        }])
+        return
+      }
 
       logger.info('API request dispatched', { requestId, messageCount: 0, hasWellnessCheck: true })
 
@@ -227,7 +243,17 @@ export function useChat(userId, memory) {
 
     const accessToken = await getFreshAccessToken()
     if (!accessToken) {
+      logger.error('No access token available — aborting sendMessage', { conversationId })
       setIsLoading(false)
+      setMessages(prev => {
+        const updated = [...prev]
+        updated[updated.length - 1] = {
+          ...updated[updated.length - 1],
+          content: 'Deine Sitzung ist abgelaufen. Bitte melde dich kurz ab und wieder an.',
+          isError: true,
+        }
+        return updated
+      })
       return
     }
 
