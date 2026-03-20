@@ -79,7 +79,12 @@ export function useChat(userId, memory) {
 
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      const accessToken = session?.access_token
+      let accessToken = session?.access_token
+      if (accessToken) {
+        // Ensure token is fresh — refreshSession is a no-op if still valid
+        const { data: refreshed } = await supabase.auth.refreshSession()
+        if (refreshed?.session?.access_token) accessToken = refreshed.session.access_token
+      }
       if (!accessToken) { setIsLoading(false); return }
 
       logger.info('API request dispatched', { requestId, messageCount: 0, hasWellnessCheck: true })
@@ -222,7 +227,11 @@ export function useChat(userId, memory) {
     }
 
     const { data: { session } } = await supabase.auth.getSession()
-    const accessToken = session?.access_token
+    let accessToken = session?.access_token
+    if (accessToken) {
+      const { data: refreshed } = await supabase.auth.refreshSession()
+      if (refreshed?.session?.access_token) accessToken = refreshed.session.access_token
+    }
     if (!accessToken) {
       setIsLoading(false)
       return
