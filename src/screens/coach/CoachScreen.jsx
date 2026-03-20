@@ -16,11 +16,11 @@ import { createLogger } from '../../lib/logger'
 const logger = createLogger('CoachScreen')
 
 export function CoachScreen() {
-  const { user, profile } = useAuth()
+  const { user, session, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
   const [showQuickReplies, setShowQuickReplies] = useState(true)

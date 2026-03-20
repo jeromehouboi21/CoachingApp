@@ -6,6 +6,7 @@ const logger = createLogger('useAuth')
 
 export function useAuth() {
   const [user, setUser] = useState(null)
+  const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -13,6 +14,7 @@ export function useAuth() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUser(session.user)
+        setSession(session)
         setLoggerUserId(session.user.id)
         logger.info('Session restored', { userId: session.user.id })
         loadProfile(session.user.id)
@@ -24,6 +26,7 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
+      setSession(session ?? null)
       if (session?.user) loadProfile(session.user.id)
       else {
         setProfile(null)
@@ -104,5 +107,5 @@ export function useAuth() {
     return data
   }
 
-  return { user, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile }
+  return { user, session, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile }
 }

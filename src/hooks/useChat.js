@@ -3,15 +3,6 @@ import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 
-async function getFreshAccessToken() {
-  // getSession() gibt den aktuellen Token zurück.
-  // Der Supabase-Client erneuert ihn automatisch wenn er abläuft.
-  // refreshSession() NICHT verwenden — verursacht 429 Rate Limit bei häufigem Aufruf.
-  const { data: { session }, error } = await supabase.auth.getSession()
-  if (error || !session?.access_token) return null
-  return session.access_token
-}
-
 const logger = createLogger('useChat')
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -41,7 +32,7 @@ async function fetchRagContext(firstMessage, accessToken) {
   }
 }
 
-export function useChat(userId, memory) {
+export function useChat(userId, memory, session) {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [conversationId, setConversationId] = useState(null)
@@ -87,7 +78,7 @@ export function useChat(userId, memory) {
     const requestId = generateRequestId()
 
     try {
-      const accessToken = await getFreshAccessToken()
+      const accessToken = session?.access_token ?? null
       if (!accessToken) {
         logger.error('No access token available — aborting wellness start', { requestId })
         setIsLoading(false)
@@ -189,7 +180,7 @@ export function useChat(userId, memory) {
     } finally {
       setIsLoading(false)
     }
-  }, [userId, memory])
+  }, [userId, memory, session])
 
   const startNewConversation = useCallback(async () => {
     const opening = OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
@@ -239,7 +230,7 @@ export function useChat(userId, memory) {
       })
     }
 
-    const accessToken = await getFreshAccessToken()
+    const accessToken = session?.access_token ?? null
     if (!accessToken) {
       logger.error('No access token available — aborting sendMessage', { conversationId })
       setIsLoading(false)
@@ -366,14 +357,14 @@ export function useChat(userId, memory) {
     } finally {
       setIsLoading(false)
     }
-  }, [messages, isLoading, userId, conversationId, memory])
+  }, [messages, isLoading, userId, conversationId, memory, session])
 
   // Nach Gesprächsende: Gedächtnis + Erkenntnis via Haiku extrahieren
   const extractMemoryAndInsight = useCallback(async () => {
     if (!userId || messages.length < 3) return null
 
     try {
-      const accessToken = await getFreshAccessToken()
+      const accessToken = session?.access_token ?? null
       if (!accessToken) return null
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
