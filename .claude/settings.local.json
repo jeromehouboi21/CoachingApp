@@ -3,7 +3,8 @@
     "allow": [
       "Bash(npm run:*)",
       "Bash(supabase functions:*)",
-      "Bash(find /f/OneDrive/Documents/GitHub/CoachingApp/src/screens -name *ellness* -o -name *screen*)"
+      "Bash(find /f/OneDrive/Documents/GitHub/CoachingApp/src/screens -name *ellness* -o -name *screen*)",
+      "Bash(grep -rn \"serviceWorker\\\\|workbox\\\\|sw.js\" vite.config* src/main*)"
     ]
   }
 }

@@ -4,13 +4,8 @@ import { OPENING_MESSAGES } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 
 async function getFreshAccessToken() {
-  const { data: refreshed, error } = await supabase.auth.refreshSession()
-  if (!error && refreshed?.session?.access_token) {
-    return refreshed.session.access_token
-  }
-  // Refresh token also expired — force sign out so user gets redirected to login
-  await supabase.auth.signOut()
-  return null
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token ?? null
 }
 
 const logger = createLogger('useChat')
