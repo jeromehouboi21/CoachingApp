@@ -4,14 +4,12 @@ import { OPENING_MESSAGES } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 
 async function getFreshAccessToken() {
-  // refreshSession() holt immer einen frischen Token — getSession() kann gecachten (abgelaufenen) Token zurückgeben
-  const { data, error } = await supabase.auth.refreshSession()
-  if (!error && data?.access_token) {
-    return data.access_token
-  }
-  // Fallback: getSession() als letzte Chance
-  const { data: sessionData } = await supabase.auth.getSession()
-  return sessionData.session?.access_token ?? null
+  // getSession() gibt den aktuellen Token zurück.
+  // Der Supabase-Client erneuert ihn automatisch wenn er abläuft.
+  // refreshSession() NICHT verwenden — verursacht 429 Rate Limit bei häufigem Aufruf.
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error || !session?.access_token) return null
+  return session.access_token
 }
 
 const logger = createLogger('useChat')

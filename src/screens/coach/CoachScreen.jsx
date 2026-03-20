@@ -22,6 +22,7 @@ export function CoachScreen() {
   const { memory, updateMemory } = useMemory(user?.id)
   const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory)
   const bottomRef = useRef(null)
+  const hasStartedRef = useRef(false)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
@@ -29,6 +30,8 @@ export function CoachScreen() {
 
   useEffect(() => {
     if (!user) return
+    if (hasStartedRef.current) return
+    hasStartedRef.current = true
 
     const wc = location.state?.wellnessCheck ?? null
     if (wc) {
