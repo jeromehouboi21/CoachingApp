@@ -3,6 +3,16 @@ import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 
+async function getFreshAccessToken() {
+  const { data: refreshed, error } = await supabase.auth.refreshSession()
+  if (!error && refreshed?.session?.access_token) {
+    return refreshed.session.access_token
+  }
+  // Refresh token also expired — force sign out so user gets redirected to login
+  await supabase.auth.signOut()
+  return null
+}
+
 const logger = createLogger('useChat')
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -78,13 +88,7 @@ export function useChat(userId, memory) {
     const requestId = generateRequestId()
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      let accessToken = session?.access_token
-      if (accessToken) {
-        // Ensure token is fresh — refreshSession is a no-op if still valid
-        const { data: refreshed } = await supabase.auth.refreshSession()
-        if (refreshed?.session?.access_token) accessToken = refreshed.session.access_token
-      }
+      const accessToken = await getFreshAccessToken()
       if (!accessToken) { setIsLoading(false); return }
 
       logger.info('API request dispatched', { requestId, messageCount: 0, hasWellnessCheck: true })
@@ -226,12 +230,7 @@ export function useChat(userId, memory) {
       })
     }
 
-    const { data: { session } } = await supabase.auth.getSession()
-    let accessToken = session?.access_token
-    if (accessToken) {
-      const { data: refreshed } = await supabase.auth.refreshSession()
-      if (refreshed?.session?.access_token) accessToken = refreshed.session.access_token
-    }
+    const accessToken = await getFreshAccessToken()
     if (!accessToken) {
       setIsLoading(false)
       return
@@ -355,8 +354,8 @@ export function useChat(userId, memory) {
     if (!userId || messages.length < 3) return null
 
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) return null
+      const accessToken = await getFreshAccessToken()
+      if (!accessToken) return null
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
         {
@@ -364,7 +363,7 @@ export function useChat(userId, memory) {
           headers: {
             'Content-Type': 'application/json',
             'apikey': ANON_KEY,
-            'Authorization': `Bearer ${session.access_token}`,
+            'Authorization': `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             messages: messages.map(m => ({ role: m.role, content: m.content })),
