@@ -28,6 +28,8 @@ export function CoachScreen() {
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
   useEffect(() => {
+    if (!user) return
+
     const wc = location.state?.wellnessCheck ?? null
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
@@ -36,7 +38,7 @@ export function CoachScreen() {
       logger.debug('CoachScreen mounted — standard entry')
       startNewConversation()
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
