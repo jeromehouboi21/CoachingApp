@@ -170,7 +170,7 @@ export function HomeScreen() {
       <div className="bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 flex items-center gap-3">
         <span className="text-2xl">🔥</span>
         <div className="flex-1">
-          <p className="text-[13px] text-ink-3">Deine Reflexionsstähne</p>
+          <p className="text-[13px] text-ink-3">Deine Reflexionssträhne</p>
           <p className="text-[18px] font-medium text-ink">{streak} {streak === 1 ? 'Tag' : 'Tage'}</p>
         </div>
         <div className="flex gap-1">

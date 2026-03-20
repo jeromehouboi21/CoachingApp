@@ -72,7 +72,7 @@ export function LandingScreen() {
 
       {/* Sticky CTA */}
       <div className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto px-6 pb-8 pt-4 bg-gradient-to-t from-bg via-bg to-transparent">
-        <Button variant="primary" className="w-full py-4 text-base" onClick={() => navigate('/auth')}>
+        <Button variant="primary" className="w-full py-4 text-base" onClick={() => navigate('/onboarding')}>
           Kostenlos starten
         </Button>
         <button

@@ -23,6 +23,7 @@ export function CoachScreen() {
   const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
+  const sessionCountedRef = useRef(false)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
@@ -40,6 +41,16 @@ export function CoachScreen() {
     } else {
       logger.debug('CoachScreen mounted — standard entry')
       startNewConversation()
+    }
+
+    // Increment session counter for free plan users (once per mount)
+    if (!sessionCountedRef.current && profile?.plan === 'free') {
+      sessionCountedRef.current = true
+      supabase
+        .from('profiles')
+        .update({ sessions_used_this_month: (profile?.sessions_used_this_month || 0) + 1 })
+        .eq('id', user.id)
+        .then(() => logger.debug('Session counter incremented'))
     }
   }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
 

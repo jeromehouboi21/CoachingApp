@@ -4,6 +4,7 @@ import { AppShell } from './components/layout/AppShell'
 import { LandingScreen } from './screens/landing/LandingScreen'
 import { AuthScreen } from './screens/landing/AuthScreen'
 import { WelcomeScreen } from './screens/landing/WelcomeScreen'
+import { OnboardingFlow } from './screens/onboarding/OnboardingFlow'
 import { HomeScreen } from './screens/home/HomeScreen'
 import { CoachScreen } from './screens/coach/CoachScreen'
 import { MirrorScreen } from './screens/mirror/MirrorScreen'
@@ -41,6 +42,7 @@ export default function App() {
       {/* Öffentliche Einstiegs-Screens */}
       <Route path="/landing" element={user ? <Navigate to="/home" replace /> : <LandingScreen />} />
       <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <AuthScreen />} />
+      <Route path="/onboarding" element={user ? <Navigate to="/home" replace /> : <OnboardingFlow />} />
       <Route path="/welcome" element={<ProtectedRoute><WelcomeScreen /></ProtectedRoute>} />
 
       {/* "Wie es funktioniert" — kein AppShell, eigenes Layout */}

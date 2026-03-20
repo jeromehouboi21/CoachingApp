@@ -17,7 +17,7 @@ export function OnboardingFlow() {
     <div className="min-h-screen bg-bg max-w-lg mx-auto relative overflow-hidden">
       {step === 1 && <Step1Welcome onNext={next} onSkip={goToApp} />}
       {step === 2 && <Step2Question onNext={next} selectedArea={selectedArea} setSelectedArea={setSelectedArea} />}
-      {step === 3 && <Step3Reveal onNext={next} />}
+      {step === 3 && <Step3Reveal onNext={next} onSkip={goToApp} />}
       {step === 4 && <Step4Auth onSuccess={goToApp} onboardingData={{ area: selectedArea }} />}
     </div>
   )
