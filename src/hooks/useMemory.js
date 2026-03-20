@@ -13,7 +13,7 @@ export function useMemory(userId) {
       .from('user_memory')
       .select('*')
       .eq('user_id', userId)
-      .single()
+      .maybeSingle()
       .then(({ data, error }) => {
         if (error) {
           logger.error('Failed to load user memory', error)

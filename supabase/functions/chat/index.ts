@@ -1,6 +1,35 @@
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
-import { createLogger } from '../_shared/logger.ts';
+
+function createLogger(source: string, requestId?: string, userId?: string) {
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  );
+
+  const persist = async (level: string, message: string, data?: unknown) => {
+    const line = JSON.stringify({ ts: new Date().toISOString(), level, source, msg: message, request_id: requestId, ...(data ? { data } : {}) });
+    if (level === 'error') console.error(line);
+    else if (level === 'warn') console.warn(line);
+    else console.log(line);
+
+    if (level === 'debug') return;
+
+    const entry: Record<string, unknown> = { level, source, message, request_id: requestId ?? null, user_id: userId ?? null };
+    if (data instanceof Error) { entry.error_detail = data.message; entry.stack_trace = data.stack ?? null; }
+    else if (data && typeof data === 'object') { entry.metadata = data; }
+
+    const { error } = await supabase.from('app_logs').insert(entry);
+    if (error) console.error(JSON.stringify({ level: 'error', source: 'logger', msg: 'Failed to persist', error: error.message }));
+  };
+
+  return {
+    debug: (msg: string, data?: unknown) => persist('debug', msg, data),
+    info:  (msg: string, data?: unknown) => { persist('info',  msg, data); },
+    warn:  (msg: string, data?: unknown) => { persist('warn',  msg, data); },
+    error: (msg: string, data?: unknown) => { persist('error', msg, data); },
+  };
+}
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -251,7 +280,7 @@ Deno.serve(async (req) => {
     return new Response(null, {
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
       }
     });
   }
