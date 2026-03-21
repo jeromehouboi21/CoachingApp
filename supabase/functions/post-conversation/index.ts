@@ -119,6 +119,30 @@ BEKANNTE MUSTER-KEYS (verwende diese wenn erkannt):
 - harmonie_um_jeden_preis    → Harmonie um jeden Preis
 - perfektionismus_blockade   → Perfektionismus-Blockade`;
 
+const RESONANCE_UPDATE_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
+Aktualisiere die Resonanzkarte dieses Menschen — was funktioniert bei ihm/ihr,
+was führt zu Verschluss oder Widerstand?
+
+AKTUELLE RESONANZKARTE:
+{RESONANZ}
+
+Antworte NUR mit validem JSON. Nur Felder angeben die sich verändert haben oder
+erstmals klar erkennbar waren. Leere Arrays wenn nichts Neues erkennbar.
+{
+  "opening_patterns_add": ["Was hat heute Öffnung erzeugt? Konkret formulieren."],
+  "closing_patterns_add": ["Was hat heute Schließen oder Ausweichen ausgelöst?"],
+  "effective_styles_add": ["Welcher Frage-Stil hat heute besonders funktioniert?"],
+  "resonant_metaphors_add": ["Welches Bild oder welche Metapher hat heute resoniert?"],
+  "preferred_pace": "slow|medium|direct|null (nur wenn eindeutig erkennbar)"
+}
+
+WICHTIG:
+- Nur hinzufügen wenn WIRKLICH erkennbar — keine Spekulation
+- Konkret formulieren (nicht "war offen" sondern "Frage nach Ausnahmen öffnete sofort")
+- Widersprüche zur bestehenden Karte dürfen notiert werden
+- preferred_pace nur ändern wenn in mehreren Gesprächen konsistent
+- Leere Arrays sind vollkommen okay`;
+
 const REFLECTION_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Reflektiere dein eigenes Vorgehen ehrlich.
 
@@ -200,8 +224,8 @@ Deno.serve(async (req) => {
       .map((m: any) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
       .join('\n');
 
-    // 1. Aktuelle Coach-Akte + Personenprofil laden (für Kontext in den Prompts)
-    const [{ data: fileEntries }, { data: currentProfile }] = await Promise.all([
+    // 1. Aktuelle Coach-Akte + Personenprofil + Resonanzkarte + Gesprächsanzahl laden
+    const [{ data: fileEntries }, { data: currentProfile }, { data: currentResonanceMap }, countResult] = await Promise.all([
       supabase
         .from('coach_file_entries')
         .select('id, category, label, description, example, confidence, status')
@@ -212,7 +236,17 @@ Deno.serve(async (req) => {
         .select('occupation, relationship_status, family_situation, life_phase, current_focus, known_values, known_stressors, known_resources')
         .eq('user_id', userId)
         .maybeSingle(),
+      supabase
+        .from('resonance_map')
+        .select('opening_patterns, closing_patterns, effective_styles, resonant_metaphors, preferred_pace')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      supabase
+        .from('conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId),
     ]);
+    const conversationCount = countResult.count ?? 0;
 
     const akteContext = fileEntries?.length
       ? fileEntries.map((e: any) => `[${e.id}] ${e.category}: ${e.label} (confidence: ${e.confidence}, status: ${e.status})`).join('\n')
@@ -225,13 +259,21 @@ Deno.serve(async (req) => {
     const fileUpdatePrompt = FILE_UPDATE_PROMPT.replace('{AKTE}', akteContext);
     const profileUpdatePrompt = PROFILE_UPDATE_PROMPT.replace('{PROFIL}', profilContext);
 
-    // 2. Alle 5 Analysen parallel ausführen
-    const [sessionNotes, fileUpdates, profileUpdates, anonSummary, reflection] = await Promise.all([
+    const resonanzContext = currentResonanceMap
+      ? JSON.stringify(currentResonanceMap, null, 2)
+      : 'Noch keine Resonanzkarte vorhanden.';
+    const resonancePrompt = RESONANCE_UPDATE_PROMPT.replace('{RESONANZ}', resonanzContext);
+
+    // 2. Alle Analysen parallel ausführen (Resonanzkarte ab 3. Gespräch)
+    const [sessionNotes, fileUpdates, profileUpdates, anonSummary, reflection, resonanceUpdate] = await Promise.all([
       runPrompt(anthropic, SESSION_NOTES_PROMPT, conversationText),
       runPrompt(anthropic, fileUpdatePrompt, conversationText),
       runPrompt(anthropic, profileUpdatePrompt, conversationText),
       runPrompt(anthropic, ANONYMOUS_SUMMARY_PROMPT, conversationText),
       runPrompt(anthropic, REFLECTION_PROMPT, conversationText),
+      conversationCount >= 3
+        ? runPrompt(anthropic, resonancePrompt, conversationText)
+        : Promise.resolve(null),
     ]);
 
     // 3. Session-Notes speichern + conversations aktualisieren
@@ -382,6 +424,33 @@ Deno.serve(async (req) => {
         resistance_handled: reflection.resistance_handled ?? null,
         improvement_note: reflection.improvement_note ?? null,
       });
+    }
+
+    // 9. Resonanzkarte aktualisieren (Idee 05 — ab 3. Gespräch)
+    if (userId && resonanceUpdate && Object.keys(resonanceUpdate).length > 0) {
+      const patch: any = { user_id: userId, last_updated: new Date().toISOString() };
+
+      if (resonanceUpdate.opening_patterns_add?.length) {
+        const existing = currentResonanceMap?.opening_patterns ?? [];
+        patch.opening_patterns = [...new Set([...existing, ...resonanceUpdate.opening_patterns_add])];
+      }
+      if (resonanceUpdate.closing_patterns_add?.length) {
+        const existing = currentResonanceMap?.closing_patterns ?? [];
+        patch.closing_patterns = [...new Set([...existing, ...resonanceUpdate.closing_patterns_add])];
+      }
+      if (resonanceUpdate.effective_styles_add?.length) {
+        const existing = currentResonanceMap?.effective_styles ?? [];
+        patch.effective_styles = [...new Set([...existing, ...resonanceUpdate.effective_styles_add])];
+      }
+      if (resonanceUpdate.resonant_metaphors_add?.length) {
+        const existing = currentResonanceMap?.resonant_metaphors ?? [];
+        patch.resonant_metaphors = [...new Set([...existing, ...resonanceUpdate.resonant_metaphors_add])];
+      }
+      if (resonanceUpdate.preferred_pace && resonanceUpdate.preferred_pace !== 'null') {
+        patch.preferred_pace = resonanceUpdate.preferred_pace;
+      }
+
+      await supabase.from('resonance_map').upsert(patch, { onConflict: 'user_id' });
     }
 
     return new Response(JSON.stringify({ ok: true }), {

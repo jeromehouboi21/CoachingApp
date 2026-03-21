@@ -306,6 +306,13 @@ interface CoachFile {
     known_stressors?: string[];
     known_resources?: string[];
   };
+  resonanceMap?: {         // aus resonance_map (Idee 05) — ab 3. Gespräch befüllt
+    opening_patterns?: string[];
+    closing_patterns?: string[];
+    effective_styles?: string[];
+    resonant_metaphors?: string[];
+    preferred_pace?: 'slow' | 'medium' | 'direct';
+  };
 }
 
 const SCALING_HINTS: Record<number, string> = {
@@ -400,6 +407,8 @@ ${text}`;
     fileBlock += `\n\nWICHTIG: Nutze die Akte als stilles Fundament, nicht als Skript.
 Erwähne Einträge nie direkt. Lass sie deine Fragen informieren.
 Wenn es natürlich passt: "Du hast mir mal erzählt, dass..."
+Muster mit hoher Konfidenz dürfen sanft angesprochen werden —
+aber nur wenn der Coachee selbst in diese Richtung geht.
 --- ENDE COACH-AKTE ---`;
 
     prompt += fileBlock;
@@ -421,6 +430,46 @@ Wenn es natürlich passt: "Du hast mir mal erzählt, dass..."
 ${parts.join('\n')}
 Nutze dieses Wissen subtil — erwähne es nicht direkt, aber lass es in deine Fragen einfließen.
 --- ENDE ---`;
+    }
+  }
+
+  // BLOCK 3: Resonanzkarte (Idee 05) — ab ~3. Gespräch befüllt
+  // Zeigt dem Coach wie dieser Mensch reagiert — was öffnet, was schließt.
+  // Fließt vollständig unsichtbar in den Prompt — der Nutzer sieht es nie.
+  if (coachFile?.resonanceMap) {
+    const r = coachFile.resonanceMap;
+    const hasData =
+      r.opening_patterns?.length ||
+      r.closing_patterns?.length ||
+      r.effective_styles?.length ||
+      r.preferred_pace;
+
+    if (hasData) {
+      let resonanceBlock = `\n\n--- RESONANZKARTE: WIE DIESER MENSCH REAGIERT ---`;
+
+      if (r.opening_patterns?.length)
+        resonanceBlock += `\nWas öffnet:      ${r.opening_patterns.join(' · ')}`;
+      if (r.closing_patterns?.length)
+        resonanceBlock += `\nWas schließt:    ${r.closing_patterns.join(' · ')}`;
+      if (r.effective_styles?.length)
+        resonanceBlock += `\nFunktioniert:    ${r.effective_styles.join(' · ')}`;
+      if (r.resonant_metaphors?.length)
+        resonanceBlock += `\nMetaphern:       ${r.resonant_metaphors.join(' · ')}`;
+      if (r.preferred_pace) {
+        const paceDesc = {
+          slow:   'langsam — braucht Stille und Raum, reagiert auf Druck mit Rückzug',
+          medium: 'normal — gute Balance aus Nähe und Raum',
+          direct: 'direkt — schätzt klare, unverblümte Fragen',
+        }[r.preferred_pace];
+        resonanceBlock += `\nGesprächs-Tempo: ${paceDesc}`;
+      }
+
+      resonanceBlock += `\n\nNutze die Resonanzkarte als feines Instrument, nicht als Regel.
+Menschen verändern sich. Was heute schließt, kann morgen öffnen.
+Lass sie deine Fragen formen — nicht dein Vorgehen bestimmen.
+--- ENDE RESONANZKARTE ---`;
+
+      prompt += resonanceBlock;
     }
   }
 

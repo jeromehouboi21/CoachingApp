@@ -72,8 +72,8 @@ Deno.serve(async (req) => {
       daysSince < 14  ? 'letzte Woche' :
                         `vor ${Math.floor(daysSince / 7)} Wochen`;
 
-    // 4. Coach-Akte + Personenprofil laden (für buildSystemPrompt)
-    const [{ data: fileEntries }, { data: coacheeProfile }] = await Promise.all([
+    // 4. Coach-Akte + Personenprofil + Resonanzkarte laden (für buildSystemPrompt)
+    const [{ data: fileEntries }, { data: coacheeProfile }, { data: resonanceMap }] = await Promise.all([
       supabase
         .from('coach_file_entries')
         .select('id, category, label, description, example, confidence, status')
@@ -83,6 +83,11 @@ Deno.serve(async (req) => {
       supabase
         .from('coachee_profile')
         .select('occupation, relationship_status, family_situation, life_phase, current_focus, known_values, known_stressors, known_resources')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+      supabase
+        .from('resonance_map')
+        .select('opening_patterns, closing_patterns, effective_styles, resonant_metaphors, preferred_pace')
         .eq('user_id', user.id)
         .maybeSingle(),
     ]);
@@ -104,6 +109,7 @@ Deno.serve(async (req) => {
     const coachFile = {
       entries: fileEntries ?? [],
       profile: coacheeProfile ?? undefined,
+      resonanceMap: resonanceMap ?? undefined,
     };
 
     return new Response(JSON.stringify({ briefing, coachFile }), {

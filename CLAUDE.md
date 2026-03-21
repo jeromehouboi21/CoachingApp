@@ -1,7 +1,7 @@
 # Friedensstifter — Technische Dokumentation für Claude Code
 
 **Produkt:** Friedensstifter · Dein systemischer Begleiter
-**Stand:** Design-Dokument v2.2 implementiert
+**Stand:** Design-Dokument v2.4 implementiert
 **Arbeitsverzeichnis:** `f:/OneDrive/Documents/GitHub/CoachingApp/`
 
 ---
@@ -96,6 +96,18 @@ patterns      JSONB []
 strengths     JSONB []
 context       JSONB {}
 last_updated  TIMESTAMPTZ
+```
+
+**`resonance_map`** — v2.4: Emotionales Reaktionsprofil (Idee 05)
+```
+id                  UUID (PK)
+user_id             UUID (FK → profiles, UNIQUE)
+opening_patterns    JSONB []  -- Was öffnet diesen Menschen
+closing_patterns    JSONB []  -- Was führt zu Schließen / Ausweichen
+effective_styles    JSONB []  -- Frage-Typen die funktionieren
+resonant_metaphors  JSONB []  -- Metaphern / Bilder die geklickt haben
+preferred_pace      TEXT CHECK ('slow' | 'medium' | 'direct')
+last_updated        TIMESTAMPTZ
 ```
 
 **`coach_file_entries`** — v2.2: Strukturierte Coach-Akte (ersetzt user_memory)
@@ -235,9 +247,10 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennung)
   + BLOCK 1: Briefing       (Pre-Session, nur wenn conversationCount > 1)
   + BLOCK 2: Coach-Akte     (coach_file_entries + coachee_profile · Fallback: user_memory)
-  + BLOCK 3: RAG-Kontext    (Anonyme Erfahrungen)
-  + BLOCK 4: Supervision    (Wöchentliche Empfehlung)
-  + BLOCK 5: Wellness-Check (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
+  + BLOCK 3: Resonanzkarte  (resonance_map · ab 3. Gespräch · immer unsichtbar)
+  + BLOCK 4: RAG-Kontext    (Anonyme Erfahrungen)
+  + BLOCK 5: Supervision    (Wöchentliche Empfehlung)
+  + BLOCK 6: Wellness-Check (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
 ```
 
 **Sprachprinzip im System-Prompt — absolut verboten:**
@@ -419,3 +432,4 @@ SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
 | `006_v2_0.sql` | pattern_references |
 | `007_v2_1.sql` | conversations.open_thread + open_thread_intensity · profiles.last_return_greeting_at |
 | `008_v2_2.sql` | coach_file_entries · coachee_profile · session_notes |
+| `009_v2_4.sql` | resonance_map (Idee 05) |
