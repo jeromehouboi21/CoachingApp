@@ -16,10 +16,13 @@ export const DAILY_IMPULSE_QUESTIONS = [
 ]
 
 export const OPENING_MESSAGES = [
-  "Schön, dass du heute hier bist. Was ist das eine Thema, das dich gerade wirklich beschäftigt? Es muss kein großes Problem sein.",
+  "Schön, dass du heute hier bist. Was ist das eine Thema, das dich gerade wirklich beschäftigt? Es braucht kein großes Problem sein.",
   "Willkommen zurück. Wie ist es dir seit unserem letzten Gespräch ergangen? Was hat sich verändert — auch wenn es klein erscheint?",
-  "Ein neues Gespräch. Was bringt dich heute hierher? Was ist gerade leise da und wartet darauf, gehört zu werden?",
+  "Ein neues Gespräch. Was bringst du heute mit? Was ist gerade leise da und wartet darauf, gehört zu werden?",
 ]
+
+// Erstes Gespräch überhaupt — keine Rückkehrreferenz, keine Erwartung
+export const FIRST_OPENING_MESSAGE = "Schön, dass du da bist. Was beschäftigt dich gerade — gibt es etwas, das du schon länger mit dir trägst?"
 
 export const SCALING_HINTS = {
   1:  "Was hält dich gerade noch aufrecht — auch wenn es wenig ist?",

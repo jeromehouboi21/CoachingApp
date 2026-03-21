@@ -228,6 +228,21 @@ interface WellnessCheck {
   context?: string;
 }
 
+interface OpenThread {
+  text: string;
+  intensity: 'low' | 'medium' | 'high';
+  conversationDate: string;
+  topicHint?: string;
+}
+
+interface PreSessionBriefing {
+  lastConversationDate: string;
+  daysSince: number;
+  lastTopicSummary: string;
+  conversationCount: number;
+  openThread?: OpenThread | null;
+}
+
 const SCALING_HINTS: Record<number, string> = {
   1:  "Was hält dich gerade noch aufrecht — auch wenn es wenig ist?",
   2:  "Was wäre der kleinste denkbare Schritt, der sich heute noch möglich anfühlt?",
@@ -241,8 +256,43 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing): string {
   let prompt = BASE_SYSTEM_PROMPT;
+
+  // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
+  // Nur vorhanden wenn ein vorheriges Gespräch existiert.
+  if (briefing && briefing.conversationCount > 1) {
+    let briefingText = `\n\n--- PRE-SESSION-BRIEFING ---
+Dies ist Gespräch Nr. ${briefing.conversationCount} mit diesem Menschen.
+Letztes Gespräch: ${briefing.lastConversationDate}
+Thema damals: ${briefing.lastTopicSummary}`;
+
+    if (briefing.openThread) {
+      const { text, intensity, topicHint } = briefing.openThread;
+      briefingText += `\n\nOFFENER FADEN (Intensität: ${intensity}):
+${text}`;
+      if (topicHint) briefingText += `\nThemenfeld: ${topicHint}`;
+
+      if (intensity === 'high') {
+        briefingText += `\n→ Dieser Faden hat den Menschen sichtbar bewegt.
+  Wenn du ihn aufnimmst: äußerste Behutsamkeit. Nicht direkt konfrontieren.
+  Erst Raum geben, dann — wenn Vertrauen spürbar — sanft fragen ob es noch da ist.`;
+      } else if (intensity === 'medium') {
+        briefingText += `\n→ Der Faden war präsent, aber nicht überwältigend.
+  Du kannst ihn früh im Gespräch sanft anbieten — ohne Druck.`;
+      } else {
+        briefingText += `\n→ Nur kurz angeschnitten. Du kannst es erwähnen, aber es ist kein Muss.`;
+      }
+    }
+
+    briefingText += `\n\nWICHTIG FÜR DIESES GESPRÄCH:
+- Nutze das Briefing als stille Orientierung, nicht als Skript
+- Wenn der Mensch heute etwas ganz anderes mitbringt: folge dem
+- Das Briefing gibt dir Tiefe — der Mensch bestimmt die Richtung
+--- ENDE BRIEFING ---`;
+
+    prompt += briefingText;
+  }
 
   // Nutzer-spezifisches Gedächtnis
   if (memory) {
@@ -371,7 +421,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, requestId } = body as any;
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, requestId } = body as any;
 
     // Jetzt logger mit requestId + userId neu erstellen — alle weiteren Logs sind korrelierbar
     logger = createLogger('chat', requestId ?? undefined, user.id);
@@ -430,7 +480,7 @@ Deno.serve(async (req) => {
     // Normaler Chat — Streaming
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck);
+      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing);
 
     if (wellnessCheck) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';

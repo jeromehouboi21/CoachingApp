@@ -14,13 +14,28 @@ import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 
 const logger = createLogger('CoachScreen')
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+// Prüft ob Wiederkehr-Begrüßung angezeigt werden soll (alle 5 Bedingungen aus Spec 7.3)
+function shouldShowReturnGreeting(briefing, profile) {
+  if (!briefing?.openThread) return false
+  if (briefing.conversationCount <= 1) return false
+  if (briefing.daysSince < 2) return false
+  if (profile?.last_return_greeting_at) {
+    const daysSinceGreeting = Math.floor(
+      (Date.now() - new Date(profile.last_return_greeting_at).getTime()) / 86400000
+    )
+    if (daysSinceGreeting < 5) return false
+  }
+  return true
+}
 
 export function CoachScreen() {
   const { user, session, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
   const sessionCountedRef = useRef(false)
@@ -30,20 +45,67 @@ export function CoachScreen() {
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !profile) return
     if (hasStartedRef.current) return
     hasStartedRef.current = true
 
     const wc = location.state?.wellnessCheck ?? null
+
+    // VARIANTE 3: Wellness-Check
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
       startWellnessConversation(wc)
-    } else {
-      logger.debug('CoachScreen mounted — standard entry')
-      startNewConversation()
+      countSession()
+      return
     }
 
-    // Increment session counter for free plan users (once per mount)
+    // Briefing laden und Eröffnungs-Variante entscheiden
+    const loadAndStart = async () => {
+      try {
+        const accessToken = session?.access_token ?? null
+        if (!accessToken) { startNewConversation(); countSession(); return }
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pre-session-briefing`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': ANON_KEY,
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({}),
+          }
+        )
+        const data = response.ok ? await response.json() : null
+        const briefing = data?.briefing ?? null
+        const isFirstEver = !briefing || briefing.conversationCount === 0
+
+        // VARIANTE 1: Wiederkehr-Begrüßung mit offenem Faden
+        if (briefing && shouldShowReturnGreeting(briefing, profile)) {
+          logger.info('Return greeting triggered', { intensity: briefing.openThread?.intensity })
+          await startBriefingConversation(briefing)
+          // last_return_greeting_at aktualisieren (fire-and-forget)
+          supabase
+            .from('profiles')
+            .update({ last_return_greeting_at: new Date().toISOString() })
+            .eq('id', user.id)
+            .then(() => logger.debug('last_return_greeting_at updated'))
+        } else {
+          // VARIANTE 2: Normaler Start
+          logger.debug('Standard entry', { isFirstEver, hasOpenThread: !!briefing?.openThread })
+          startNewConversation(isFirstEver)
+        }
+      } catch {
+        startNewConversation()
+      }
+      countSession()
+    }
+
+    loadAndStart()
+  }, [user, profile]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const countSession = () => {
     if (!sessionCountedRef.current && profile?.plan === 'free') {
       sessionCountedRef.current = true
       supabase
@@ -52,7 +114,7 @@ export function CoachScreen() {
         .eq('id', user.id)
         .then(() => logger.debug('Session counter incremented'))
     }
-  }, [user]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })

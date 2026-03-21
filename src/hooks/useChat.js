@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { OPENING_MESSAGES } from '../lib/prompts'
+import { OPENING_MESSAGES, FIRST_OPENING_MESSAGE } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 
 const logger = createLogger('useChat')
@@ -39,6 +39,8 @@ export function useChat(userId, memory, session) {
   // RAG-Kontext wird nach der ersten Nutzer-Nachricht gesetzt und für alle weiteren verwendet
   const ragContextRef = useRef(null)
   const isFirstUserMessageRef = useRef(true)
+  // Aktuelles Briefing — wird beim Senden mitgeschickt
+  const briefingRef = useRef(null)
 
   // Wellness-Start: kein sichtbarer User-Turn, Coach antwortet direkt aus dem System-Prompt
   const startWellnessConversation = useCallback(async (wellnessCheck) => {
@@ -182,12 +184,114 @@ export function useChat(userId, memory, session) {
     }
   }, [userId, memory, session])
 
-  const startNewConversation = useCallback(async () => {
-    const opening = OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
+  // Wiederkehr-Begrüßung: Coach öffnet automatisch mit einem ersten Turn
+  // (basierend auf offenem Faden aus dem letzten Gespräch)
+  const startBriefingConversation = useCallback(async (briefing) => {
+    setMessages([])
+    setConversationId(null)
+    ragContextRef.current = null
+    briefingRef.current = briefing
+    isFirstUserMessageRef.current = false
+
+    let convId = null
+    if (userId) {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .insert({ user_id: userId, title: 'Gespräch' })
+        .select()
+        .single()
+      if (conv) {
+        convId = conv.id
+        setConversationId(convId)
+      }
+    }
+
+    setIsLoading(true)
+    const assistantMessage = { role: 'assistant', content: '', id: Date.now() }
+    setMessages([assistantMessage])
+
+    const requestId = generateRequestId()
+
+    try {
+      const accessToken = session?.access_token ?? null
+      if (!accessToken) {
+        setIsLoading(false)
+        return
+      }
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
+            'Authorization': `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            messages: [],
+            conversationId: convId,
+            memory: memory || null,
+            briefing,
+            requestId,
+          }),
+        }
+      )
+
+      if (!response.ok) throw new Error(`API error ${response.status}`)
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        for (const line of chunk.split('\n')) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') break
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.text) {
+                fullContent += parsed.text
+                setMessages([{ ...assistantMessage, content: fullContent }])
+              }
+            } catch {}
+          }
+        }
+      }
+
+      if (userId && convId && fullContent) {
+        await supabase.from('messages').insert({
+          conversation_id: convId,
+          role: 'assistant',
+          content: fullContent,
+        })
+      }
+    } catch (err) {
+      console.error('[useChat] startBriefingConversation catch:', err)
+      setMessages([{
+        role: 'assistant',
+        content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
+        isError: true,
+        id: Date.now(),
+      }])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [userId, memory, session])
+
+  const startNewConversation = useCallback(async (isFirstEver = false) => {
+    const opening = isFirstEver
+      ? FIRST_OPENING_MESSAGE
+      : OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
     const firstMessage = { role: 'assistant', content: opening, id: Date.now() }
     setMessages([firstMessage])
     setConversationId(null)
     ragContextRef.current = null
+    briefingRef.current = null
     isFirstUserMessageRef.current = true
 
     if (userId) {
@@ -281,6 +385,7 @@ export function useChat(userId, memory, session) {
             conversationId,
             memory: memory || null,
             ragContext: ragContextRef.current || null,
+            briefing: briefingRef.current || null,
             requestId,
           }),
         }
@@ -395,6 +500,7 @@ export function useChat(userId, memory, session) {
     conversationId,
     startNewConversation,
     startWellnessConversation,
+    startBriefingConversation,
     sendMessage,
     extractMemoryAndInsight,
     setMessages,

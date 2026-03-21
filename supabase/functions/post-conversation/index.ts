@@ -19,8 +19,42 @@ Antworte NUR mit validem JSON:
   "resistance": "Widerstandsmoment falls aufgetreten, sonst null",
   "what_helped": "Welche Coach-Reaktion war wirksam, sonst null",
   "what_blocked": "Was hat nicht geholfen, sonst null",
-  "outcome": "breakthrough | stuck | partial | unknown"
-}`;
+  "outcome": "breakthrough | stuck | partial | unknown",
+  "pattern_references": [
+    {
+      "pattern_key": "maschinenlesbarer_schlüssel",
+      "pattern_label": "Lesbarer Muster-Name",
+      "excerpt": "Relevantes Zitat aus dem Gespräch (max. 150 Zeichen)"
+    }
+  ],
+  "open_thread": {
+    "exists": true,
+    "text": "Was wurde angesprochen aber nicht abgeschlossen? (1-2 Sätze, anonym)",
+    "intensity": "low | medium | high",
+    "reasoning": "Warum gilt das als offen?"
+  }
+}
+
+BEKANNTE MUSTER-KEYS (verwende diese wenn erkannt):
+- rueckzug_unter_druck       → Rückzug unter Druck
+- innerer_kritiker           → Der innere Kritiker
+- uebernahme_reflex          → Übernahme-Reflex
+- harmonie_um_jeden_preis    → Harmonie um jeden Preis
+- perfektionismus_blockade   → Perfektionismus-Blockade
+
+KRITERIEN FÜR OFFENE FÄDEN:
+Ein Faden gilt als offen wenn:
+- Der Coachee ein Thema angesprochen hat und dann selbst das Gespräch abgelenkt hat
+- Eine Frage des Coaches eine ungewöhnlich kurze oder ausweichende Antwort erzeugt hat
+- Der Coachee etwas Halbes gesagt hat: "Da ist noch etwas, aber..." ohne weiterzumachen
+- Das Gespräch an einer emotional aufgeladenen Stelle endete
+
+INTENSITÄT:
+- low:    Kurz erwähnt, keine erkennbare emotionale Reaktion
+- medium: Deutlich präsent, Coachee hat ausgewichen oder abgebrochen
+- high:   Starke emotionale Reaktion, abrupter Themenwechsel oder Gesprächsende
+
+Wenn kein offener Faden erkennbar ist: "open_thread": { "exists": false }`;
 
 const REFLECTION_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Reflektiere dein eigenes Vorgehen ehrlich.
@@ -32,8 +66,13 @@ Antworte NUR mit validem JSON:
   "what_missed": "Was hättest du besser machen können?",
   "resistance_detected": true oder false,
   "resistance_handled": "Wie hast du mit Widerstand umgegangen, falls vorhanden, sonst null",
-  "improvement_note": "Ein konkreter Hinweis für zukünftige ähnliche Gespräche"
-}`;
+  "improvement_note": "Ein konkreter Hinweis für zukünftige ähnliche Gespräche",
+  "language_violations": ["Liste der verwendeten verbotenen Wörter, z.B. 'müssen', 'immer'"]
+}
+
+SPRACHCHECK: Prüfe deine eigenen Antworten im Gespräch auf verbotene Wörter
+(müssen, immer als Absolutheitsaussage, nie als Absolutheitsaussage, können nicht).
+Trage Verstöße in language_violations ein — für die Qualitätssicherung.`;
 
 async function generateEmbedding(text: string, openaiKey: string): Promise<number[] | null> {
   try {
@@ -67,7 +106,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, conversationId } = await req.json();
+    const { messages, conversationId, userId } = await req.json();
 
     if (!messages || messages.length < 3) {
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
@@ -142,6 +181,33 @@ Deno.serve(async (req) => {
         resistance_handled: reflection.resistance_handled || null,
         improvement_note: reflection.improvement_note || null,
       });
+    }
+
+    // 5. Offenen Faden in conversations speichern
+    if (conversationId && summary.open_thread?.exists && summary.open_thread.text) {
+      await supabase
+        .from('conversations')
+        .update({
+          open_thread: summary.open_thread.text,
+          open_thread_intensity: summary.open_thread.intensity ?? 'low',
+        })
+        .eq('id', conversationId);
+    }
+
+    // 6. Muster-Referenzen speichern (für "Verstehen"-Modul)
+    if (userId && conversationId && Array.isArray(summary.pattern_references)) {
+      const refs = summary.pattern_references
+        .filter((r: any) => r.pattern_key && r.pattern_label)
+        .map((r: any) => ({
+          user_id: userId,
+          conversation_id: conversationId,
+          pattern_key: r.pattern_key,
+          pattern_label: r.pattern_label,
+          excerpt: r.excerpt || null,
+        }));
+      if (refs.length) {
+        await supabase.from('pattern_references').insert(refs);
+      }
     }
 
     return new Response(JSON.stringify({ ok: true }), {
