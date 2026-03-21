@@ -1,7 +1,7 @@
 # Friedensstifter — Technische Dokumentation für Claude Code
 
 **Produkt:** Friedensstifter · Dein systemischer Begleiter
-**Stand:** Design-Dokument v2.4 implementiert
+**Stand:** Design-Dokument v2.5 implementiert
 **Arbeitsverzeichnis:** `f:/OneDrive/Documents/GitHub/CoachingApp/`
 
 ---
@@ -57,7 +57,7 @@ onboarding_completed      BOOLEAN DEFAULT FALSE
 onboarding_data           JSONB  -- Antworten aus Onboarding
 streak_count              INTEGER DEFAULT 0
 streak_last_date          DATE
-plan                      TEXT CHECK ('free' | 'premium')
+plan                      TEXT CHECK ('free' | 'premium' | 'tester')
 sessions_used_this_month  INTEGER DEFAULT 0
 last_return_greeting_at   TIMESTAMPTZ  -- v2.1: Wiederkehr-Begrüßung Throttle
 created_at                TIMESTAMPTZ
@@ -97,6 +97,17 @@ strengths     JSONB []
 context       JSONB {}
 last_updated  TIMESTAMPTZ
 ```
+
+**`invite_codes`** — v2.5: Einladungscodes für Beta-Tester
+```
+id          UUID (PK)
+code        TEXT UNIQUE  -- immer uppercase
+max_uses    INTEGER      -- NULL = unbegrenzt
+uses_count  INTEGER DEFAULT 0
+expires_at  TIMESTAMPTZ  -- NULL = kein Ablaufdatum
+created_at  TIMESTAMPTZ
+```
+RLS aktiv · keine SELECT-Policy für normale Nutzer · Einlösen nur via `redeem_invite_code` RPC (SECURITY DEFINER)
 
 **`resonance_map`** — v2.4: Emotionales Reaktionsprofil (Idee 05)
 ```
@@ -236,6 +247,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | `chat` | Jede Chat-Nachricht | Anthropic API Proxy, Streaming, buildSystemPrompt |
 | `pre-session-briefing` | CoachScreen Mount | Letztes Gespräch + offener Faden → Briefing-Objekt |
 | `post-conversation` | Nach Gespräch (fire-and-forget) | RAG-Eintrag, Selbstreflexion, open_thread, pattern_references |
+| `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
 | `rag-search` | Erste Nutzer-Nachricht | Semantische Ähnlichkeitssuche in experience_patterns |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
 
@@ -433,3 +445,4 @@ SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
 | `007_v2_1.sql` | conversations.open_thread + open_thread_intensity · profiles.last_return_greeting_at |
 | `008_v2_2.sql` | coach_file_entries · coachee_profile · session_notes |
 | `009_v2_4.sql` | resonance_map (Idee 05) |
+| `010_v2_5.sql` | profiles.plan + 'tester' · invite_codes · redeem_invite_code RPC |

@@ -42,6 +42,7 @@ export function CoachScreen() {
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
+  const isPaidUser = profile?.plan === 'premium' || profile?.plan === 'tester'
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
   useEffect(() => {
@@ -107,7 +108,7 @@ export function CoachScreen() {
   }, [user, profile]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const countSession = () => {
-    if (!sessionCountedRef.current && profile?.plan === 'free') {
+    if (!sessionCountedRef.current && !isPaidUser) {
       sessionCountedRef.current = true
       supabase
         .from('profiles')
@@ -122,7 +123,7 @@ export function CoachScreen() {
   }, [messages, isLoading])
 
   const handleSend = async (content, inputMode = 'text') => {
-    if (profile?.plan === 'free' && sessionsLeft <= 0) {
+    if (!isPaidUser && sessionsLeft <= 0) {
       setShowLimitModal(true)
       return
     }

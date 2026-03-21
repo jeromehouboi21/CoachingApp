@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 export function ProfileScreen() {
@@ -13,6 +13,9 @@ export function ProfileScreen() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState('')
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
+  const [showBetaModal, setShowBetaModal] = useState(false)
+  const [betaFeedback, setBetaFeedback] = useState('')
+  const [betaSent, setBetaSent] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -35,9 +38,13 @@ export function ProfileScreen() {
       <div className="flex flex-col items-center text-center mb-8">
         <Avatar name={name} size="lg" className="mb-4" />
         <h1 className="font-display text-[22px] text-ink mb-2">{name}</h1>
-        <Badge variant={profile?.plan === 'premium' ? 'premium' : 'free'}>
-          {profile?.plan === 'premium' ? 'Premium' : 'Kostenlos'}
-        </Badge>
+        {profile?.plan === 'tester' ? (
+          <span className="text-[12px] font-medium px-3 py-1 rounded-full bg-accent-light text-accent">Beta</span>
+        ) : (
+          <Badge variant={profile?.plan === 'premium' ? 'premium' : 'free'}>
+            {profile?.plan === 'premium' ? 'Premium' : 'Kostenlos'}
+          </Badge>
+        )}
       </div>
 
       {/* Stats */}
@@ -55,6 +62,14 @@ export function ProfileScreen() {
           <p className="text-[12px] text-ink-3">Erkenntnisse</p>
         </div>
       </div>
+
+      {/* Beta-Hinweis für Tester */}
+      {profile?.plan === 'tester' && (
+        <div className="bg-accent-light rounded-xl p-4 mb-6">
+          <p className="text-[13px] text-accent font-medium mb-1">Du nimmst an der Beta teil.</p>
+          <p className="text-[12px] text-ink-2">Danke für dein Feedback — es hilft, Friedensstifter besser zu machen.</p>
+        </div>
+      )}
 
       {/* Jerome's CTA Card */}
       <div className="bg-accent rounded-xl p-5 mb-8 relative overflow-hidden">
@@ -77,7 +92,8 @@ export function ProfileScreen() {
         {[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
-          { icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') },
+          ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
+          ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setShowBetaModal(true) } }] : []),
           { icon: Shield, label: 'Datenschutzerklärung', action: () => setShowPrivacyModal(true) },
         ].map(({ icon: Icon, label, action }) => (
           <button
@@ -129,6 +145,63 @@ export function ProfileScreen() {
                 Abbrechen
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Beta-Feedback Modal */}
+      {showBetaModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
+            <h3 className="font-display text-[22px] text-ink mb-2">Beta-Feedback</h3>
+            <p className="text-[13px] text-ink-3 mb-4">Was fällt dir auf? Was fehlt? Was funktioniert gut?</p>
+            {betaSent ? (
+              <div className="text-center py-6">
+                <p className="text-[28px] mb-3">🙏</p>
+                <p className="text-[15px] text-ink font-medium">Danke für dein Feedback!</p>
+                <p className="text-[13px] text-ink-3 mt-1">Es hilft wirklich.</p>
+                <button
+                  onClick={() => setShowBetaModal(false)}
+                  className="mt-5 text-[13px] text-ink-3"
+                >
+                  Schließen
+                </button>
+              </div>
+            ) : (
+              <>
+                <textarea
+                  value={betaFeedback}
+                  onChange={e => setBetaFeedback(e.target.value)}
+                  placeholder="Dein Feedback..."
+                  rows={5}
+                  className="w-full border border-[var(--color-border)] rounded-xl px-4 py-3 text-[15px] text-ink bg-bg mb-4 focus:outline-none focus:border-[var(--color-accent)] transition-colors resize-none"
+                />
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={async () => {
+                      if (!betaFeedback.trim() || !user) return
+                      await supabase.from('user_feedback').insert({
+                        user_id: user.id,
+                        feedback_type: 'beta',
+                        content: betaFeedback.trim(),
+                        consent_given: true,
+                      })
+                      setBetaSent(true)
+                    }}
+                    disabled={!betaFeedback.trim()}
+                    className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors disabled:opacity-40"
+                  >
+                    Feedback senden
+                  </button>
+                  <button
+                    onClick={() => setShowBetaModal(false)}
+                    className="text-[13px] text-ink-3 text-center"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

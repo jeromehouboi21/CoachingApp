@@ -477,7 +477,7 @@ export function MirrorScreen() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [loading, setLoading] = useState(true)
 
-  const isPremium = profile?.plan === 'premium'
+  const isPremium = profile?.plan === 'premium' || profile?.plan === 'tester'
 
   useEffect(() => {
     if (!user) return

@@ -3,6 +3,8 @@ import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
 
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+
 const StepDots = ({ current, total }) => (
   <div className="flex gap-2">
     {Array.from({ length: total }).map((_, i) => (
@@ -19,6 +21,8 @@ export function Step4Auth({ onSuccess, onboardingData }) {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState('')
   const [magicSent, setMagicSent] = useState(false)
+  const [showInviteField, setShowInviteField] = useState(false)
+  const [inviteCode, setInviteCode] = useState('')
 
   const handleRegister = async (e) => {
     e.preventDefault()
@@ -27,12 +31,36 @@ export function Step4Auth({ onSuccess, onboardingData }) {
     try {
       await signUp(email, password)
       // Save onboarding data
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, } = await supabase.auth.getUser()
       if (user) {
         await supabase.from('profiles').update({
           onboarding_completed: true,
           onboarding_data: onboardingData,
         }).eq('id', user.id)
+
+        // Einladungscode einlösen (optional)
+        if (inviteCode.trim()) {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.access_token) {
+            const res = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-invite-code`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': ANON_KEY,
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
+              }
+            )
+            const result = await res.json()
+            if (!result.ok) {
+              // Code ungültig — Registrierung trotzdem fortsetzen (free plan)
+              console.warn('Invite code invalid:', result.error)
+            }
+          }
+        }
       }
       onSuccess()
     } catch (err) {
@@ -128,6 +156,28 @@ export function Step4Auth({ onSuccess, onboardingData }) {
             required
             className="w-full bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 text-[15px] text-ink placeholder:text-ink-3 outline-none focus:border-accent transition-colors"
           />
+          {mode === 'register' && (
+            <div>
+              {!showInviteField ? (
+                <button
+                  type="button"
+                  onClick={() => setShowInviteField(true)}
+                  className="text-[12px] text-ink-3 hover:text-ink-2 transition-colors"
+                >
+                  + Einladungscode eingeben
+                </button>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Einladungscode (optional)"
+                  value={inviteCode}
+                  onChange={e => setInviteCode(e.target.value.toUpperCase())}
+                  className="w-full bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 text-[15px] text-ink placeholder:text-ink-3 outline-none focus:border-accent transition-colors tracking-widest"
+                />
+              )}
+            </div>
+          )}
+
           {error && <p className="text-[13px] text-coral">{error}</p>}
           <Button type="submit" variant="primary" className="w-full py-4 text-base" disabled={!!loading}>
             {loading ? 'Lädt…' : mode === 'register' ? 'Loslegen — kostenlos' : 'Einloggen'}
