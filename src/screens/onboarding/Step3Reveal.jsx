@@ -53,7 +53,7 @@ export function Step3Reveal({ onNext, onSkip }) {
         </div>
 
         <h1 className="font-display text-[22px] text-ink leading-[1.25] mb-4 text-center">
-          Solche Muster haben immer einen Grund.
+          Solche Muster haben einen Grund.
         </h1>
 
         <p className="text-[15px] text-ink-2 leading-[1.65] text-center">

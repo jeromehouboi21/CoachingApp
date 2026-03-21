@@ -46,9 +46,8 @@ const TOOL_CARDS = [
     iconColor: 'var(--color-ink-2)',
     title: 'Verstehen',
     desc: 'Wie Muster entstehen',
-    to: null,
+    to: '/verstehen',
     badge: null,
-    soon: true,
   },
 ]
 

@@ -5,19 +5,19 @@ const AREAS = [
     id: 'work',
     icon: '💼',
     title: 'Im Job',
-    description: 'Ich sage nicht, was ich wirklich denke. Oder ich reagiere zu stark.',
+    description: 'Ich sage nicht, was ich wirklich denke.',
   },
   {
     id: 'relationships',
     icon: '🤝',
     title: 'In Beziehungen',
-    description: 'Ich ziehe mich zurück. Oder ich kämpfe zu hart.',
+    description: 'Ich ziehe mich zurück oder kämpfe zu hart.',
   },
   {
     id: 'self',
     icon: '🧘',
     title: 'Mit mir selbst',
-    description: 'Ich zweifle. Treffe keine Entscheidung. Oder strenge mich zu sehr an.',
+    description: 'Ich zweifle, treffe keine Entscheidungen.',
   },
 ]
 
@@ -39,7 +39,7 @@ export function Step2Question({ onNext, selectedArea, setSelectedArea }) {
 
       <div className="mb-6">
         <h1 className="font-display text-[28px] text-ink leading-[1.25] mb-2">
-          Gibt es eine Situation, in der du immer wieder gleich reagierst — obwohl du dir wünschst, es wäre anders?
+          Gibt es eine Situation, in der du oft gleich reagierst — obwohl du dir wünschst, es wäre anders?
         </h1>
         <p className="text-[16px] text-ink-2">Kein Urteil. Nur eine ehrliche Frage.</p>
       </div>

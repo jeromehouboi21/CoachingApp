@@ -12,6 +12,9 @@ import { ProfileScreen } from './screens/profile/ProfileScreen'
 import { HowItWorksScreen } from './screens/howto/HowItWorksScreen'
 import { WellnessCheckScreen } from './screens/wellness/WellnessCheckScreen'
 import { PremiumScreen } from './screens/premium/PremiumScreen'
+import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
+import { MusterDetail } from './screens/verstehen/MusterDetail'
+import { AusGespraechen } from './screens/verstehen/AusGespraechen'
 
 function LoadingScreen() {
   return (
@@ -49,6 +52,11 @@ export default function App() {
       <Route path="/howto" element={<ProtectedRoute><HowItWorksScreen /></ProtectedRoute>} />
       <Route path="/wellness" element={<ProtectedRoute><WellnessCheckScreen /></ProtectedRoute>} />
       <Route path="/premium" element={<ProtectedRoute><PremiumScreen /></ProtectedRoute>} />
+
+      {/* Verstehen-Modul */}
+      <Route path="/verstehen" element={<ProtectedRoute><VorstehenScreen /></ProtectedRoute>} />
+      <Route path="/verstehen/aus-gespraechen" element={<ProtectedRoute><AusGespraechen /></ProtectedRoute>} />
+      <Route path="/verstehen/:key" element={<ProtectedRoute><MusterDetail /></ProtectedRoute>} />
 
       {/* Haupt-App mit BottomNav */}
       <Route element={<AppShell />}>
