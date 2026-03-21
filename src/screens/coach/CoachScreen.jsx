@@ -79,12 +79,13 @@ export function CoachScreen() {
         )
         const data = response.ok ? await response.json() : null
         const briefing = data?.briefing ?? null
+        const coachFile = data?.coachFile ?? null
         const isFirstEver = !briefing || briefing.conversationCount === 0
 
         // VARIANTE 1: Wiederkehr-Begrüßung mit offenem Faden
         if (briefing && shouldShowReturnGreeting(briefing, profile)) {
           logger.info('Return greeting triggered', { intensity: briefing.openThread?.intensity })
-          await startBriefingConversation(briefing)
+          await startBriefingConversation(briefing, coachFile)
           // last_return_greeting_at aktualisieren (fire-and-forget)
           supabase
             .from('profiles')
@@ -94,7 +95,7 @@ export function CoachScreen() {
         } else {
           // VARIANTE 2: Normaler Start
           logger.debug('Standard entry', { isFirstEver, hasOpenThread: !!briefing?.openThread })
-          startNewConversation(isFirstEver)
+          startNewConversation(isFirstEver, coachFile)
         }
       } catch {
         startNewConversation()

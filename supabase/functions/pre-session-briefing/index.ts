@@ -72,7 +72,22 @@ Deno.serve(async (req) => {
       daysSince < 14  ? 'letzte Woche' :
                         `vor ${Math.floor(daysSince / 7)} Wochen`;
 
-    // 4. Briefing zusammenstellen
+    // 4. Coach-Akte + Personenprofil laden (für buildSystemPrompt)
+    const [{ data: fileEntries }, { data: coacheeProfile }] = await Promise.all([
+      supabase
+        .from('coach_file_entries')
+        .select('id, category, label, description, example, confidence, status')
+        .eq('user_id', user.id)
+        .neq('status', 'resolved')
+        .order('confidence', { ascending: false }),
+      supabase
+        .from('coachee_profile')
+        .select('occupation, relationship_status, family_situation, life_phase, current_focus, known_values, known_stressors, known_resources')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+    ]);
+
+    // 5. Briefing + coachFile zusammenstellen
     const briefing = {
       lastConversationDate: dateLabel,
       daysSince,
@@ -86,7 +101,12 @@ Deno.serve(async (req) => {
       } : null,
     };
 
-    return new Response(JSON.stringify({ briefing }), {
+    const coachFile = {
+      entries: fileEntries ?? [],
+      profile: coacheeProfile ?? undefined,
+    };
+
+    return new Response(JSON.stringify({ briefing, coachFile }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
 

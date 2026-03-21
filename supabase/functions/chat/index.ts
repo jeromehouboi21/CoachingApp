@@ -243,6 +243,30 @@ interface PreSessionBriefing {
   openThread?: OpenThread | null;
 }
 
+interface CoachFileEntry {
+  id: string;
+  category: 'pattern' | 'strength' | 'theme' | 'value' | 'trigger';
+  label: string;
+  description?: string;
+  example?: string;
+  confidence: number;
+  status: 'active' | 'fading' | 'resolved';
+}
+
+interface CoachFile {
+  entries: CoachFileEntry[];
+  profile?: {
+    occupation?: string;
+    relationship_status?: string;
+    family_situation?: string;
+    life_phase?: string;
+    current_focus?: string;
+    known_values?: string[];
+    known_stressors?: string[];
+    known_resources?: string[];
+  };
+}
+
 const SCALING_HINTS: Record<number, string> = {
   1:  "Was hält dich gerade noch aufrecht — auch wenn es wenig ist?",
   2:  "Was wäre der kleinste denkbare Schritt, der sich heute noch möglich anfühlt?",
@@ -256,7 +280,7 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile): string {
   let prompt = BASE_SYSTEM_PROMPT;
 
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
@@ -294,8 +318,53 @@ ${text}`;
     prompt += briefingText;
   }
 
-  // Nutzer-spezifisches Gedächtnis
-  if (memory) {
+  // BLOCK 2: Coach-Akte (Idee 01 + 02) — strukturierte Beobachtungen + Personenprofil
+  // Fallback auf user_memory wenn noch keine coach_file_entries vorhanden.
+  if (coachFile && coachFile.entries?.length) {
+    const byCategory = (cat: string) =>
+      coachFile.entries
+        .filter((e) => e.category === cat && e.status !== 'resolved')
+        .map((e) => {
+          let text = e.label;
+          if (e.confidence >= 4) text += ' (wiederholt beobachtet)';
+          if (e.status === 'fading') text += ' (zeigt sich seltener)';
+          if (e.example) text += ` — Beispiel: "${e.example}"`;
+          return text;
+        });
+
+    const patterns  = byCategory('pattern');
+    const strengths = byCategory('strength');
+    const themes    = byCategory('theme');
+    const values    = byCategory('value');
+    const triggers  = byCategory('trigger');
+
+    let fileBlock = `\n\n--- COACH-AKTE: DEINE BEOBACHTUNGEN ÜBER DIESEN MENSCHEN ---`;
+    if (patterns.length)  fileBlock += `\nMuster:   ${patterns.join(' · ')}`;
+    if (strengths.length) fileBlock += `\nStärken:  ${strengths.join(' · ')}`;
+    if (themes.length)    fileBlock += `\nThemen:   ${themes.join(' · ')}`;
+    if (values.length)    fileBlock += `\nWerte:    ${values.join(' · ')}`;
+    if (triggers.length)  fileBlock += `\nTrigger:  ${triggers.join(' · ')}`;
+
+    if (coachFile.profile) {
+      const p = coachFile.profile;
+      const ctx: string[] = [];
+      if (p.occupation)           ctx.push(p.occupation);
+      if (p.relationship_status)  ctx.push(p.relationship_status);
+      if (p.family_situation)     ctx.push(p.family_situation);
+      if (p.life_phase)           ctx.push(`Lebensphase: ${p.life_phase}`);
+      if (p.current_focus)        ctx.push(`Fokus: ${p.current_focus}`);
+      if (ctx.length) fileBlock += `\nKontext:  ${ctx.join(' · ')}`;
+    }
+
+    fileBlock += `\n\nWICHTIG: Nutze die Akte als stilles Fundament, nicht als Skript.
+Erwähne Einträge nie direkt. Lass sie deine Fragen informieren.
+Wenn es natürlich passt: "Du hast mir mal erzählt, dass..."
+--- ENDE COACH-AKTE ---`;
+
+    prompt += fileBlock;
+
+  } else if (memory) {
+    // Legacy-Fallback: user_memory für Nutzer ohne coach_file_entries
     const parts: string[] = [];
     if (memory.themes?.length)
       parts.push(`Wiederkehrende Themen: ${memory.themes.join(', ')}`);
@@ -307,10 +376,9 @@ ${text}`;
       parts.push(`Lebenskontext: ${JSON.stringify(memory.context)}`);
 
     if (parts.length) {
-      prompt += `\n\n--- DEIN WISSEN ÜBER DIESEN MENSCHEN ---
+      prompt += `\n\n--- DEIN WISSEN ÜBER DIESEN MENSCHEN (Legacy) ---
 ${parts.join('\n')}
 Nutze dieses Wissen subtil — erwähne es nicht direkt, aber lass es in deine Fragen einfließen.
-Wenn es passt, beziehe dich auf Bekanntes: "Du hast mir mal erzählt, dass..."
 --- ENDE ---`;
     }
   }
@@ -421,7 +489,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, requestId } = body as any;
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, requestId } = body as any;
 
     // Jetzt logger mit requestId + userId neu erstellen — alle weiteren Logs sind korrelierbar
     logger = createLogger('chat', requestId ?? undefined, user.id);
@@ -480,7 +548,7 @@ Deno.serve(async (req) => {
     // Normaler Chat — Streaming
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing);
+      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile);
 
     if (wellnessCheck) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';

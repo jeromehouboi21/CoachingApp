@@ -41,12 +41,15 @@ export function useChat(userId, memory, session) {
   const isFirstUserMessageRef = useRef(true)
   // Aktuelles Briefing — wird beim Senden mitgeschickt
   const briefingRef = useRef(null)
+  // Coach-Akte — wird beim Senden mitgeschickt
+  const coachFileRef = useRef(null)
 
   // Wellness-Start: kein sichtbarer User-Turn, Coach antwortet direkt aus dem System-Prompt
-  const startWellnessConversation = useCallback(async (wellnessCheck) => {
+  const startWellnessConversation = useCallback(async (wellnessCheck, coachFile = null) => {
     setMessages([])
     setConversationId(null)
     ragContextRef.current = null
+    coachFileRef.current = coachFile
     isFirstUserMessageRef.current = false
 
     let convId = null
@@ -111,6 +114,7 @@ export function useChat(userId, memory, session) {
             memory: memory || null,
             ragContext: null,
             wellnessCheck,
+            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
@@ -186,11 +190,12 @@ export function useChat(userId, memory, session) {
 
   // Wiederkehr-Begrüßung: Coach öffnet automatisch mit einem ersten Turn
   // (basierend auf offenem Faden aus dem letzten Gespräch)
-  const startBriefingConversation = useCallback(async (briefing) => {
+  const startBriefingConversation = useCallback(async (briefing, coachFile = null) => {
     setMessages([])
     setConversationId(null)
     ragContextRef.current = null
     briefingRef.current = briefing
+    coachFileRef.current = coachFile
     isFirstUserMessageRef.current = false
 
     let convId = null
@@ -233,6 +238,7 @@ export function useChat(userId, memory, session) {
             conversationId: convId,
             memory: memory || null,
             briefing,
+            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
@@ -283,7 +289,7 @@ export function useChat(userId, memory, session) {
     }
   }, [userId, memory, session])
 
-  const startNewConversation = useCallback(async (isFirstEver = false) => {
+  const startNewConversation = useCallback(async (isFirstEver = false, coachFile = null) => {
     const opening = isFirstEver
       ? FIRST_OPENING_MESSAGE
       : OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
@@ -292,6 +298,7 @@ export function useChat(userId, memory, session) {
     setConversationId(null)
     ragContextRef.current = null
     briefingRef.current = null
+    coachFileRef.current = coachFile
     isFirstUserMessageRef.current = true
 
     if (userId) {
@@ -386,6 +393,7 @@ export function useChat(userId, memory, session) {
             memory: memory || null,
             ragContext: ragContextRef.current || null,
             briefing: briefingRef.current || null,
+            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
