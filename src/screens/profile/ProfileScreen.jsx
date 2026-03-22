@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export function ProfileScreen() {
   const { profile, user, signOut, updateProfile } = useAuth()
@@ -13,6 +15,10 @@ export function ProfileScreen() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState('')
   const [showBetaModal, setShowBetaModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
   const [betaFeedback, setBetaFeedback] = useState('')
   const [betaSent, setBetaSent] = useState(false)
 
@@ -29,6 +35,34 @@ export function ProfileScreen() {
   const handleSignOut = async () => {
     await signOut()
     navigate('/onboarding')
+  }
+
+  const handleDeleteAccount = async () => {
+    if (deleteInput !== 'LÖSCHEN') return
+    setDeleteLoading(true)
+    setDeleteError('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Nicht eingeloggt')
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': ANON_KEY,
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      )
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error || 'Fehler beim Löschen')
+      await signOut()
+      navigate('/landing')
+    } catch (err) {
+      setDeleteError(err.message)
+      setDeleteLoading(false)
+    }
   }
 
   return (
@@ -108,10 +142,17 @@ export function ProfileScreen() {
         ))}
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-4 py-4 hover:bg-surface-2 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-4 py-4 border-b border-[var(--color-border)] hover:bg-surface-2 transition-colors text-left"
         >
           <LogOut size={18} color="var(--color-coral)" />
           <span className="flex-1 text-[15px] text-coral">Abmelden</span>
+        </button>
+        <button
+          onClick={() => { setDeleteInput(''); setDeleteError(''); setShowDeleteModal(true) }}
+          className="w-full flex items-center gap-3 px-4 py-4 hover:bg-surface-2 transition-colors text-left"
+        >
+          <Trash2 size={18} color="var(--color-ink-3)" />
+          <span className="flex-1 text-[15px] text-ink-3">Konto löschen</span>
         </button>
       </div>
 
@@ -141,6 +182,59 @@ export function ProfileScreen() {
               <button
                 onClick={() => setShowEditModal(false)}
                 className="text-[13px] text-ink-3 text-center"
+              >
+                Abbrechen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Konto löschen Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
+            <h3 className="font-display text-[22px] text-coral mb-2">Konto wirklich löschen?</h3>
+            <p className="text-[14px] text-ink-2 mb-4">
+              Damit werden unwiderruflich gelöscht:
+            </p>
+            <ul className="flex flex-col gap-1 mb-4">
+              {[
+                'Alle deine Gespräche',
+                'Dein persönliches Coaching-Profil',
+                'Alle erkannten Muster und Erkenntnisse',
+              ].map(item => (
+                <li key={item} className="flex items-start gap-2 text-[14px] text-ink-2">
+                  <span className="text-coral mt-0.5">·</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+            <p className="text-[13px] text-ink-3 mb-5">Diese Aktion kann nicht rückgängig gemacht werden.</p>
+            <label className="block text-[13px] text-ink-2 mb-2">
+              Zur Bestätigung tippe: <strong className="text-ink">LÖSCHEN</strong>
+            </label>
+            <input
+              value={deleteInput}
+              onChange={e => setDeleteInput(e.target.value)}
+              placeholder="LÖSCHEN"
+              className="w-full border border-[var(--color-border)] rounded-xl px-4 py-3 text-[15px] text-ink bg-bg mb-2 focus:outline-none focus:border-coral transition-colors"
+            />
+            {deleteError && <p className="text-[13px] text-coral mb-3">{deleteError}</p>}
+            <p className="text-[11px] text-ink-3 mb-5">
+              Deine Daten bei Anthropic (API-Logs) werden nach 30 Tagen automatisch von Anthropic gelöscht.
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteInput !== 'LÖSCHEN' || deleteLoading}
+                className="w-full bg-coral text-white py-3 rounded-full font-medium hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                {deleteLoading ? 'Wird gelöscht…' : 'Konto endgültig löschen'}
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium"
               >
                 Abbrechen
               </button>

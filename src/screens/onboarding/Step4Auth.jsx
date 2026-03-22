@@ -41,6 +41,8 @@ export function Step4Auth({ onSuccess, onboardingData }) {
           onboarding_data: onboardingData,
           consent_given_at: new Date().toISOString(),
           consent_version: '1.0',
+          coaching_agreement_accepted_at: new Date().toISOString(),
+          coaching_agreement_version: '1.0',
         }).eq('id', user.id)
 
         // Einladungscode einlösen (optional)
@@ -117,7 +119,7 @@ export function Step4Auth({ onSuccess, onboardingData }) {
     <div className="flex flex-col min-h-screen px-6 py-10 animate-[fadeSlideUp_0.4s_ease]">
       <div className="flex items-center justify-between mb-10">
         <span className="font-display text-[28px] text-ink">Friedensstifter</span>
-        <StepDots current={4} total={4} />
+        <StepDots current={5} total={5} />
       </div>
 
       <div className="mb-8">
@@ -241,6 +243,12 @@ export function Step4Auth({ onSuccess, onboardingData }) {
           >
             {mode === 'register' ? 'Ich habe bereits ein Konto' : 'Noch kein Konto? Registrieren'}
           </button>
+
+          <div className="flex items-center justify-center gap-4 mt-2">
+            <Link to="/impressum" target="_blank" className="text-[11px] text-ink-3 hover:text-ink-2">Impressum</Link>
+            <span className="w-1 h-1 rounded-full bg-ink-3" />
+            <Link to="/datenschutz" target="_blank" className="text-[11px] text-ink-3 hover:text-ink-2">Datenschutzerklärung</Link>
+          </div>
         </form>
       )}
     </div>
