@@ -5,7 +5,8 @@
       "Bash(supabase functions:*)",
       "Bash(find /f/OneDrive/Documents/GitHub/CoachingApp/src/screens -name *ellness* -o -name *screen*)",
       "Bash(grep -rn \"serviceWorker\\\\|workbox\\\\|sw.js\" vite.config* src/main*)",
-      "Bash(grep -n \"to: null\\\\|navigate.*null\\\\|disabled.*true\\\\|commented\\\\|//\" \"f:\\\\OneDrive\\\\Documents\\\\GitHub\\\\CoachingApp\\\\src\\\\screens\\\\home\\\\HomeScreen.jsx\")"
+      "Bash(grep -n \"to: null\\\\|navigate.*null\\\\|disabled.*true\\\\|commented\\\\|//\" \"f:\\\\OneDrive\\\\Documents\\\\GitHub\\\\CoachingApp\\\\src\\\\screens\\\\home\\\\HomeScreen.jsx\")",
+      "Bash(npx supabase:*)"
     ]
   }
 }

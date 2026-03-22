@@ -6,11 +6,14 @@
 import { createClient } from 'npm:@supabase/supabase-js';
 
 Deno.serve(async (req) => {
+  // CORS preflight — MUSS als erstes stehen
   if (req.method === 'OPTIONS') {
     return new Response(null, {
+      status: 204,
       headers: {
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
       },
     });
   }

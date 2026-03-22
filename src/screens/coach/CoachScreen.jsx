@@ -39,6 +39,9 @@ export function CoachScreen() {
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
   const sessionCountedRef = useRef(false)
+  // Refs für Navigation-State — sofort bei Mount gelesen, bevor React Router location.state verändern kann
+  const entryContextRef = useRef(location.state?.entryContext ?? null)
+  const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
@@ -50,12 +53,12 @@ export function CoachScreen() {
     if (hasStartedRef.current) return
     hasStartedRef.current = true
 
-    const wc = location.state?.wellnessCheck ?? null
-    const entryCtx = location.state?.entryContext ?? null
+    const wc = wellnessCheckRef.current
+    const entryCtx = entryContextRef.current
 
-    // State sofort löschen — kein erneutes Triggern bei Back-Navigation
+    // State löschen via React Router — kein erneutes Triggern bei Back-Navigation
     if (entryCtx || wc) {
-      window.history.replaceState({}, '')
+      navigate('/coach', { replace: true, state: {} })
     }
 
     // VARIANTE 3: Wellness-Check (höchste Priorität)
