@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { createLogger, setLoggerUserId } from '../lib/logger'
 
 const logger = createLogger('useAuth')
+const CURRENT_CONSENT_VERSION = '1.0'
 
 export function useAuth() {
   const [user, setUser] = useState(null)
@@ -107,5 +108,12 @@ export function useAuth() {
     return data
   }
 
-  return { user, session, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile }
+  function checkConsent(profileData) {
+    const p = profileData ?? profile
+    if (!p?.consent_given_at || !p?.consent_version) return 'missing'
+    if (p.consent_version !== CURRENT_CONSENT_VERSION) return 'outdated'
+    return 'valid'
+  }
+
+  return { user, session, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile, checkConsent }
 }

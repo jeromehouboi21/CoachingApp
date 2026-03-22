@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 import { supabase } from '../../lib/supabase'
@@ -23,6 +24,8 @@ export function Step4Auth({ onSuccess, onboardingData }) {
   const [magicSent, setMagicSent] = useState(false)
   const [showInviteField, setShowInviteField] = useState(false)
   const [inviteCode, setInviteCode] = useState('')
+  const [consentPrivacy, setConsentPrivacy] = useState(false)
+  const [consentSensitive, setConsentSensitive] = useState(false)
 
   const handleRegister = async (e) => {
     e.preventDefault()
@@ -30,12 +33,14 @@ export function Step4Auth({ onSuccess, onboardingData }) {
     setLoading('register')
     try {
       await signUp(email, password)
-      // Save onboarding data
+      // Save onboarding data + consent
       const { data: { user }, } = await supabase.auth.getUser()
       if (user) {
         await supabase.from('profiles').update({
           onboarding_completed: true,
           onboarding_data: onboardingData,
+          consent_given_at: new Date().toISOString(),
+          consent_version: '1.0',
         }).eq('id', user.id)
 
         // Einladungscode einlösen (optional)
@@ -178,8 +183,44 @@ export function Step4Auth({ onSuccess, onboardingData }) {
             </div>
           )}
 
+          {mode === 'register' && (
+            <div className="flex flex-col gap-3 mt-1">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentPrivacy}
+                  onChange={e => setConsentPrivacy(e.target.checked)}
+                  className="mt-0.5 flex-shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="text-[13px] text-ink-2 leading-snug">
+                  Ich habe die{' '}
+                  <Link to="/datenschutz" target="_blank" className="text-accent underline">
+                    Datenschutzerklärung
+                  </Link>{' '}
+                  gelesen und stimme der Verarbeitung meiner Daten zu.
+                </span>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentSensitive}
+                  onChange={e => setConsentSensitive(e.target.checked)}
+                  className="mt-0.5 flex-shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="text-[13px] text-ink-2 leading-snug">
+                  Ich stimme ausdrücklich der Verarbeitung meiner Gesprächsinhalte zu, die Informationen zu meinem emotionalen Erleben enthalten können (Art. 9 Abs. 2 lit. a DS-GVO).
+                </span>
+              </label>
+            </div>
+          )}
+
           {error && <p className="text-[13px] text-coral">{error}</p>}
-          <Button type="submit" variant="primary" className="w-full py-4 text-base" disabled={!!loading}>
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full py-4 text-base"
+            disabled={!!loading || (mode === 'register' && (!consentPrivacy || !consentSensitive))}
+          >
             {loading ? 'Lädt…' : mode === 'register' ? 'Loslegen — kostenlos' : 'Einloggen'}
           </Button>
 
@@ -192,10 +233,6 @@ export function Step4Auth({ onSuccess, onboardingData }) {
           <Button type="button" variant="secondary" className="w-full py-3" onClick={() => setMode('magic')}>
             Link per E-Mail erhalten
           </Button>
-
-          <p className="text-[12px] text-ink-3 text-center mt-2">
-            Mit der Registrierung stimmst du unserer Datenschutzerklärung zu.
-          </p>
 
           <button
             type="button"

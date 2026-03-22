@@ -15,6 +15,8 @@ import { PremiumScreen } from './screens/premium/PremiumScreen'
 import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
 import { MusterDetail } from './screens/verstehen/MusterDetail'
 import { AusGespraechen } from './screens/verstehen/AusGespraechen'
+import { ImpressumScreen } from './screens/legal/ImpressumScreen'
+import { DatenschutzScreen } from './screens/legal/DatenschutzScreen'
 
 function LoadingScreen() {
   return (
@@ -65,6 +67,10 @@ export default function App() {
         <Route path="/mirror" element={<ProtectedRoute><MirrorScreen /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
       </Route>
+
+      {/* Rechtliches — öffentlich zugänglich */}
+      <Route path="/impressum" element={<ImpressumScreen />} />
+      <Route path="/datenschutz" element={<DatenschutzScreen />} />
 
       {/* Fallback */}
       <Route

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 export function ProfileScreen() {
@@ -12,7 +12,6 @@ export function ProfileScreen() {
   const [insightCount, setInsightCount] = useState(0)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState('')
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [showBetaModal, setShowBetaModal] = useState(false)
   const [betaFeedback, setBetaFeedback] = useState('')
   const [betaSent, setBetaSent] = useState(false)
@@ -94,7 +93,8 @@ export function ProfileScreen() {
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setShowBetaModal(true) } }] : []),
-          { icon: Shield, label: 'Datenschutzerklärung', action: () => setShowPrivacyModal(true) },
+          { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
+          { icon: FileText, label: 'Impressum', action: () => navigate('/impressum') },
         ].map(({ icon: Icon, label, action }) => (
           <button
             key={label}
@@ -206,40 +206,6 @@ export function ProfileScreen() {
         </div>
       )}
 
-      {/* Datenschutzerklärung Modal */}
-      {showPrivacyModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
-          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6 max-h-[80vh] overflow-y-auto">
-            <h3 className="font-display text-[22px] text-ink mb-4">Datenschutzerklärung</h3>
-            <div className="bg-accent-light rounded-xl p-4 mb-5">
-              <p className="text-[14px] text-ink font-medium mb-3">Dein Raum gehört dir</p>
-              <ul className="flex flex-col gap-2">
-                {[
-                  'Deine Gespräche werden nur für dich gespeichert.',
-                  'Keine Weitergabe an Dritte — niemals.',
-                  'Keine Werbung, kein Tracking deines Verhaltens.',
-                  'Deine Daten werden nicht zum Training von KI-Modellen verwendet.',
-                  'Du kannst dein Konto und alle Daten jederzeit löschen.',
-                ].map(item => (
-                  <li key={item} className="flex items-start gap-2 text-[14px] text-ink-2">
-                    <span className="text-accent mt-0.5">·</span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="text-[13px] text-ink-2 mb-5 leading-relaxed">
-              Diese App speichert deine Konversationen und Erkenntnisse in einer sicheren Datenbank (Supabase, EU-Server), die ausschließlich dir zugänglich ist. Der KI-Coach wird über die Anthropic API betrieben. Deine Inhalte werden nicht für das Training von KI-Modellen verwendet. Bei Fragen: info@friedensstifter.coach
-            </p>
-            <button
-              onClick={() => setShowPrivacyModal(false)}
-              className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors"
-            >
-              Verstanden
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
