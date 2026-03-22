@@ -184,7 +184,7 @@ export function DatenschutzScreen() {
           <div className="bg-surface border border-[var(--color-border)] rounded-xl p-4 mt-2">
             <p className="text-[12px] text-ink-3">
               Auftragsverarbeitungsvertrag mit Supabase:{' '}
-              <a href="/supabase-dpa.pdf" target="_blank" rel="noopener noreferrer" className="text-accent underline">
+              <a href="/public/supabase-dpa.pdf" target="_blank" rel="noopener noreferrer" className="text-accent underline">
                 Supabase DPA (PDF) →
               </a>
             </p>
