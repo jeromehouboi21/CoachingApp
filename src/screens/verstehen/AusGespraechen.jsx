@@ -64,7 +64,7 @@ export function AusGespraechen() {
               Sie entstehen im Gespräch — mit der Zeit.
             </p>
             <button
-              onClick={() => navigate('/coach')}
+              onClick={() => navigate('/coach', { state: { entryContext: { source: 'verstehen' } } })}
               className="mt-4 bg-accent text-white text-[13px] font-medium px-5 py-2.5 rounded-full hover:bg-accent-2 transition-colors"
             >
               Gespräch beginnen →
@@ -108,6 +108,17 @@ export function AusGespraechen() {
                 </div>
               )
             })}
+
+            {/* Mit dem Coach besprechen CTA */}
+            <button
+              onClick={() => {
+                const dominant = references[0]
+                navigate('/coach', { state: { entryContext: { source: 'pattern', topic: dominant.pattern_label, topicKey: dominant.pattern_key } } })
+              }}
+              className="w-full bg-accent text-white text-[14px] font-medium py-4 rounded-full hover:bg-accent-2 transition-colors"
+            >
+              Mit dem Coach besprechen →
+            </button>
 
             {/* Premium-CTA wenn Free-Nutzer gesperrte Karten sieht */}
             {!isPremium && references.length > 1 && (

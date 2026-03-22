@@ -119,7 +119,7 @@ export function HomeScreen() {
       {/* Tagesimpuls Card */}
       <div
         className="relative bg-accent rounded-xl p-6 mb-8 overflow-hidden cursor-pointer"
-        onClick={() => navigate('/coach')}
+        onClick={() => navigate('/coach', { state: { entryContext: { source: 'tagesimpuls', impulse } } })}
       >
         <div className="absolute right-0 top-0 w-32 h-32 rounded-full bg-white opacity-5 translate-x-10 -translate-y-10" />
         <div className="absolute right-4 bottom-0 w-20 h-20 rounded-full bg-white opacity-5 translate-y-8" />
@@ -127,7 +127,7 @@ export function HomeScreen() {
         <p className="font-display text-[20px] text-white leading-[1.35] mb-5 relative z-10">{impulse}</p>
         <button
           className="bg-white text-accent text-[13px] font-medium px-4 py-2 rounded-full hover:bg-accent-light transition-colors relative z-10"
-          onClick={e => { e.stopPropagation(); navigate('/coach') }}
+          onClick={e => { e.stopPropagation(); navigate('/coach', { state: { entryContext: { source: 'tagesimpuls', impulse } } }) }}
         >
           Darüber sprechen →
         </button>

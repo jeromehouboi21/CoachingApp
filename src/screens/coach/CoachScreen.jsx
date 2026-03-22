@@ -35,7 +35,7 @@ export function CoachScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
   const sessionCountedRef = useRef(false)
@@ -51,8 +51,14 @@ export function CoachScreen() {
     hasStartedRef.current = true
 
     const wc = location.state?.wellnessCheck ?? null
+    const entryCtx = location.state?.entryContext ?? null
 
-    // VARIANTE 3: Wellness-Check
+    // State sofort löschen — kein erneutes Triggern bei Back-Navigation
+    if (entryCtx || wc) {
+      window.history.replaceState({}, '')
+    }
+
+    // VARIANTE 3: Wellness-Check (höchste Priorität)
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
       startWellnessConversation(wc)
@@ -83,8 +89,12 @@ export function CoachScreen() {
         const coachFile = data?.coachFile ?? null
         const isFirstEver = !briefing || briefing.conversationCount === 0
 
+        // VARIANTE 4: Entry-Kontext (Priorität über Wiederkehr-Begrüßung)
+        if (entryCtx && entryCtx.source !== 'direct') {
+          logger.info('Entry context start', { source: entryCtx.source, topic: entryCtx.topic })
+          await startEntryContextConversation(entryCtx, coachFile)
         // VARIANTE 1: Wiederkehr-Begrüßung mit offenem Faden
-        if (briefing && shouldShowReturnGreeting(briefing, profile)) {
+        } else if (briefing && shouldShowReturnGreeting(briefing, profile)) {
           logger.info('Return greeting triggered', { intensity: briefing.openThread?.intensity })
           await startBriefingConversation(briefing, coachFile)
           // last_return_greeting_at aktualisieren (fire-and-forget)

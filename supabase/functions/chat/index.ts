@@ -284,6 +284,14 @@ interface PreSessionBriefing {
   openThread?: OpenThread | null;
 }
 
+interface EntryContext {
+  source: 'pattern' | 'tagesimpuls' | 'verstehen' | 'spiegel' | 'direct';
+  topic?: string;
+  topicKey?: string;
+  impulse?: string;
+  insightText?: string;
+}
+
 interface CoachFileEntry {
   id: string;
   category: 'pattern' | 'strength' | 'theme' | 'value' | 'trigger';
@@ -328,7 +336,7 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext): string {
   let prompt = BASE_SYSTEM_PROMPT;
 
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
@@ -526,6 +534,73 @@ WICHTIG:
 --- ENDE WELLNESS-CHECK ---`;
   }
 
+  // ─── BLOCK 7: Entry-Kontext (v2.6) ──────────────────────────────────────────
+  // Wird gesetzt wenn der Nutzer aus einem bestimmten App-Kontext in den
+  // Coach springt. Hat KEINE Priorität über Wellness-Check.
+  if (entryContext && entryContext.source !== 'direct' && !wellnessCheck) {
+    let entryBlock = `\n\n--- ENTRY-KONTEXT: WOHER KOMMT DIESER MENSCH ---`;
+
+    if (entryContext.source === 'pattern' && entryContext.topic) {
+      entryBlock += `
+Der Mensch hat sich gerade das Muster "${entryContext.topic}" angeschaut
+und ist von dort in das Gespräch gewechselt.
+
+Er möchte über dieses Muster sprechen — aber er hat es noch nicht selbst
+in Worte gefasst. Er hat nur auf "Darüber sprechen" getippt.
+
+DEINE ERSTE ANTWORT — PFLICHTSTRUKTUR:
+1. Nimm das Muster auf — ohne es zu definieren oder zu erklären.
+   Er weiß, was es bedeutet, er hat es gerade gelesen.
+   Statt: "${entryContext.topic} bedeutet, dass..."
+   Lieber: "Da ist also dieses Muster. Wann hast du es zuletzt gespürt?"
+2. Stelle GENAU EINE konkrete, situative Frage — nicht theoretisch.
+   Frag nach einem echten Moment, nicht nach dem Muster an sich.
+   Beispiele:
+   — "Wann hast du das zuletzt so erlebt — vielleicht diese Woche?"
+   — "Gibt es gerade eine Situation, in der du das erkennst?"
+   — "Was war der letzte Moment, in dem du gespürt hast, dass das passiert?"
+3. Maximal 2 Sätze. Kein Hallo. Kein Einleiten. Direkt rein.`;
+
+    } else if (entryContext.source === 'tagesimpuls' && entryContext.impulse) {
+      entryBlock += `
+Der Mensch hat auf den Tagesimpuls geklickt:
+"${entryContext.impulse}"
+
+Er will über genau diese Frage sprechen. Beginne mit ihr —
+aber stelle sie nicht einfach nochmal. Mach sie persönlicher.
+Statt die Frage zu wiederholen: nimm sie auf und öffne sie.
+Beispiel: "Was kommt dir gerade in den Sinn, wenn du das hörst?"
+
+Maximal 1-2 Sätze. Kein langer Einstieg.`;
+
+    } else if (entryContext.source === 'spiegel' && entryContext.insightText) {
+      entryBlock += `
+Der Mensch kommt aus seinem persönlichen Spiegel und möchte
+über eine seiner Erkenntnisse sprechen:
+"${entryContext.insightText}"
+
+Er hat das selbst so formuliert oder bestätigt — es ist seine Sprache.
+Beginne mit dieser Erkenntnis. Frag nach dem Jetzt, nicht nach der Vergangenheit.
+Beispiel:
+— "Du hast das selbst so formuliert. Wie spürst du das gerade?"
+— "Wann war das zuletzt konkret so — in den letzten Tagen?"
+
+Maximal 2 Sätze. Kein Hallo. Nimm die Erkenntnis als gegeben.`;
+
+    } else if (entryContext.source === 'verstehen') {
+      entryBlock += `
+Der Mensch kommt aus dem "Verstehen"-Modul.
+Er hat sich gerade mit Mustern beschäftigt — allgemein, ohne spezifisches Thema.
+
+Frag offen was ihn davon beschäftigt hat.
+Beispiel: "Was ist dir gerade durch den Kopf gegangen, als du das gelesen hast?"
+Maximal 1 Satz.`;
+    }
+
+    entryBlock += `\n--- ENDE ENTRY-KONTEXT ---`;
+    prompt += entryBlock;
+  }
+
   return prompt;
 }
 
@@ -579,7 +654,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, requestId } = body as any;
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, requestId } = body as any;
 
     // Jetzt logger mit requestId + userId neu erstellen — alle weiteren Logs sind korrelierbar
     logger = createLogger('chat', requestId ?? undefined, user.id);
@@ -638,7 +713,7 @@ Deno.serve(async (req) => {
     // Normaler Chat — Streaming
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile);
+      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext);
 
     if (wellnessCheck) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';

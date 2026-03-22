@@ -149,7 +149,7 @@ export function MusterDetail() {
   }
 
   const handleStartChat = () => {
-    navigate('/coach', { state: { initialPrompt: pattern.prompt } })
+    navigate('/coach', { state: { entryContext: { source: 'pattern', topic: pattern.label, topicKey: key } } })
   }
 
   return (

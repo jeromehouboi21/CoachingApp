@@ -107,9 +107,15 @@ export function VorstehenScreen() {
         <h2 className="font-display text-[22px] text-ink leading-[1.3] mb-2">
           Warum reagierst du oft so?
         </h2>
-        <p className="text-[14px] text-ink-2 leading-relaxed">
+        <p className="text-[14px] text-ink-2 leading-relaxed mb-4">
           Muster sind keine Fehler. Sie entstanden, weil sie einmal die beste Lösung waren.
         </p>
+        <button
+          onClick={() => navigate('/coach', { state: { entryContext: { source: 'verstehen' } } })}
+          className="text-[13px] text-accent font-medium hover:underline"
+        >
+          Zum Coach →
+        </button>
       </div>
 
       {/* Coach-Banner — nur wenn persönliche Muster vorhanden */}
