@@ -51,16 +51,20 @@
 
 **`profiles`** — erweitert `auth.users`
 ```
-id                        UUID (PK, FK → auth.users)
-display_name              TEXT
-onboarding_completed      BOOLEAN DEFAULT FALSE
-onboarding_data           JSONB  -- Antworten aus Onboarding
-streak_count              INTEGER DEFAULT 0
-streak_last_date          DATE
-plan                      TEXT CHECK ('free' | 'premium' | 'tester')
-sessions_used_this_month  INTEGER DEFAULT 0
-last_return_greeting_at   TIMESTAMPTZ  -- v2.1: Wiederkehr-Begrüßung Throttle
-created_at                TIMESTAMPTZ
+id                                UUID (PK, FK → auth.users)
+display_name                      TEXT
+onboarding_completed              BOOLEAN DEFAULT FALSE
+onboarding_data                   JSONB  -- Antworten aus Onboarding
+streak_count                      INTEGER DEFAULT 0
+streak_last_date                  DATE
+plan                              TEXT CHECK ('free' | 'premium' | 'tester')
+sessions_used_this_month          INTEGER DEFAULT 0
+last_return_greeting_at           TIMESTAMPTZ  -- v2.1: Wiederkehr-Begrüßung Throttle
+consent_given_at                  TIMESTAMPTZ  -- DSGVO Art. 6/7: Zeitstempel Datenschutz-Zustimmung
+consent_version                   TEXT         -- z.B. '1.0'
+coaching_agreement_accepted_at    TIMESTAMPTZ  -- Zeitstempel Coaching-Vereinbarungs-Zustimmung
+coaching_agreement_version        TEXT         -- z.B. '1.0'
+created_at                        TIMESTAMPTZ
 ```
 
 **`conversations`**

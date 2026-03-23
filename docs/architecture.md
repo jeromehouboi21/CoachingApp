@@ -1,7 +1,7 @@
 # Friedensstifter — Architektur-Dokumentation
 
 **Produkt:** Friedensstifter · Dein systemischer Begleiter
-**Version:** Design-Dokument v2.1
+**Version:** Design-Dokument v2.5
 **Stand:** März 2026
 
 ---
@@ -38,9 +38,10 @@ Nutzer (Browser / PWA)
 | `src/screens/wellness/WellnessCheckScreen.jsx` | Score-Auswahl + Kontext-Chips |
 | `src/screens/verstehen/` | 3 Screens: Übersicht, Muster-Detail, Aus Gesprächen |
 | `src/screens/mirror/MirrorScreen.jsx` | "Mein Spiegel" — gespeicherte Erkenntnisse |
-| `src/hooks/useAuth.js` | Supabase Auth + Profile |
+| `src/screens/onboarding/` | 4-Schritt-Onboarding inkl. Registrierung + Invite-Code |
+| `src/hooks/useAuth.js` | Supabase Auth + Profile + Pending-Invite-Code-Logik |
 | `src/hooks/useChat.js` | Streaming-Chat, 3 Start-Funktionen, Memory-Extraktion |
-| `src/hooks/useMemory.js` | Lesen + Schreiben des Coach-Gedächtnisses |
+| `src/hooks/useMemory.js` | Lesen + Schreiben des Coach-Gedächtnisses (Legacy-Fallback) |
 | `src/lib/prompts.js` | Texte: Eröffnungen, Impulsfragen, Skalierungsfragen |
 | `src/lib/supabase.js` | Supabase Client-Instanz |
 | `src/lib/logger.js` | Strukturiertes Frontend-Logging → app_logs |
@@ -51,7 +52,8 @@ Nutzer (Browser / PWA)
 |---|---|---|
 | `chat` | Jede Nutzer-Nachricht | Baut System-Prompt, streamt Antwort (SSE) |
 | `pre-session-briefing` | CoachScreen Mount | Liest letztes Gespräch + offenen Faden |
-| `post-conversation` | Nach Gespräch (fire-and-forget) | Anonymes RAG-Muster, Selbstreflexion, open_thread |
+| `post-conversation` | Nach Gespräch (fire-and-forget) | Anonymes RAG-Muster, Selbstreflexion, open_thread, pattern_references |
+| `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC → plan='tester' |
 | `rag-search` | Erste Nutzer-Nachricht | Semantische Suche in experience_patterns |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
 
@@ -74,7 +76,7 @@ Nutzer schreibt Nachricht
     ├── [Edge Function: chat]
     │       ├── JWT validieren → user holen
     │       ├── buildSystemPrompt():
-    │       │       BASE + Briefing + Memory + RAG + Wellness
+    │       │       BASE + Briefing + Coach-Akte + Resonanzkarte + RAG + Wellness
     │       └── Anthropic API stream
     │               └── claude-sonnet-4-5 (Streaming)
     │
@@ -137,6 +139,27 @@ CoachScreen mountet (user + profile geladen)
                             + profiles.last_return_greeting_at aktualisieren
 ```
 
+### 5. Registrierung + Invite-Code
+
+```
+Onboarding Step 4 (handleRegister)
+    │
+    ├── supabase.auth.signUp() → { user, session } direkt aus Rückgabe
+    │
+    ├── profiles.update():
+    │       onboarding_completed, onboarding_data,
+    │       consent_given_at, consent_version,
+    │       coaching_agreement_accepted_at, coaching_agreement_version
+    │
+    ├── session vorhanden (kein E-Mail-Confirm)?
+    │       └── POST /functions/v1/validate-invite-code
+    │               └── redeem_invite_code RPC → plan='tester'
+    │
+    └── session NULL (E-Mail-Bestätigung erforderlich)?
+            └── localStorage.setItem('pendingInviteCode', code)
+                    └── useAuth.onAuthStateChange: nach SIGNED_IN einlösen
+```
+
 ---
 
 ## Datenbankschema
@@ -150,9 +173,13 @@ profiles
 ├── onboarding_completed (BOOLEAN)
 ├── onboarding_data (JSONB)
 ├── streak_count / streak_last_date
-├── plan ('free' | 'premium')
+├── plan ('free' | 'premium' | 'tester')
 ├── sessions_used_this_month
-└── last_return_greeting_at (TIMESTAMPTZ) — Throttle für Wiederkehr-Begrüßung
+├── last_return_greeting_at (TIMESTAMPTZ) — Throttle für Wiederkehr-Begrüßung
+├── consent_given_at (TIMESTAMPTZ) — DSGVO Art. 6/7
+├── consent_version (TEXT)
+├── coaching_agreement_accepted_at (TIMESTAMPTZ)
+└── coaching_agreement_version (TEXT)
 
 conversations
 ├── id (UUID)
@@ -169,12 +196,58 @@ messages
 ├── content
 └── input_mode ('text' | 'voice')
 
-user_memory (1 Zeile pro User)
+user_memory (1 Zeile pro User — Legacy, Fallback)
 ├── user_id (UNIQUE)
 ├── themes (JSONB[])
 ├── patterns (JSONB[])
 ├── strengths (JSONB[])
 └── context (JSONB)
+
+invite_codes — Beta-Tester Einladungscodes
+├── id (UUID)
+├── code (TEXT UNIQUE, immer uppercase)
+├── max_uses (INTEGER, NULL = unbegrenzt)
+├── uses_count (INTEGER DEFAULT 0)
+└── expires_at (TIMESTAMPTZ, NULL = kein Ablaufdatum)
+    RLS: keine SELECT-Policy für normale Nutzer
+    Einlösen nur via redeem_invite_code RPC (SECURITY DEFINER)
+```
+
+### Coach-Akte (v2.2)
+
+```
+coach_file_entries — strukturierte Coach-Akte (ersetzt user_memory)
+├── id (UUID)
+├── user_id (FK → profiles)
+├── category ('pattern' | 'strength' | 'theme' | 'value' | 'trigger')
+├── label / description / example
+├── source_conversation_id (FK → conversations, nullable)
+├── first_detected (TIMESTAMPTZ)
+├── history (JSONB[]) — [{ date, note, conversation_id }]
+├── confidence (INTEGER 1–5)
+├── status ('active' | 'fading' | 'resolved')
+└── last_updated (TIMESTAMPTZ)
+
+coachee_profile — Personenprofil, wächst durch Coach-Extraktion
+├── id (UUID)
+├── user_id (FK → profiles, UNIQUE)
+├── occupation / relationship_status / family_situation / living_situation
+├── life_phase / current_focus
+├── known_values / known_stressors / known_resources (JSONB[])
+├── completeness (INTEGER)
+├── last_enriched_by (FK → conversations, nullable)
+└── last_updated (TIMESTAMPTZ)
+
+session_notes — strukturierte Session-Notes (1 pro Gespräch)
+├── id (UUID)
+├── conversation_id (FK → conversations, UNIQUE)
+├── user_id (FK → profiles)
+├── main_topic / emotional_intensity (1–5)
+├── resistance_detected (BOOLEAN) / resistance_location
+├── breakthrough_moment / where_we_left_off
+├── coach_effectiveness (1–5) / next_session_rec
+├── file_updates (JSONB[])
+└── created_at (TIMESTAMPTZ)
 ```
 
 ### Lernende Architektur
@@ -190,7 +263,16 @@ pattern_references — persönliche Muster-Erkennungen
 ├── user_id / conversation_id / message_id
 ├── pattern_key (z.B. "rueckzug_unter_druck")
 ├── pattern_label (z.B. "Rückzug unter Druck")
-└── excerpt (max. 150 Zeichen)
+└── excerpt (max. 150 Zeichen, anonymisiert)
+
+resonance_map — emotionales Reaktionsprofil (v2.4)
+├── user_id (FK → profiles, UNIQUE)
+├── opening_patterns (JSONB[]) — Was öffnet diesen Menschen
+├── closing_patterns (JSONB[]) — Was führt zu Schließen / Ausweichen
+├── effective_styles (JSONB[]) — Frage-Typen die funktionieren
+├── resonant_metaphors (JSONB[])
+├── preferred_pace ('slow' | 'medium' | 'direct')
+└── last_updated (TIMESTAMPTZ)
 
 coach_reflections — KI-Selbstreflexion nach jedem Gespräch
 ├── conversation_id
@@ -210,7 +292,7 @@ insights — "Mein Spiegel"-Erkenntnisse
 
 ## System-Prompt Architektur
 
-Die Edge Function `chat` baut den System-Prompt dynamisch aus bis zu 5 Blöcken:
+Die Edge Function `chat` baut den System-Prompt dynamisch aus bis zu 6 Blöcken:
 
 ```
 BASE_SYSTEM_PROMPT
@@ -223,16 +305,20 @@ BLOCK 1: Briefing (optional)
     Nur wenn conversationCount > 1
     Letztes Gesprächsdatum, offener Faden, Intensität
 
-BLOCK 2: user_memory (optional)
-    Themen, Muster, Stärken, Kontext aus vergangenen Gesprächen
+BLOCK 2: Coach-Akte (optional)
+    coach_file_entries + coachee_profile
+    Fallback: user_memory (Legacy)
 
-BLOCK 3: RAG-Kontext (optional)
+BLOCK 3: Resonanzkarte (optional, ab 3. Gespräch, immer unsichtbar)
+    resonance_map: opening_patterns, effective_styles, preferred_pace
+
+BLOCK 4: RAG-Kontext (optional)
     Anonyme Erfahrungen aus ähnlichen Gesprächen (pgvector)
 
-BLOCK 4: Supervision (optional)
+BLOCK 5: Supervision (optional)
     Wöchentliche Empfehlung aus Supervision-Cron
 
-BLOCK 5: Wellness-Check (optional, ersetzt Standard-Eröffnung)
+BLOCK 6: Wellness-Check (optional, ersetzt Standard-Eröffnung)
     Score (1–10), Kontext-Label, Skalierungsfrage
 ```
 
@@ -286,7 +372,7 @@ Post-Processing (nach jedem Gespräch)
 ## Freemium-Logik
 
 ```
-profiles.plan = 'free' | 'premium'
+profiles.plan = 'free' | 'premium' | 'tester'
 profiles.sessions_used_this_month — inkrementiert beim CoachScreen-Aufruf
 
 Free:
@@ -298,6 +384,10 @@ Premium:
     Unbegrenzte Gespräche
     Vollständiger Spiegel + Export
     Persönliche pattern_references im Verstehen-Modul
+
+Tester (via Invite-Code):
+    Wie Premium — für Beta-Tester
+    Wird beim Onboarding durch validate-invite-code Edge Function gesetzt
 ```
 
 Reset-Cron: `sessions_used_this_month = 0` am 1. des Monats.
@@ -334,6 +424,9 @@ useChat: token-by-token in setMessages() einbauen
 | `005_v1_8.sql` | app_logs |
 | `006_v2_0.sql` | pattern_references |
 | `007_v2_1.sql` | conversations.open_thread + open_thread_intensity · profiles.last_return_greeting_at |
+| `008_v2_2.sql` | coach_file_entries · coachee_profile · session_notes |
+| `009_v2_4.sql` | resonance_map |
+| `010_v2_5.sql` | profiles.plan + 'tester' · invite_codes · redeem_invite_code RPC |
 
 Deployment: `supabase db push` (lokal) oder Migration-Datei im Supabase Dashboard ausführen.
 
@@ -363,6 +456,8 @@ SUPABASE_SERVICE_ROLE_KEY=      # automatisch in Edge Functions verfügbar
 | `--color-bg` | `#F5F3EF` | Haupthintergrund |
 | `--color-surface` | `#FFFFFF` | Cards, Modals |
 | `--color-accent` | `#2D5A4E` | Brand-Grün, primäre Buttons |
+| `--color-accent-2` | `#4A8C7A` | Hover |
+| `--color-accent-light` | `#E8F0EE` | Hintergrund-Tints |
 | `--color-coral` | `#C4593A` | Warnung, niedrige Wellness-Scores |
 | `--color-ink` | `#1A1916` | Haupttext |
 | `--color-ink-2` | `#5C5A54` | Sekundärtext |
