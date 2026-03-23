@@ -92,7 +92,7 @@ export function useAuth() {
     if (data.user) {
       setLoggerUserId(data.user.id)
       logger.info('User signed in', { method: 'password' })
-      await supabase.from('profiles').insert({
+      await supabase.from('profiles').upsert({
         id: data.user.id,
         display_name: displayName || email.split('@')[0],
       })
