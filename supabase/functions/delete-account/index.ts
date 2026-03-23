@@ -42,13 +42,24 @@ Deno.serve(async (req) => {
 
     const userId = user.id;
 
-    // Alle user-eigenen Daten löschen (das meiste ist durch ON DELETE CASCADE abgedeckt,
-    // aber wir löschen explizit um sicher zu gehen)
+   // Schritt 1: Conversation IDs zuerst separat laden
+    const { data: conversations } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('user_id', userId);
+
+    const conversationIds = conversations?.map(c => c.id) ?? [];
+
+    // Schritt 2: Messages nur löschen wenn IDs vorhanden
+    if (conversationIds.length > 0) {
+      await supabase
+        .from('messages')
+        .delete()
+        .in('conversation_id', conversationIds);
+    }
+
+    // Dann der Rest wie gehabt parallel
     await Promise.all([
-      supabase.from('messages').delete().in(
-        'conversation_id',
-        supabase.from('conversations').select('id').eq('user_id', userId)
-      ),
       supabase.from('insights').delete().eq('user_id', userId),
       supabase.from('pattern_references').delete().eq('user_id', userId),
       supabase.from('user_feedback').delete().eq('user_id', userId),

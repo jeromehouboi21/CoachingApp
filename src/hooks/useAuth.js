@@ -26,11 +26,41 @@ export function useAuth() {
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null)
       setSession(session ?? null)
-      if (session?.user) loadProfile(session.user.id)
-      else {
+
+      if (session?.user) {
+        loadProfile(session.user.id)
+
+        // Pending Invite Code einlösen (nach E-Mail-Bestätigung)
+        const pendingCode = localStorage.getItem('pendingInviteCode')
+        if (pendingCode && session.access_token) {
+          localStorage.removeItem('pendingInviteCode')
+          try {
+            const res = await fetch(
+              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-invite-code`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                  'Authorization': `Bearer ${session.access_token}`,
+                },
+                body: JSON.stringify({ code: pendingCode }),
+              }
+            )
+            const result = await res.json()
+            if (result.ok) {
+              logger.info('Pending invite code redeemed', { code: pendingCode })
+            } else {
+              logger.warn('Pending invite code invalid', { code: pendingCode, error: result.error })
+            }
+          } catch (err) {
+            logger.warn('Failed to redeem pending invite code', err)
+          }
+        }
+      } else {
         setProfile(null)
         setLoggerUserId(null)
         setLoading(false)

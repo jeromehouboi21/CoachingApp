@@ -32,43 +32,61 @@ export function Step4Auth({ onSuccess, onboardingData }) {
     setError('')
     setLoading('register')
     try {
-      await signUp(email, password)
-      // Save onboarding data + consent
-      const { data: { user }, } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from('profiles').update({
+      // signUp() gibt { user, session } direkt zurück
+      const data = await signUp(email, password)
+      const userId = data.user?.id
+      const accessToken = data.session?.access_token
+
+      if (!userId) throw new Error('Registrierung fehlgeschlagen — kein User erhalten.')
+
+      // Profile-Update mit userId aus signUp() — KEIN getUser() danach
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
           onboarding_completed: true,
           onboarding_data: onboardingData,
           consent_given_at: new Date().toISOString(),
           consent_version: '1.0',
           coaching_agreement_accepted_at: new Date().toISOString(),
           coaching_agreement_version: '1.0',
-        }).eq('id', user.id)
+        })
+        .eq('id', userId)
 
-        // Einladungscode einlösen (optional)
-        if (inviteCode.trim()) {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.access_token) {
-            const res = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-invite-code`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': ANON_KEY,
-                  'Authorization': `Bearer ${session.access_token}`,
-                },
-                body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
-              }
-            )
-            const result = await res.json()
-            if (!result.ok) {
-              // Code ungültig — Registrierung trotzdem fortsetzen (free plan)
-              console.warn('Invite code invalid:', result.error)
-            }
-          }
-        }
+      if (updateError) {
+        console.error('Profile update failed:', updateError)
+        // Nicht werfen — Registrierung trotzdem fortsetzen
       }
+
+      // Invite-Code einlösen (optional)
+      if (inviteCode.trim() && accessToken) {
+        try {
+          const res = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-invite-code`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': ANON_KEY,
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
+            }
+          )
+          const result = await res.json()
+          if (!result.ok) {
+            console.warn('Invite code invalid or already used:', result.error)
+            // Kein Fehler für den Nutzer — Registrierung läuft weiter (free plan)
+          }
+        } catch (inviteErr) {
+          console.warn('Invite code request failed:', inviteErr)
+          // Nicht werfen — Registrierung trotzdem fortsetzen
+        }
+      } else if (inviteCode.trim() && !accessToken) {
+        // Kein accessToken bedeutet E-Mail-Bestätigung erforderlich.
+        // Invite-Code im localStorage zwischenspeichern und nach Login einlösen.
+        localStorage.setItem('pendingInviteCode', inviteCode.trim().toUpperCase())
+      }
+
       onSuccess()
     } catch (err) {
       setError(err.message)
