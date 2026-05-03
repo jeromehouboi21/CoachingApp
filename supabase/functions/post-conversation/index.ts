@@ -5,6 +5,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
+import { createLogger } from '../_shared/logger.ts';
 
 const SESSION_NOTES_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Erstelle strukturierte Session-Notes für deine Coach-Akte.
@@ -109,8 +110,18 @@ Antworte NUR mit validem JSON:
       "pattern_label": "Lesbarer Muster-Name",
       "excerpt": "Relevantes Zitat aus dem Gespräch (max. 150 Zeichen)"
     }
+  ],
+  "insights": [
+    {
+      "content": "Erkenntnis in einem Satz, aus Ich-Perspektive formuliert",
+      "category": "muster | stärke | erkenntnis | ziel"
+    }
   ]
 }
+
+insights: 0–2 Einträge. Nur wenn wirklich etwas klar Erkennbares entstanden ist.
+Formulierung: konkret, nicht abstrakt. "Ich neige dazu X wenn Y" statt "Muster erkannt".
+Leeres Array ist vollkommen okay.
 
 BEKANNTE MUSTER-KEYS (verwende diese wenn erkannt):
 - rueckzug_unter_druck       → Rückzug unter Druck
@@ -212,11 +223,16 @@ Deno.serve(async (req) => {
   try {
     const { messages, conversationId, userId } = await req.json();
 
+    const logger = createLogger('post-conversation', undefined, userId);
+
     if (!messages || messages.length < 3) {
+      logger.info('Skipped — too few messages', { messageCount: messages?.length ?? 0, conversationId });
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
       });
     }
+
+    logger.info('Started', { conversationId, messageCount: messages.length });
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
     const supabase = createClient(
@@ -418,6 +434,23 @@ Deno.serve(async (req) => {
       if (refs.length) await supabase.from('pattern_references').insert(refs);
     }
 
+    // 7b. Automatische Insights speichern
+    if (userId && conversationId && Array.isArray(anonSummary.insights)) {
+      const insightRows = anonSummary.insights
+        .filter((i: any) => i.content && i.category)
+        .map((i: any) => ({
+          user_id: userId,
+          conversation_id: conversationId,
+          content: i.content,
+          category: i.category,
+          source: 'auto',
+        }));
+      if (insightRows.length) {
+        await supabase.from('insights').insert(insightRows);
+        logger.info('Insights saved', { count: insightRows.length });
+      }
+    }
+
     // 8. Coach-Selbstreflexion speichern
     if (reflection.what_worked || reflection.improvement_note) {
       await supabase.from('coach_reflections').insert({
@@ -458,12 +491,16 @@ Deno.serve(async (req) => {
       await supabase.from('resonance_map').upsert(patch, { onConflict: 'user_id' });
     }
 
+    logger.info('Completed', { conversationId });
+
     return new Response(JSON.stringify({ ok: true }), {
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
     });
 
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
+    const errorLogger = createLogger('post-conversation');
+    errorLogger.error('Failed', { error: message });
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },

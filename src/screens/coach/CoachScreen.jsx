@@ -161,6 +161,7 @@ export function CoachScreen() {
           body: JSON.stringify({
             messages: msgs.map(m => ({ role: m.role, content: m.content })),
             conversationId: convId,
+            userId: user?.id,
           }),
         }
       )
