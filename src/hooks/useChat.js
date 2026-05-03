@@ -32,23 +32,6 @@ async function fetchRagContext(firstMessage, accessToken) {
   }
 }
 
-async function triggerPostConversation(conversationId, userId, messages, accessToken) {
-  const cleanMessages = messages.map(m => ({ role: m.role, content: m.content }))
-  try {
-    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/post-conversation`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': ANON_KEY,
-        'Authorization': `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ messages: cleanMessages, conversationId, userId }),
-    })
-  } catch (err) {
-    console.error('[post-conversation] Trigger failed:', err)
-  }
-}
-
 export function useChat(userId, memory, session) {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
@@ -568,10 +551,6 @@ export function useChat(userId, memory, session) {
           role: 'assistant',
           content: fullContent,
         })
-
-        // fire-and-forget: post-processing (session notes, coach file, patterns, ...)
-        const allMessages = [...updatedMessages, { role: 'assistant', content: fullContent }]
-        triggerPostConversation(conversationId, userId, allMessages, accessToken)
       }
     } catch (err) {
       console.error('[useChat] sendMessage catch:', err)

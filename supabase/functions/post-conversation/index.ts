@@ -7,6 +7,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
 import { createLogger } from '../_shared/logger.ts';
 
+
 const SESSION_NOTES_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Erstelle strukturierte Session-Notes für deine Coach-Akte.
 
@@ -191,10 +192,12 @@ async function runPrompt(anthropic: Anthropic, prompt: string, conversationText:
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 600,
+      max_tokens: 1500,
       messages: [{ role: 'user', content: `${prompt}\n\nGespräch:\n${conversationText}` }],
     });
-    const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
+    const raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
+    // Strip markdown code fences that models sometimes add despite "NUR JSON" instruction
+    const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
     return JSON.parse(text);
   } catch {
     return {};
@@ -221,9 +224,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { messages, conversationId, userId } = await req.json();
-
-    const logger = createLogger('post-conversation', undefined, userId);
+    const body = await req.json();
+    const { messages, conversationId, userId } = body;
+    const logger = createLogger('post-conversation', undefined, userId ?? undefined);
+    logger.info('Request body received', {
+      hasMessages: !!messages,
+      messageCount: messages?.length,
+      hasConversationId: !!conversationId,
+      hasUserId: !!userId,
+    });
 
     if (!messages || messages.length < 3) {
       logger.info('Skipped — too few messages', { messageCount: messages?.length ?? 0, conversationId });
@@ -298,8 +307,11 @@ Deno.serve(async (req) => {
     ]);
 
     // 3. Session-Notes speichern + conversations aktualisieren
+    if (!sessionNotes.main_topic) {
+      logger.warn('session_notes skipped — main_topic missing (runPrompt returned empty)', { conversationId });
+    }
     if (conversationId && sessionNotes.main_topic) {
-      await supabase.from('session_notes').upsert({
+      const { error: snError } = await supabase.from('session_notes').upsert({
         conversation_id: conversationId,
         user_id: userId || null,
         main_topic: sessionNotes.main_topic,
@@ -312,6 +324,7 @@ Deno.serve(async (req) => {
         next_session_rec: sessionNotes.next_session_rec ?? null,
         file_updates: fileUpdates.updates ?? [],
       });
+      if (snError) logger.error('session_notes write failed', { error: snError.message, conversationId });
 
       await supabase
         .from('conversations')
