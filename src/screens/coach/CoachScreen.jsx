@@ -168,7 +168,7 @@ export function CoachScreen() {
     } catch {
       // Fire-and-forget — Fehler nicht an den Nutzer weiterleiten
     }
-  }, [])
+  }, [user?.id])
 
   const handleNewConversation = async () => {
     // Gedächtnis extrahieren bevor neues Gespräch startet
