@@ -211,6 +211,14 @@ function deriveIntensity(notes: any): 'low' | 'medium' | 'high' | null {
   return 'low';
 }
 
+// Klammert Modell-Ausgaben robust auf einen gültigen Bereich (Schutz gegen
+// 0, 6, Kommazahlen, Strings etc., die sonst DB-Check-Constraints verletzen).
+function clampScore(value: unknown, min = 1, max = 5): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -338,12 +346,12 @@ Deno.serve(async (req) => {
         conversation_id: conversationId,
         user_id: userId || null,
         main_topic: sessionNotes.main_topic,
-        emotional_intensity: sessionNotes.emotional_intensity ?? null,
+        emotional_intensity: clampScore(sessionNotes.emotional_intensity),
         resistance_detected: sessionNotes.resistance_detected ?? false,
         resistance_location: sessionNotes.resistance_location ?? null,
         breakthrough_moment: sessionNotes.breakthrough_moment ?? null,
         where_we_left_off: sessionNotes.where_we_left_off ?? null,
-        coach_effectiveness: sessionNotes.coach_effectiveness ?? null,
+        coach_effectiveness: clampScore(sessionNotes.coach_effectiveness),
         next_session_rec: sessionNotes.next_session_rec ?? null,
         file_updates: fileUpdates.updates ?? [],
       });
