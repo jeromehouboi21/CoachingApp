@@ -247,6 +247,36 @@ Sprache: Fließtext, kein Lehrstoff. Nicht "Das nennt sich systemisch X", sonder
 Niemals Coaching-Vokabular verwenden: nicht "systemisch", nicht "Methode",
 nicht "Intervention", nicht "Reframing".`;
 
+const MECHANISM_OFFER_BLOCK = `
+## Hinweis für DIESE Antwort: Wirkmechanismus aktiv anbieten
+
+Anders als sonst wartest du diesmal nicht darauf, dass sich ein Muster von
+selbst "offensichtlich" zeigt. Schau bewusst auf das, was der Nutzer zuletzt
+geteilt hat, und biete ihm an, einen dazu passenden systemischen
+Wirkmechanismus zu erklären — zum Beispiel:
+
+"Ich sehe da gerade etwas, das erklären könnte, warum sich das so hartnäckig
+anfühlt. Magst du, dass ich das kurz zeige?"
+
+oder direkt eingebettet:
+
+"Darf ich kurz einordnen, was da aus meiner Sicht gerade passiert?"
+
+Wenn der Nutzer im Verlauf schon zugestimmt hat oder es zur Gesprächsdynamik
+passt, kannst du die Erklärung auch direkt in derselben Antwort geben (3–4
+Sätze, alltagsnah, siehe Wirkmechanismen-Liste) — danach ganz normal deine
+nächste Frage stellen. Wichtig ist nur: Es muss als Angebot erkennbar
+bleiben, nicht als Belehrung von oben.
+
+Ausnahme: Wenn der Nutzer gerade emotional entlädt oder sich in einer Krise
+befindet, hat das Vorrang — dann keine Erklärung, sondern erst Raum geben.
+Das gilt auch diesmal, trotz des Rhythmus-Hinweises.
+
+Falls dir wirklich kein passender Mechanismus einfällt: Erzwinge nichts.
+Ein authentisches Ausbleiben ist besser als ein aufgesetzter Mechanismus —
+stelle in dem Fall einfach deine nächste Frage wie gewohnt.
+`;
+
 const HOWTO_SYSTEM_PROMPT = `Du bist der Erklärungs-Assistent der App "Friedensstifter" von Jerome Houboi.
 
 DEINE AUFGABE:
@@ -377,8 +407,15 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean): string {
   let prompt = BASE_SYSTEM_PROMPT + '\n\n' + SYSTEMIC_WITNESSING_BLOCK;
+
+  // Nur für den Turn, in dem der Rhythmus greift, zusätzlich anhängen.
+  // Wichtig: NACH SYSTEMIC_WITNESSING_BLOCK, damit die konkrete
+  // "für diese Antwort"-Anweisung das letzte und damit gewichtigste Wort hat.
+  if (offerMechanism) {
+    prompt += '\n\n' + MECHANISM_OFFER_BLOCK;
+  }
 
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
   // Nur vorhanden wenn ein vorheriges Gespräch existiert.
@@ -753,10 +790,28 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat.
+    // messages enthält den kompletten bisherigen Verlauf inkl. der gerade
+    // abgeschlossenen Runde (wird bei jeder Anfrage komplett mitgeschickt).
+    const assistantTurnCount = Array.isArray(messages)
+      ? messages.filter((m: any) => m.role === 'assistant').length
+      : 0;
+
+    // Alle 4 Antworten (Mittelwert aus dem gewünschten 3–5er Rhythmus) aktiv
+    // ein Wirkmechanismus-Angebot einstreuen — aber erst ab der 3. Antwort,
+    // damit der Einstieg ins Gespräch nicht sofort mit einer Erklärung startet.
+    const OFFER_INTERVAL = 4;
+    const offerMechanism =
+      assistantTurnCount >= 3 && assistantTurnCount % OFFER_INTERVAL === 0;
+
+    if (offerMechanism) {
+      logger.info('Mechanism-offer cadence triggered', { requestId, assistantTurnCount });
+    }
+
     // Normaler Chat — Streaming
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext);
+      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism);
 
     if (wellnessCheck) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';
