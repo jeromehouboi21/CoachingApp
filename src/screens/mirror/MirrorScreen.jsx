@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { Pin, Trash2, BookOpen, Lock, ChevronRight, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
@@ -150,7 +151,7 @@ function MusterKarte({ entry, onVerlauf, locked = false }) {
 
 function VerlaufsSheet({ entry, onClose }) {
   if (!entry) return null
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div className="relative bg-surface w-full rounded-t-2xl max-h-[70vh] overflow-y-auto p-6 pb-10">
@@ -183,7 +184,8 @@ function VerlaufsSheet({ entry, onClose }) {
           <p className="text-[13px] text-ink-3">Noch keine Verlaufsdaten.</p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
