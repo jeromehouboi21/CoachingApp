@@ -365,7 +365,7 @@ Deno.serve(async (req) => {
     if (userId && Array.isArray(fileUpdates.updates)) {
       for (const update of fileUpdates.updates) {
         if (update.action === 'add' && update.label && update.category) {
-          await supabase.from('coach_file_entries').insert({
+          const { error: addError } = await supabase.from('coach_file_entries').insert({
             user_id: userId,
             source_conversation_id: conversationId || null,
             category: update.category,
@@ -374,14 +374,22 @@ Deno.serve(async (req) => {
             example: update.example ?? null,
             confidence: update.confidence ?? 2,
           });
+          if (addError) {
+            logger.error('coach_file_entries insert failed', { error: addError.message, conversationId, label: update.label });
+          } else {
+            logger.info('coach_file_entries entry added', { conversationId, label: update.label, category: update.category });
+          }
         } else if (update.action === 'update' && update.entry_id) {
-          const { data: entry } = await supabase
+          const { data: entry, error: readError } = await supabase
             .from('coach_file_entries')
             .select('history')
             .eq('id', update.entry_id)
             .single();
+          if (readError) {
+            logger.error('coach_file_entries read (for update) failed', { error: readError.message, conversationId, entryId: update.entry_id });
+          }
 
-          await supabase.from('coach_file_entries').update({
+          const { error: updateError } = await supabase.from('coach_file_entries').update({
             confidence: update.new_confidence ?? undefined,
             status: update.new_status ?? undefined,
             last_updated: new Date().toISOString(),
@@ -391,14 +399,22 @@ Deno.serve(async (req) => {
               conversation_id: conversationId,
             }],
           }).eq('id', update.entry_id);
+          if (updateError) {
+            logger.error('coach_file_entries update failed', { error: updateError.message, conversationId, entryId: update.entry_id });
+          } else {
+            logger.info('coach_file_entries entry updated', { conversationId, entryId: update.entry_id });
+          }
         } else if (update.action === 'resolve' && update.entry_id) {
-          const { data: entry } = await supabase
+          const { data: entry, error: readError } = await supabase
             .from('coach_file_entries')
             .select('history')
             .eq('id', update.entry_id)
             .single();
+          if (readError) {
+            logger.error('coach_file_entries read (for resolve) failed', { error: readError.message, conversationId, entryId: update.entry_id });
+          }
 
-          await supabase.from('coach_file_entries').update({
+          const { error: resolveError } = await supabase.from('coach_file_entries').update({
             status: 'resolved',
             last_updated: new Date().toISOString(),
             history: [...(entry?.history ?? []), {
@@ -407,6 +423,11 @@ Deno.serve(async (req) => {
               conversation_id: conversationId,
             }],
           }).eq('id', update.entry_id);
+          if (resolveError) {
+            logger.error('coach_file_entries resolve failed', { error: resolveError.message, conversationId, entryId: update.entry_id });
+          } else {
+            logger.info('coach_file_entries entry resolved', { conversationId, entryId: update.entry_id });
+          }
         }
       }
     }
@@ -434,7 +455,12 @@ Deno.serve(async (req) => {
         patch.known_resources = [...new Set([...existing, ...profileUpdates.known_resources_add])];
       }
 
-      await supabase.from('coachee_profile').upsert(patch, { onConflict: 'user_id' });
+      const { error: profileError } = await supabase.from('coachee_profile').upsert(patch, { onConflict: 'user_id' });
+      if (profileError) {
+        logger.error('coachee_profile upsert failed', { error: profileError.message, conversationId, userId });
+      } else {
+        logger.info('coachee_profile updated', { conversationId, userId, fields: Object.keys(patch) });
+      }
     }
 
     // 6. Anonymes Muster + RAG-Eintrag speichern
@@ -455,7 +481,12 @@ Deno.serve(async (req) => {
         outcome: anonSummary.outcome ?? 'unknown',
       };
       if (embedding) patternRow.embedding = JSON.stringify(embedding);
-      await supabase.from('experience_patterns').insert(patternRow);
+      const { error: patternError } = await supabase.from('experience_patterns').insert(patternRow);
+      if (patternError) {
+        logger.error('experience_patterns insert failed', { error: patternError.message, conversationId });
+      } else {
+        logger.info('experience_patterns entry saved', { conversationId, pattern: patternRow.pattern });
+      }
     }
 
     // 7. Muster-Referenzen speichern (für "Verstehen"-Modul)
@@ -469,7 +500,14 @@ Deno.serve(async (req) => {
           pattern_label: r.pattern_label,
           excerpt: r.excerpt ?? null,
         }));
-      if (refs.length) await supabase.from('pattern_references').insert(refs);
+      if (refs.length) {
+        const { error: refsError } = await supabase.from('pattern_references').insert(refs);
+        if (refsError) {
+          logger.error('pattern_references insert failed', { error: refsError.message, conversationId, count: refs.length });
+        } else {
+          logger.info('pattern_references saved', { conversationId, count: refs.length });
+        }
+      }
     }
 
     // 7b. Automatische Insights speichern
@@ -484,14 +522,18 @@ Deno.serve(async (req) => {
           source: 'auto',
         }));
       if (insightRows.length) {
-        await supabase.from('insights').insert(insightRows);
-        logger.info('Insights saved', { count: insightRows.length });
+        const { error: insightError } = await supabase.from('insights').insert(insightRows);
+        if (insightError) {
+          logger.error('insights insert failed', { error: insightError.message, conversationId, count: insightRows.length });
+        } else {
+          logger.info('Insights saved', { conversationId, count: insightRows.length });
+        }
       }
     }
 
     // 8. Coach-Selbstreflexion speichern
     if (reflection.what_worked || reflection.improvement_note) {
-      await supabase.from('coach_reflections').insert({
+      const { error: reflectionError } = await supabase.from('coach_reflections').insert({
         conversation_id: conversationId || null,
         was_helpful: reflection.was_helpful ?? null,
         what_worked: reflection.what_worked ?? null,
@@ -500,6 +542,11 @@ Deno.serve(async (req) => {
         resistance_handled: reflection.resistance_handled ?? null,
         improvement_note: reflection.improvement_note ?? null,
       });
+      if (reflectionError) {
+        logger.error('coach_reflections insert failed', { error: reflectionError.message, conversationId });
+      } else {
+        logger.info('coach_reflections saved', { conversationId });
+      }
     }
 
     // 9. Resonanzkarte aktualisieren (Idee 05 — ab 3. Gespräch)
@@ -526,7 +573,12 @@ Deno.serve(async (req) => {
         patch.preferred_pace = resonanceUpdate.preferred_pace;
       }
 
-      await supabase.from('resonance_map').upsert(patch, { onConflict: 'user_id' });
+      const { error: resonanceError } = await supabase.from('resonance_map').upsert(patch, { onConflict: 'user_id' });
+      if (resonanceError) {
+        logger.error('resonance_map upsert failed', { error: resonanceError.message, conversationId, userId });
+      } else {
+        logger.info('resonance_map updated', { conversationId, userId, fields: Object.keys(patch) });
+      }
     }
 
     logger.info('Completed', { conversationId });

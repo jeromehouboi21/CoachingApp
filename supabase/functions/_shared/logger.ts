@@ -3,6 +3,11 @@
 
 import { createClient } from 'npm:@supabase/supabase-js';
 
+// EdgeRuntime ist global in Supabase Edge Functions verfügbar, aber nicht Teil
+// der Standard-Deno-Typen — deshalb hier deklariert statt @ts-ignore an jeder
+// Aufrufstelle.
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined;
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogEntry {
@@ -74,7 +79,16 @@ export function createLogger(source: string, requestId?: string, userId?: string
         : data ? { metadata: data as Record<string, unknown> } : {}
       ),
     };
-    persist(entry); // fire-and-forget
+    const promise = persist(entry);
+
+    // Promise am Leben halten, auch nachdem die Response schon raus ist.
+    // Ohne das kann die Isolate den Insert abschneiden, bevor er ankommt.
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) {
+      EdgeRuntime.waitUntil(promise);
+    } else {
+      // Lokaler Dev-Server / Fallback: zumindest unhandled rejections vermeiden
+      promise.catch(() => {});
+    }
   };
 
   return {
