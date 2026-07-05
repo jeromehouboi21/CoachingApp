@@ -144,8 +144,21 @@ export function CoachScreen() {
     await sendMessage(content, inputMode)
   }
 
+  // processedRef: verhindert, dass derselbe conversationId-Wert mehrfach clientseitig
+  // angestoßen wird (z.B. visibilitychange UND pagehide kurz hintereinander).
+  // Wird bei einem neuen conversationId implizit "vergessen".
+  const processedRef = useRef(new Set())
+
+  // Gemeinsame Kern-Funktion für ALLE Trigger-Pfade (v2.9, Abschnitt 6b.0).
+  // keepalive: true sorgt dafür, dass der Request auch dann noch abgeschickt wird,
+  // wenn das Dokument im selben Tick entladen wird (Tab-Schließen, Navigation weg
+  // von der Seite). Anders als navigator.sendBeacon() erlaubt fetch mit keepalive
+  // weiterhin eigene Header — wichtig, weil die Edge Function den Supabase-Access-
+  // Token im Authorization-Header braucht.
   const runPostConversation = useCallback(async (msgs, convId) => {
     if (!msgs || msgs.length < 3) return
+    if (processedRef.current.has(convId)) return // Idempotenz — Client-Seite
+    processedRef.current.add(convId)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) return
@@ -153,6 +166,7 @@ export function CoachScreen() {
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/post-conversation`,
         {
           method: 'POST',
+          keepalive: true,
           headers: {
             'Content-Type': 'application/json',
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
@@ -166,9 +180,53 @@ export function CoachScreen() {
         }
       )
     } catch {
-      // Fire-and-forget — Fehler nicht an den Nutzer weiterleiten
+      // Fire-and-forget — Fehler nicht an den Nutzer weiterleiten.
+      // processedRef NICHT zurücksetzen: ein Retry beim nächsten Trigger-Pfad
+      // (z.B. pagehide nach fehlgeschlagenem visibilitychange-Versuch) ist
+      // erwünscht und wird serverseitig durch die Idempotenz-Prüfung sauber
+      // gehandhabt, falls beide durchkommen.
     }
   }, [user?.id])
+
+  // messagesRef/conversationIdRef: synchrone Spiegel von messages/conversationId.
+  // Notwendig, weil Event-Handler und die Unmount-Cleanup-Funktion sonst einen
+  // veralteten Closure-Stand sehen (Stale-Closure-Problem bei useEffect-Cleanups).
+  const messagesRef = useRef(messages)
+  const conversationIdRef = useRef(conversationId)
+  useEffect(() => { messagesRef.current = messages }, [messages])
+  useEffect(() => { conversationIdRef.current = conversationId }, [conversationId])
+
+  // Trigger-Pfad 2: Tab/App wird in den Hintergrund geschickt oder geschlossen.
+  // visibilitychange feuert zuverlässiger als beforeunload, v.a. auf Mobile/PWA.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        runPostConversation(messagesRef.current, conversationIdRef.current)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [runPostConversation])
+
+  // Trigger-Pfad 3: Seite wird endgültig verlassen (Tab-Schließen, Reload,
+  // Zurück-Button). Ergänzt visibilitychange, da pagehide auch bei
+  // bfcache-Navigation zuverlässig feuert.
+  useEffect(() => {
+    const handlePageHide = () => {
+      runPostConversation(messagesRef.current, conversationIdRef.current)
+    }
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
+  }, [runPostConversation])
+
+  // Trigger-Pfad 4: Navigation innerhalb der SPA weg vom Coach-Screen
+  // (z.B. Tab-Wechsel zu "Spiegel" oder "Profil"). React Router löst dabei
+  // weder pagehide noch visibilitychange aus — braucht einen Unmount-Guard.
+  useEffect(() => {
+    return () => {
+      runPostConversation(messagesRef.current, conversationIdRef.current)
+    }
+  }, [runPostConversation])
 
   const handleNewConversation = async () => {
     // Gedächtnis extrahieren bevor neues Gespräch startet

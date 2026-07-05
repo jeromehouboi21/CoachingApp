@@ -241,14 +241,37 @@ Deno.serve(async (req) => {
       });
     }
 
-    logger.info('Started', { conversationId, messageCount: messages.length });
-
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
+
+    // Idempotenz-Guard (v2.9, Abschnitt 6b.0): Client- und serverseitige Trigger
+    // können sich überschneiden (mehrere Trigger-Pfade, Netzwerk-Retries, mehrere
+    // Tabs). Ein Gespräch darf erneut verarbeitet werden, wenn es gewachsen ist —
+    // aber nicht zweimal für denselben Nachrichtenstand.
+    if (conversationId) {
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('post_processed_message_count')
+        .eq('id', conversationId)
+        .maybeSingle();
+
+      if (existing && existing.post_processed_message_count >= messages.length) {
+        logger.info('Skipped — already processed for this message count', {
+          conversationId,
+          messageCount: messages.length,
+          alreadyProcessed: existing.post_processed_message_count,
+        });
+        return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'idempotent' }), {
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+    }
+
+    logger.info('Started', { conversationId, messageCount: messages.length });
 
     const conversationText = messages
       .map((m: any) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
@@ -332,6 +355,8 @@ Deno.serve(async (req) => {
           summary: sessionNotes.main_topic,
           open_thread: sessionNotes.where_we_left_off ?? null,
           open_thread_intensity: deriveIntensity(sessionNotes),
+          post_processed_at: new Date().toISOString(),
+          post_processed_message_count: messages.length,
         })
         .eq('id', conversationId);
     }

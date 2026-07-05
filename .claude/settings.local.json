@@ -6,7 +6,13 @@
       "Bash(find /f/OneDrive/Documents/GitHub/CoachingApp/src/screens -name *ellness* -o -name *screen*)",
       "Bash(grep -rn \"serviceWorker\\\\|workbox\\\\|sw.js\" vite.config* src/main*)",
       "Bash(grep -n \"to: null\\\\|navigate.*null\\\\|disabled.*true\\\\|commented\\\\|//\" \"f:\\\\OneDrive\\\\Documents\\\\GitHub\\\\CoachingApp\\\\src\\\\screens\\\\home\\\\HomeScreen.jsx\")",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\jerom\\\\OneDrive\\\\Documents\\\\GitHub\\\\CoachingApp\" -Recurse -Exclude node_modules,.git,dist -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(Sort-Object)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\jerom\\\\OneDrive\\\\Documents\\\\GitHub\\\\CoachingApp\" -Recurse -Exclude node_modules,.git,dist,build | Where-Object { $_.PSIsContainer -eq $false } | Select-Object -ExpandProperty FullName | Sort-Object)",
+      "Bash(timeout 90 npx vite build)",
+      "Bash(npx esbuild *)"
     ]
   }
 }
