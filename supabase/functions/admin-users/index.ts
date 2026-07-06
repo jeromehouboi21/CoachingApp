@@ -30,19 +30,31 @@ Deno.serve(async (req) => {
     });
   }
 
-  const supabase = createClient(
+  // Client 1: NUR für die Identitätsprüfung — mit dem Nutzer-Token. PostgREST
+  // bestimmt die effektive DB-Rolle über den Authorization-Header, nicht über
+  // den API-Key — mit dem Nutzer-Token liefe dieser Client sonst unter der
+  // "authenticated"-Rolle der aufrufenden Person, nicht als service_role.
+  const callerClient = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } }
   );
 
-  const { data: { user: caller }, error: authError } = await supabase.auth.getUser(token);
+  const { data: { user: caller }, error: authError } = await callerClient.auth.getUser(token);
   if (authError || !caller) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
     });
   }
+
+  // Client 2: echter Service-Role-Client, OHNE Nutzer-Token — umgeht RLS
+  // wirklich. Alle Admin-Abfragen/-Änderungen laufen über diesen Client.
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+    { auth: { persistSession: false } }
+  );
 
   // Kernprüfung: nur Admins kommen hier weiter.
   const { data: callerProfile } = await supabase

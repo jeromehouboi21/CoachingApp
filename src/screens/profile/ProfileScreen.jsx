@@ -274,12 +274,16 @@ export function ProfileScreen() {
                   <button
                     onClick={async () => {
                       if (!betaFeedback.trim() || !user) return
-                      await supabase.from('user_feedback').insert({
+                      const { error } = await supabase.from('user_feedback').insert({
                         user_id: user.id,
                         feedback_type: 'beta',
                         content: betaFeedback.trim(),
                         consent_given: true,
                       })
+                      if (error) {
+                        console.error('Feedback insert failed:', error.message)
+                        return
+                      }
                       setBetaSent(true)
                     }}
                     disabled={!betaFeedback.trim()}

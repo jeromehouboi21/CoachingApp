@@ -9,6 +9,9 @@ export function AdminUsersScreen() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
+  const [tab, setTab] = useState('users') // 'users' | 'feedback'
+  const [feedback, setFeedback] = useState([])
+  const [feedbackLoading, setFeedbackLoading] = useState(true)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -23,9 +26,30 @@ export function AdminUsersScreen() {
     setLoading(false)
   }
 
+  const fetchFeedback = async () => {
+    setFeedbackLoading(true)
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-feedback`, {
+      headers: {
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    })
+    const data = await res.json()
+    setFeedback(data.feedback ?? [])
+    setFeedbackLoading(false)
+  }
+
   useEffect(() => {
     if (session) fetchUsers()
   }, [session])
+
+  useEffect(() => {
+    if (session && tab === 'feedback') fetchFeedback()
+  }, [session, tab])
+
+  const formatDate = (iso) => new Date(iso).toLocaleString('de-DE', {
+    day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
 
   const updateUser = async (userId, patch) => {
     setSavingId(userId)
@@ -60,13 +84,34 @@ export function AdminUsersScreen() {
           Zurück
         </button>
         <h1 className="font-display text-[24px] text-ink mb-2">Nutzerverwaltung</h1>
-        <p className="text-[14px] text-ink-2">{users.length} Nutzer</p>
+        <p className="text-[14px] text-ink-2 mb-4">
+          {tab === 'users' ? `${users.length} Nutzer` : `${feedback.length} Rückmeldungen`}
+        </p>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setTab('users')}
+            className={`text-[13px] px-4 py-1.5 rounded-full border ${
+              tab === 'users' ? 'bg-accent text-white border-accent' : 'bg-surface border-[var(--color-border)] text-ink-2'
+            }`}
+          >
+            Nutzer
+          </button>
+          <button
+            onClick={() => setTab('feedback')}
+            className={`text-[13px] px-4 py-1.5 rounded-full border ${
+              tab === 'feedback' ? 'bg-accent text-white border-accent' : 'bg-surface border-[var(--color-border)] text-ink-2'
+            }`}
+          >
+            Feedback
+          </button>
+        </div>
       </div>
 
       <div className="px-5 pb-24">
-        {loading && <p className="text-ink-3 text-[14px]">Lädt …</p>}
+        {tab === 'users' && loading && <p className="text-ink-3 text-[14px]">Lädt …</p>}
 
-        {!loading && (
+        {tab === 'users' && !loading && (
           <div className="flex flex-col gap-3">
             {users.map(u => (
               <div key={u.id} className="bg-surface border border-[var(--color-border)] rounded-xl p-4">
@@ -110,6 +155,29 @@ export function AdminUsersScreen() {
                     Genutzt: {u.sessions_used_this_month ?? 0}
                   </span>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'feedback' && (
+          <div className="flex flex-col gap-3">
+            {feedbackLoading && <p className="text-ink-3 text-[14px]">Lädt …</p>}
+            {!feedbackLoading && feedback.length === 0 && (
+              <p className="text-ink-3 text-[14px]">Noch keine Rückmeldungen.</p>
+            )}
+            {!feedbackLoading && feedback.map(f => (
+              <div key={f.id} className="bg-surface border border-[var(--color-border)] rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <p className="text-[14px] font-medium text-ink">{f.display_name || f.email || '(unbekannt)'}</p>
+                    <p className="text-[12px] text-ink-3">{formatDate(f.created_at)}</p>
+                  </div>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-surface-2 text-ink-3">
+                    {f.feedback_type}
+                  </span>
+                </div>
+                <p className="text-[14px] text-ink-2 leading-relaxed">{f.content}</p>
               </div>
             ))}
           </div>
