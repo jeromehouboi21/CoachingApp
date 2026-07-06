@@ -109,7 +109,13 @@ export function CoachScreen() {
   // "Innere Stimmen" Phase 2: bereits beantwortete Namensgebungs-Angebote
   // ausblenden, auch wenn dieselbe Nachricht erneut gerendert wird.
   const [handledVoiceIds, setHandledVoiceIds] = useState(new Set())
-  const isPaidUser = profile?.plan === 'premium' || profile?.plan === 'tester'
+  // Nur ein echter Paid-Plan schaltet die Limit-Zählung ab. 'tester' zählt
+  // und wird begrenzt wie jeder andere unbezahlte Account — das Admin-Panel
+  // setzt für Tester bewusst individuelle session_limit-Werte (z.B. 3, 300,
+  // 500), die vorher wirkungslos waren, weil 'tester' hier fälschlich wie
+  // 'premium' behandelt wurde. Es gibt aktuell keine Paid-User-Phase (steht
+  // noch aus); dieser Wert ist ein Platzhalter für später.
+  const isPaidUser = profile?.plan === 'premium'
   const sessionsLeft = profile?.session_limit == null
     ? Infinity
     : profile.session_limit - (profile?.sessions_used_this_month || 0)

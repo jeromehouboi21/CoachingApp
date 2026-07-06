@@ -778,6 +778,33 @@ Deno.serve(async (req) => {
     });
   }
 
+  // Serverseitige Limit-Durchsetzung — Frontend-Check allein ist umgehbar
+  // (direkter Funktionsaufruf mit gültigem Token). Premium ist aktuell
+  // noch nicht im Einsatz; alle Nutzer werden begrenzt, sofern session_limit
+  // gesetzt ist (null = unbegrenzt).
+  const { data: limitProfile, error: limitProfileError } = await supabase
+    .from('profiles')
+    .select('plan, session_limit, sessions_used_this_month')
+    .eq('id', user.id)
+    .single();
+
+  if (limitProfileError) {
+    logger.error('limit check: profile fetch failed', { error: limitProfileError.message });
+    // Fail-open bewusst vermeiden wäre strenger, aber ein Logging-/Read-Fehler
+    // soll bestehende Nutzer nicht aussperren — wir loggen und lassen durch.
+  } else if (limitProfile.plan !== 'premium' && limitProfile.session_limit != null) {
+    const used = limitProfile.sessions_used_this_month ?? 0;
+    if (used >= limitProfile.session_limit) {
+      logger.warn('session limit reached, request blocked', {
+        userId: user.id, used, limit: limitProfile.session_limit,
+      });
+      return new Response(JSON.stringify({ error: 'Session limit reached' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+  }
+
   try {
     let body: Record<string, unknown>;
     try {
