@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       // Alle Profile laden ...
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, display_name, plan, is_beta_tester, session_limit, sessions_used_this_month, created_at')
+        .select('id, display_name, plan, is_beta_tester, session_limit, sessions_used_this_month, created_at, invited_at')
         .order('created_at', { ascending: false });
 
       if (profilesError) {
@@ -94,11 +94,14 @@ Deno.serve(async (req) => {
       if (authListError) {
         logger.error('auth.admin.listUsers failed', { error: authListError.message });
       }
-      const emailById = new Map((authUsers?.users ?? []).map((u: any) => [u.id, u.email]));
+      const authById = new Map(
+        (authUsers?.users ?? []).map((u: any) => [u.id, { email: u.email, lastSignInAt: u.last_sign_in_at }])
+      );
 
       const merged = (profiles ?? []).map((p: any) => ({
         ...p,
-        email: emailById.get(p.id) ?? null,
+        email: authById.get(p.id)?.email ?? null,
+        last_sign_in_at: authById.get(p.id)?.lastSignInAt ?? null,
       }));
 
       logger.info('Admin fetched user list', { adminId: caller.id, count: merged.length });

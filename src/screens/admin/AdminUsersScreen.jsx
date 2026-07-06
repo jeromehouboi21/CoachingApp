@@ -12,6 +12,13 @@ export function AdminUsersScreen() {
   const [tab, setTab] = useState('users') // 'users' | 'feedback'
   const [feedback, setFeedback] = useState([])
   const [feedbackLoading, setFeedbackLoading] = useState(true)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteName, setInviteName] = useState('')
+  const [inviteLimit, setInviteLimit] = useState('20')
+  const [inviteSubmitting, setInviteSubmitting] = useState(false)
+  const [inviteError, setInviteError] = useState(null)
+  const [inviteSuccess, setInviteSuccess] = useState(null)
 
   const fetchUsers = async () => {
     setLoading(true)
@@ -66,6 +73,42 @@ export function AdminUsersScreen() {
     setSavingId(null)
   }
 
+  const inviteUser = async (e) => {
+    e.preventDefault()
+    setInviteSubmitting(true)
+    setInviteError(null)
+    setInviteSuccess(null)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-invite-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: inviteEmail,
+          displayName: inviteName || null,
+          sessionLimit: inviteLimit === '' ? null : parseInt(inviteLimit, 10),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setInviteError(data.error || 'Einladung fehlgeschlagen.')
+        return
+      }
+      setInviteSuccess(`Einladung an ${inviteEmail} verschickt.`)
+      setInviteEmail('')
+      setInviteName('')
+      setInviteLimit('20')
+      fetchUsers()
+    } catch {
+      setInviteError('Einladung fehlgeschlagen — Netzwerkfehler.')
+    } finally {
+      setInviteSubmitting(false)
+    }
+  }
+
   // Client-seitiger Guard: nur UX, die eigentliche Absicherung passiert
   // in der Edge Function selbst (403 bei fehlender is_admin-Berechtigung).
   if (profile && !profile.is_admin) {
@@ -106,6 +149,70 @@ export function AdminUsersScreen() {
             Feedback
           </button>
         </div>
+
+        {tab === 'users' && (
+          <div className="mt-4">
+            {!inviteOpen && (
+              <button
+                onClick={() => { setInviteOpen(true); setInviteError(null); setInviteSuccess(null) }}
+                className="text-[13px] text-accent font-medium"
+              >
+                + Per E-Mail einladen
+              </button>
+            )}
+
+            {inviteOpen && (
+              <form onSubmit={inviteUser} className="bg-surface border border-[var(--color-border)] rounded-xl p-4 flex flex-col gap-3 mt-2">
+                <input
+                  type="email"
+                  required
+                  placeholder="E-Mail-Adresse"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="border border-[var(--color-border)] rounded-lg px-3 py-2 text-[14px]"
+                />
+                <input
+                  type="text"
+                  placeholder="Name (optional)"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  className="border border-[var(--color-border)] rounded-lg px-3 py-2 text-[14px]"
+                />
+                <label className="flex items-center gap-2 text-[13px] text-ink-2">
+                  Gesprächs-Limit:
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="∞"
+                    value={inviteLimit}
+                    onChange={(e) => setInviteLimit(e.target.value)}
+                    className="w-20 border border-[var(--color-border)] rounded px-2 py-1 text-[13px]"
+                  />
+                </label>
+
+                {inviteError && <p className="text-[13px] text-red-600">{inviteError}</p>}
+                {inviteSuccess && <p className="text-[13px] text-accent">{inviteSuccess}</p>}
+
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={inviteSubmitting}
+                    className="bg-accent text-white text-[13px] font-medium px-4 py-2 rounded-full"
+                  >
+                    {inviteSubmitting ? 'Sende …' : 'Einladen'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInviteOpen(false)}
+                    className="text-[13px] text-ink-3 px-4 py-2"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="px-5 pb-24">
@@ -119,6 +226,12 @@ export function AdminUsersScreen() {
                   <div>
                     <p className="text-[14px] font-medium text-ink">{u.display_name || '(kein Name)'}</p>
                     <p className="text-[12px] text-ink-3">{u.email}</p>
+                    {u.invited_at && (
+                      <p className="text-[11px] text-ink-3 mt-1">
+                        Eingeladen am {formatDate(u.invited_at)}
+                        {!u.last_sign_in_at && ' — noch nicht angenommen'}
+                      </p>
+                    )}
                   </div>
                   <span className="text-[11px] px-2 py-0.5 rounded-full bg-surface-2 text-ink-3">
                     {u.plan}
