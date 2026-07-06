@@ -55,8 +55,7 @@ export default function App() {
       <Route path="/wellness" element={<ProtectedRoute><WellnessCheckScreen /></ProtectedRoute>} />
       <Route path="/premium" element={<ProtectedRoute><PremiumScreen /></ProtectedRoute>} />
 
-      {/* Verstehen-Modul */}
-      <Route path="/verstehen" element={<ProtectedRoute><VorstehenScreen /></ProtectedRoute>} />
+      {/* Verstehen-Modul: Detail-Ansichten bewusst ohne BottomNav (eigener Zurück-Button) */}
       <Route path="/verstehen/aus-gespraechen" element={<ProtectedRoute><AusGespraechen /></ProtectedRoute>} />
       <Route path="/verstehen/:key" element={<ProtectedRoute><MusterDetail /></ProtectedRoute>} />
 
@@ -66,6 +65,7 @@ export default function App() {
         <Route path="/coach" element={<ProtectedRoute><CoachScreen /></ProtectedRoute>} />
         <Route path="/mirror" element={<ProtectedRoute><MirrorScreen /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
+        <Route path="/verstehen" element={<ProtectedRoute><VorstehenScreen /></ProtectedRoute>} />
       </Route>
 
       {/* Rechtliches — öffentlich zugänglich */}
