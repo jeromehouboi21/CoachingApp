@@ -36,7 +36,7 @@ const TOOL_CARDS = [
     iconColor: 'var(--color-premium)',
     title: 'Innere Stimmen',
     desc: 'Welche Stimme bremst dich?',
-    to: null,
+    to: '/stimmen',
     badge: 'PRO',
   },
   {

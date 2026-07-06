@@ -173,6 +173,35 @@ SPRACHCHECK: Prüfe deine eigenen Antworten im Gespräch auf verbotene Wörter
 (müssen, immer als Absolutheitsaussage, nie als Absolutheitsaussage, können nicht).
 Trage Verstöße in language_violations ein — für die Qualitätssicherung.`;
 
+const VOICE_CLUSTER_PROMPT = `Hier sind mehrere, bisher unabhängig
+erfasste Muster/Trigger/Stärken aus der Coach-Akte eines Nutzers:
+
+{ENTRIES}
+
+BEREITS BENANNTE INNERE STIMMEN DIESES NUTZERS (falls vorhanden):
+{EXISTING_VOICES}
+
+Prüfe zuerst: Passt eines der obigen Muster eindeutig zu einer bereits
+benannten Stimme (thematisch, nicht nur oberflächlich ähnlich)? Wenn ja,
+gib deren id in "existing_voice_id" zurück und liste die passenden
+Eintrag-IDs in "cluster_entry_ids".
+
+Nur falls keine bestehende Stimme passt: Prüfe, ob mehrere der Einträge
+thematisch so eng zusammengehören, dass sie eine gemeinsame, wiederkehrende
+"innere Stimme" beschreiben könnten (z.B. mehrere Einträge rund um
+Kontrolle/Perfektionismus könnten zu einem "Antreiber" gehören). Nur
+zusammenfassen, wenn es wirklich naheliegend ist — im Zweifel lieber
+getrennt lassen.
+
+Antworte NUR mit JSON, kein Markdown:
+{
+  "existing_voice_id": "<id einer bereits benannten Stimme, sonst null>",
+  "cluster_entry_ids": ["<ids der zusammengehörigen Einträge, min. 3>"],
+  "suggested_names": ["2-3 mögliche Namen, alltagssprachlich, z.B. 'Der Antreiber', 'Die Kontrolleurin'"],
+  "description": "1-2 Sätze, was diese Stimme zu tun scheint und wovor sie schützt"
+}
+Falls kein klares Cluster erkennbar ist: {}`;
+
 async function generateEmbedding(text: string, openaiKey: string): Promise<number[] | null> {
   try {
     const response = await fetch('https://api.openai.com/v1/embeddings', {
@@ -435,6 +464,71 @@ Deno.serve(async (req) => {
             logger.error('coach_file_entries resolve failed', { error: resolveError.message, conversationId, entryId: update.entry_id });
           } else {
             logger.info('coach_file_entries entry resolved', { conversationId, entryId: update.entry_id });
+          }
+        }
+      }
+    }
+
+    // 4b. Stimmen-Kandidaten erkennen ("Innere Stimmen")
+    // Nur prüfen, wenn mind. 3 unverknüpfte, aktive Coach-Akte-Einträge mit
+    // confidence >= 3 vorliegen — sonst zu wenig Grundlage für ein Cluster.
+    if (userId) {
+      const unlinkedEntries = (fileEntries ?? []).filter((e: any) => !e.voice_id && e.confidence >= 3);
+
+      if (unlinkedEntries.length >= 3) {
+        const { data: namedVoices } = await supabase
+          .from('inner_voices')
+          .select('id, name, description')
+          .eq('user_id', userId)
+          .eq('status', 'named');
+
+        const existingVoicesContext = namedVoices?.length
+          ? namedVoices.map((v: any) => `[${v.id}] ${v.name}: ${v.description ?? ''}`).join('\n')
+          : 'Noch keine benannten Stimmen vorhanden.';
+
+        const voiceClusterPrompt = VOICE_CLUSTER_PROMPT
+          .replace('{ENTRIES}', JSON.stringify(unlinkedEntries.map((e: any) => ({
+            id: e.id, category: e.category, label: e.label, description: e.description,
+          }))))
+          .replace('{EXISTING_VOICES}', existingVoicesContext);
+
+        const voiceCandidate = await runPrompt(anthropic, voiceClusterPrompt, conversationText);
+
+        if (voiceCandidate.existing_voice_id && voiceCandidate.cluster_entry_ids?.length) {
+          const { error: linkError } = await supabase.from('coach_file_entries')
+            .update({ voice_id: voiceCandidate.existing_voice_id })
+            .in('id', voiceCandidate.cluster_entry_ids);
+          if (linkError) {
+            logger.error('inner_voices link to existing voice failed', { error: linkError.message, conversationId });
+          } else {
+            await supabase.from('inner_voices')
+              .update({ last_active_at: new Date().toISOString() })
+              .eq('id', voiceCandidate.existing_voice_id);
+            logger.info('inner_voices entries linked to existing voice', { conversationId, voiceId: voiceCandidate.existing_voice_id, entryCount: voiceCandidate.cluster_entry_ids.length });
+          }
+        } else if (voiceCandidate.cluster_entry_ids?.length >= 3) {
+          const { data: newVoice, error: voiceError } = await supabase
+            .from('inner_voices')
+            .insert({
+              user_id: userId,
+              status: 'candidate',
+              suggested_names: voiceCandidate.suggested_names ?? [],
+              description: voiceCandidate.description ?? null,
+            })
+            .select('id')
+            .single();
+
+          if (voiceError) {
+            logger.error('inner_voices insert failed', { error: voiceError.message, conversationId });
+          } else {
+            const { error: linkError } = await supabase.from('coach_file_entries')
+              .update({ voice_id: newVoice.id })
+              .in('id', voiceCandidate.cluster_entry_ids);
+            if (linkError) {
+              logger.error('inner_voices link to new voice failed', { error: linkError.message, conversationId, voiceId: newVoice.id });
+            } else {
+              logger.info('inner_voices candidate created', { conversationId, voiceId: newVoice.id, entryCount: voiceCandidate.cluster_entry_ids.length });
+            }
           }
         }
       }

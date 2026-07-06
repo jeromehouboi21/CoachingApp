@@ -277,6 +277,55 @@ Ein authentisches Ausbleiben ist besser als ein aufgesetzter Mechanismus —
 stelle in dem Fall einfach deine nächste Frage wie gewohnt.
 `;
 
+interface InnerVoice {
+  id: string;
+  name?: string | null;
+  description?: string | null;
+  suggested_names?: string[];
+}
+
+const VOICE_INTRODUCE_BLOCK = (description: string) => `
+## Hinweis für diese Antwort: eine wiederkehrende innere Stimme ansprechen
+
+Über mehrere Gespräche hinweg hat sich ein Muster gezeigt: ${description}
+
+Sprich das behutsam an — als Beobachtung, nicht als Etikett. Zum Beispiel:
+"Mir fällt auf, dass sich da öfter etwas Ähnliches zeigt bei dir: [Muster in
+eigenen Worten]. Manchmal hilft es, so einem wiederkehrenden inneren Anteil
+eine Form zu geben — nicht um ihn festzunageln, sondern um leichter darüber
+sprechen zu können." Erkläre kurz, was das bedeuten könnte, und lass dann
+offen, wie der Nutzer darauf reagiert.
+
+WICHTIG: In dieser Antwort NUR verstehen, NICHT nach einem Namen fragen und
+KEINE Namensvorschläge machen. Das kommt frühestens im übernächsten
+Gespräch. Wenn der Nutzer selbst schon einen Namen vorschlägt, kannst du
+darauf eingehen — aber dränge nicht darauf.
+
+Falls der Nutzer gerade emotional belastet ist: dieses Thema jetzt nicht
+ansprechen, sondern zurückstellen.
+`;
+
+const VOICE_NAMING_BLOCK = (voice: InnerVoice) => `
+## Hinweis für diese Antwort: Namensgebung anbieten
+
+Ihr hattet bereits darüber gesprochen, dass sich ein wiederkehrender
+innerer Anteil zeigt (${voice.description ?? ''}). Biete jetzt an, ihm einen
+Namen zu geben — als Einladung, nicht als Pflicht.
+
+Schließe deine Antwort mit genau diesem strukturierten Block ab (wird vom
+Frontend als auswählbare Chips gerendert, NICHT als Freitext ausgeben):
+
+<<VOICE_NAMING_CHOICE
+voiceId: ${voice.id}
+options: ${(voice.suggested_names ?? []).join(' | ')}
+allowCustom: true
+allowDismiss: true
+>>
+
+Formuliere davor 1-2 einladende Sätze, z.B. "Wie würdest du diese Stimme
+nennen, wenn du magst?"
+`;
+
 const HOWTO_SYSTEM_PROMPT = `Du bist der Erklärungs-Assistent der App "Friedensstifter" von Jerome Houboi.
 
 DEINE AUFGABE:
@@ -407,7 +456,7 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice): string {
   let prompt = BASE_SYSTEM_PROMPT + '\n\n' + SYSTEMIC_WITNESSING_BLOCK;
 
   // Nur für den Turn, in dem der Rhythmus greift, zusätzlich anhängen.
@@ -415,6 +464,13 @@ function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisi
   // "für diese Antwort"-Anweisung das letzte und damit gewichtigste Wort hat.
   if (offerMechanism) {
     prompt += '\n\n' + MECHANISM_OFFER_BLOCK;
+  }
+
+  // "Innere Stimmen" — Zwei-Phasen-Chatflow, serverseitig getaktet (nie beide im selben Turn).
+  if (introduceVoice) {
+    prompt += '\n\n' + VOICE_INTRODUCE_BLOCK(introduceVoice.description ?? '');
+  } else if (namingVoice) {
+    prompt += '\n\n' + VOICE_NAMING_BLOCK(namingVoice);
   }
 
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
@@ -808,10 +864,58 @@ Deno.serve(async (req) => {
       logger.info('Mechanism-offer cadence triggered', { requestId, assistantTurnCount });
     }
 
+    // "Innere Stimmen" — Zwei-Phasen-Chatflow (Teil 4). Serverseitig getaktet,
+    // nie beide Phasen im selben Turn. Übersprungen im Howto-Modus (keine
+    // echte Coaching-Konversation) und bei akuter Belastung — das
+    // Sicherheitsnetz hat Vorrang vor der Taktung (Teil 4.4).
+    const acuteDistress = !!wellnessCheck && wellnessCheck.score <= 3;
+    let introduceVoice: InnerVoice | undefined;
+    let namingVoice: InnerVoice | undefined;
+
+    if (!howtoMode && !acuteDistress) {
+      const { data: candidateVoice } = await supabase
+        .from('inner_voices')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'candidate')
+        .is('introduced_at', null)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (candidateVoice && assistantTurnCount >= 2) {
+        introduceVoice = candidateVoice;
+        const { error: introError } = await supabase
+          .from('inner_voices')
+          .update({ introduced_at: new Date().toISOString() })
+          .eq('id', candidateVoice.id);
+        if (introError) {
+          logger.error('inner_voices introduced_at update failed', { error: introError.message, voiceId: candidateVoice.id });
+        } else {
+          logger.info('Voice-introduce triggered', { requestId, voiceId: candidateVoice.id });
+        }
+      } else {
+        const { data: readyVoice } = await supabase
+          .from('inner_voices')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'candidate')
+          .not('introduced_at', 'is', null)
+          .lt('introduced_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (readyVoice) {
+          namingVoice = readyVoice;
+          logger.info('Voice-naming triggered', { requestId, voiceId: readyVoice.id });
+        }
+      }
+    }
+
     // Normaler Chat — Streaming
     const systemPrompt = howtoMode
       ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism);
+      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
 
     if (wellnessCheck) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';

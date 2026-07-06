@@ -16,6 +16,67 @@ import { createLogger } from '../../lib/logger'
 const logger = createLogger('CoachScreen')
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+// Parst den <<VOICE_NAMING_CHOICE ...>>-Steuerblock aus einer Coach-Antwort
+// ("Innere Stimmen", Phase 2) und trennt ihn vom sichtbaren Chat-Text.
+// Solange der Block noch nicht geschlossen ist (Streaming läuft noch),
+// wird nur der Text davor angezeigt — kein rohes Marker-Fragment.
+function extractVoiceNaming(content) {
+  const idx = content.indexOf('<<VOICE_NAMING_CHOICE')
+  if (idx === -1) return { cleanText: content, naming: null }
+  const cleanText = content.slice(0, idx).trimEnd()
+  const blockMatch = content.slice(idx).match(/<<VOICE_NAMING_CHOICE([\s\S]*?)>>/)
+  if (!blockMatch) return { cleanText, naming: null }
+  const body = blockMatch[1]
+  const voiceId = body.match(/voiceId:\s*(\S+)/)?.[1]
+  const optionsRaw = body.match(/options:\s*(.*)/)?.[1] ?? ''
+  const options = optionsRaw.split('|').map(s => s.trim()).filter(Boolean)
+  const allowCustom = /allowCustom:\s*true/.test(body)
+  const allowDismiss = /allowDismiss:\s*true/.test(body)
+  if (!voiceId) return { cleanText, naming: null }
+  return { cleanText, naming: { voiceId, options, allowCustom, allowDismiss } }
+}
+
+function VoiceNamingChips({ naming, onChoose }) {
+  const [custom, setCustom] = useState('')
+  return (
+    <div className="flex flex-col gap-2 mt-1 mb-1 ml-1">
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {naming.options.map((name, i) => (
+          <button
+            key={i}
+            onClick={() => onChoose(name, false)}
+            className="flex-none bg-premium-light text-premium text-[13px] px-4 py-2 rounded-full border border-[var(--color-premium)]/30 whitespace-nowrap hover:opacity-80 transition-all"
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      {naming.allowCustom && (
+        <div className="flex gap-2">
+          <input
+            value={custom}
+            onChange={e => setCustom(e.target.value)}
+            placeholder="Eigener Name..."
+            className="flex-1 text-[13px] bg-surface border border-[var(--color-border)] rounded-full px-3 py-1.5 text-ink"
+          />
+          <button
+            disabled={!custom.trim()}
+            onClick={() => onChoose(custom.trim(), false)}
+            className="text-[13px] text-accent font-medium px-3 disabled:opacity-40"
+          >
+            Bestätigen
+          </button>
+        </div>
+      )}
+      {naming.allowDismiss && (
+        <button onClick={() => onChoose(null, true)} className="text-[12px] text-ink-3 text-left hover:underline">
+          Passt nicht für mich
+        </button>
+      )}
+    </div>
+  )
+}
+
 // Prüft ob Wiederkehr-Begrüßung angezeigt werden soll (alle 5 Bedingungen aus Spec 7.3)
 function shouldShowReturnGreeting(briefing, profile) {
   if (!briefing?.openThread) return false
@@ -45,6 +106,9 @@ export function CoachScreen() {
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
+  // "Innere Stimmen" Phase 2: bereits beantwortete Namensgebungs-Angebote
+  // ausblenden, auch wenn dieselbe Nachricht erneut gerendert wird.
+  const [handledVoiceIds, setHandledVoiceIds] = useState(new Set())
   const isPaidUser = profile?.plan === 'premium' || profile?.plan === 'tester'
   const sessionsLeft = 3 - (profile?.sessions_used_this_month || 0)
 
@@ -284,6 +348,24 @@ export function CoachScreen() {
     setShowQuickReplies(true)
   }
 
+  // "Innere Stimmen" Phase 2: Chip-Auswahl direkt in inner_voices schreiben
+  // und als normale Nutzer-Nachricht weiterführen, damit der Coach natürlich
+  // darauf reagieren kann (kein Formular, der Name entsteht im Gespräch).
+  const handleVoiceNaming = async (voiceId, chosenName, dismissed) => {
+    setHandledVoiceIds(prev => new Set(prev).add(voiceId))
+    if (dismissed) {
+      await supabase.from('inner_voices')
+        .update({ status: 'dismissed', dismissed_at: new Date().toISOString() })
+        .eq('id', voiceId)
+      handleSend('Das passt nicht für mich.')
+    } else {
+      await supabase.from('inner_voices')
+        .update({ status: 'named', name: chosenName, named_at: new Date().toISOString() })
+        .eq('id', voiceId)
+      handleSend(`Ich nenne sie „${chosenName}".`)
+    }
+  }
+
   return (
     <div className="flex flex-col h-screen bg-bg">
       {/* Header */}
@@ -317,9 +399,22 @@ export function CoachScreen() {
 
       {/* Chat Area */}
       <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-3">
-        {messages.map((msg) => (
-          <ChatBubble key={msg.id} role={msg.role} content={msg.content} isError={msg.isError} />
-        ))}
+        {messages.map((msg) => {
+          const { cleanText, naming } = msg.role === 'assistant'
+            ? extractVoiceNaming(msg.content)
+            : { cleanText: msg.content, naming: null }
+          return (
+            <div key={msg.id}>
+              <ChatBubble role={msg.role} content={cleanText} isError={msg.isError} />
+              {naming && !isLoading && !handledVoiceIds.has(naming.voiceId) && (
+                <VoiceNamingChips
+                  naming={naming}
+                  onChoose={(name, dismissed) => handleVoiceNaming(naming.voiceId, name, dismissed)}
+                />
+              )}
+            </div>
+          )
+        })}
         {isLoading && <TypingIndicator />}
         <div ref={bottomRef} />
       </div>

@@ -12,6 +12,7 @@ import { ProfileScreen } from './screens/profile/ProfileScreen'
 import { HowItWorksScreen } from './screens/howto/HowItWorksScreen'
 import { WellnessCheckScreen } from './screens/wellness/WellnessCheckScreen'
 import { PremiumScreen } from './screens/premium/PremiumScreen'
+import { StimmenScreen } from './screens/stimmen/StimmenScreen'
 import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
 import { MusterDetail } from './screens/verstehen/MusterDetail'
 import { AusGespraechen } from './screens/verstehen/AusGespraechen'
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/mirror" element={<ProtectedRoute><MirrorScreen /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
         <Route path="/verstehen" element={<ProtectedRoute><VorstehenScreen /></ProtectedRoute>} />
+        <Route path="/stimmen" element={<ProtectedRoute><StimmenScreen /></ProtectedRoute>} />
       </Route>
 
       {/* Rechtliches — öffentlich zugänglich */}
