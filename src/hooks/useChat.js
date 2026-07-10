@@ -386,6 +386,40 @@ export function useChat(userId, memory, session) {
     }
   }, [userId, memory, session])
 
+  // Lädt ein bestehendes Gespräch aus dem Verlauf und macht es zum aktiven
+  // Gespräch, damit es über sendMessage() ganz normal weitergeführt werden kann.
+  // Zählt bewusst NICHT als neue Session (kein countSession() im CoachScreen-Aufrufpfad).
+  const loadConversation = useCallback(async (convId) => {
+    if (!userId || !convId) return false
+
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id, role, content, created_at')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true })
+
+    if (error || !data || data.length === 0) {
+      logger.error('Failed to load conversation for resume', {
+        conversationId: convId,
+        error: error?.message ?? 'empty result',
+      })
+      return false
+    }
+
+    setMessages(data.map(m => ({ role: m.role, content: m.content, id: m.id })))
+    setConversationId(convId)
+    ragContextRef.current = null
+    briefingRef.current = null
+    coachFileRef.current = null
+    // isFirstUserMessageRef auf true: ragContext wurde nicht persistiert und ist
+    // nach dem Reload leer — beim nächsten Nutzer-Input soll die RAG-Suche
+    // daher noch einmal laufen (siehe fetchRagContext oben).
+    isFirstUserMessageRef.current = true
+
+    logger.info('Conversation resumed', { conversationId: convId, messageCount: data.length })
+    return true
+  }, [userId])
+
   const startNewConversation = useCallback(async (isFirstEver = false, coachFile = null) => {
     const opening = isFirstEver
       ? FIRST_OPENING_MESSAGE
@@ -609,6 +643,7 @@ export function useChat(userId, memory, session) {
     startEntryContextConversation,
     sendMessage,
     extractMemoryAndInsight,
+    loadConversation,
     setMessages,
   }
 }

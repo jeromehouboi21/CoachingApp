@@ -17,6 +17,7 @@ import { StimmenScreen } from './screens/stimmen/StimmenScreen'
 import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
 import { MusterDetail } from './screens/verstehen/MusterDetail'
 import { AusGespraechen } from './screens/verstehen/AusGespraechen'
+import { HistoryScreen } from './screens/history/HistoryScreen'
 import { ImpressumScreen } from './screens/legal/ImpressumScreen'
 import { DatenschutzScreen } from './screens/legal/DatenschutzScreen'
 
@@ -68,6 +69,9 @@ export default function App() {
       {/* Verstehen-Modul: Detail-Ansichten bewusst ohne BottomNav (eigener Zurück-Button) */}
       <Route path="/verstehen/aus-gespraechen" element={<ProtectedRoute><AusGespraechen /></ProtectedRoute>} />
       <Route path="/verstehen/:key" element={<ProtectedRoute><MusterDetail /></ProtectedRoute>} />
+
+      {/* Gesprächsverlauf: eigenes Vollbild-Layout wie Verstehen-Detailscreens, kein BottomNav */}
+      <Route path="/verlauf" element={<ProtectedRoute><HistoryScreen /></ProtectedRoute>} />
 
       {/* Haupt-App mit BottomNav */}
       <Route element={<AppShell />}>

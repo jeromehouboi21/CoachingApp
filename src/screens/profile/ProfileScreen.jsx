@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2 } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, History } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -124,6 +124,7 @@ export function ProfileScreen() {
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         {[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
+          { icon: History, label: 'Gesprächsverlauf', action: () => navigate('/verlauf') },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setShowBetaModal(true) } }] : []),

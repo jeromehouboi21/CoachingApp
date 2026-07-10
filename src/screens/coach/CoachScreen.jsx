@@ -96,13 +96,14 @@ export function CoachScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight } = useChat(user?.id, memory, session)
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight, loadConversation } = useChat(user?.id, memory, session)
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
   const sessionCountedRef = useRef(false)
   // Refs für Navigation-State — sofort bei Mount gelesen, bevor React Router location.state verändern kann
   const entryContextRef = useRef(location.state?.entryContext ?? null)
   const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
+  const resumeConversationIdRef = useRef(location.state?.resumeConversationId ?? null)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
@@ -127,13 +128,32 @@ export function CoachScreen() {
 
     const wc = wellnessCheckRef.current
     const entryCtx = entryContextRef.current
+    const resumeId = resumeConversationIdRef.current
 
     // State löschen via React Router — kein erneutes Triggern bei Back-Navigation
-    if (entryCtx || wc) {
+    if (entryCtx || wc || resumeId) {
       navigate('/coach', { replace: true, state: {} })
     }
 
-    // VARIANTE 3: Wellness-Check (höchste Priorität)
+    // VARIANTE 0: Bestehendes Gespräch aus dem Verlauf fortsetzen.
+    // Höchste Priorität — expliziter Klick des Nutzers auf ein konkretes Gespräch
+    // darf nicht von Wellness-Check/Wiederkehr-Begrüßung überschrieben werden.
+    // Zählt bewusst nicht als neue Session (kein countSession()-Aufruf hier).
+    if (resumeId) {
+      logger.info('Resuming conversation from history', { conversationId: resumeId })
+      setShowQuickReplies(false)
+      loadConversation(resumeId).then(ok => {
+        if (!ok) {
+          logger.warn('Resume failed, falling back to new conversation', { conversationId: resumeId })
+          startNewConversation()
+          setShowQuickReplies(true)
+          countSession()
+        }
+      })
+      return
+    }
+
+    // VARIANTE 3: Wellness-Check (höchste Priorität unter den automatischen Eröffnungen)
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
       startWellnessConversation(wc)
