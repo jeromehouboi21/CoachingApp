@@ -43,7 +43,8 @@ Antworte NUR mit validem JSON:
       "label": "Kurzbezeichnung",
       "description": "Ausführlichere Beschreibung (optional, sonst null)",
       "example": "Konkretes Beispiel aus diesem Gespräch (optional, sonst null)",
-      "confidence": 2
+      "confidence": 2,
+      "linked_value": "Der Wert oder Glaubenssatz, den dieses Muster zu schützen scheint — z.B. 'Ich darf keine Fehler machen' oder 'Harmonie um jeden Preis' (optional, nur bei category: pattern oder trigger, sonst null)"
     }
   ]
 }
@@ -62,7 +63,15 @@ KRITERIEN:
 - "fading" setzen wenn ein Muster deutlich schwächer geworden ist
 - "resolved" nur wenn der Coachee selbst etwas explizit aufgelöst hat
 - Bei Zweifeln: lieber nicht hinzufügen als spekulieren
-- Leeres updates-Array ist vollkommen okay`;
+- Leeres updates-Array ist vollkommen okay
+
+ZU linked_value:
+Jedes wiederkehrende Muster schützt fast immer einen Wert oder einen
+verinnerlichten Glaubenssatz (z.B. Sicherheit, Anerkennung, Harmonie,
+Kontrolle). Wenn im Gespräch erkennbar wird, wofür ein Muster eigentlich gut
+sein will, halte das kurz und konkret in linked_value fest — in der Sprache
+des Nutzers, nicht als Fachbegriff. Nur ausfüllen wenn wirklich erkennbar,
+sonst null. Kein Spekulieren.`;
 
 const PROFILE_UPDATE_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Aktualisiere das Personenprofil des Coachees basierend auf dem Gespräch.
@@ -165,13 +174,17 @@ Antworte NUR mit validem JSON:
   "what_missed": "Was hättest du besser machen können?",
   "resistance_detected": false,
   "resistance_handled": null,
+  "capacity_vs_resistance_note": "Gab es einen Moment, in dem echte Erschöpfung als Widerstand missverstanden worden sein könnte (oder umgekehrt)? Kurze Einschätzung, sonst null.",
   "improvement_note": "Ein konkreter Hinweis für zukünftige ähnliche Gespräche",
   "language_violations": []
 }
 
 SPRACHCHECK: Prüfe deine eigenen Antworten im Gespräch auf verbotene Wörter
-(müssen, immer als Absolutheitsaussage, nie als Absolutheitsaussage, können nicht).
-Trage Verstöße in language_violations ein — für die Qualitätssicherung.`;
+(müssen, immer als Absolutheitsaussage, nie als Absolutheitsaussage, können
+nicht) UND auf unbeabsichtigtes Optimierungs- oder Schuld-Framing (z.B.
+Formulierungen, die nahelegen, der Nutzer müsse "besser" oder "produktiver"
+werden, oder die Schuld statt Verantwortung ansprechen). Trage Verstöße in
+language_violations ein — für die Qualitätssicherung.`;
 
 const VOICE_CLUSTER_PROMPT = `Hier sind mehrere, bisher unabhängig
 erfasste Muster/Trigger/Stärken aus der Coach-Akte eines Nutzers:
@@ -198,7 +211,7 @@ Antworte NUR mit JSON, kein Markdown:
   "existing_voice_id": "<id einer bereits benannten Stimme, sonst null>",
   "cluster_entry_ids": ["<ids der zusammengehörigen Einträge, min. 3>"],
   "suggested_names": ["2-3 mögliche Namen, alltagssprachlich, z.B. 'Der Antreiber', 'Die Kontrolleurin'"],
-  "description": "1-2 Sätze, was diese Stimme zu tun scheint und wovor sie schützt"
+  "description": "1-2 Sätze: was diese Stimme tut UND wovor sie ursprünglich schützen wollte (die positive Absicht dahinter) — z.B. 'Sorgt dafür, dass alles kontrolliert bleibt, wahrscheinlich weil Kontrollverlust früher gefährlich war.' Nie als Defekt formulieren, immer als Schutzmechanismus mit einer (heute vielleicht überholten) guten Absicht."
 }
 Falls kein klares Cluster erkennbar ist: {}`;
 
@@ -410,6 +423,7 @@ Deno.serve(async (req) => {
             description: update.description ?? null,
             example: update.example ?? null,
             confidence: update.confidence ?? 2,
+            linked_value: update.linked_value ?? null,
           });
           if (addError) {
             logger.error('coach_file_entries insert failed', { error: addError.message, conversationId, label: update.label });

@@ -123,8 +123,27 @@ export function HowItWorksScreen() {
           <div>
             <h2 className="text-[16px] font-medium text-ink mb-2">Was kannst du hier tun?</h2>
             <p className="text-[14px] text-ink-2 leading-[1.7]">
-              Du bringst ein Thema — groß oder klein. Etwas, das dich beschäftigt, nervt, blockiert oder einfach nicht loslässt. Die App stellt dir Fragen. Nicht um dich zu analysieren. Sondern damit du selbst klarer siehst, was wirklich los ist.
+              Du bringst ein Thema — groß oder klein. Etwas, das dich beschäftigt, nervt, blockiert oder einfach nicht loslässt. Der Coach stellt dir Fragen. Nicht um dich zu analysieren. Sondern damit du selbst klarer siehst, was wirklich los ist. Daneben gibt es ein paar weitere Werkzeuge, die dir helfen, das Gesehene festzuhalten und wiederzuerkennen.
             </p>
+          </div>
+
+          {/* Block 1b — Werkzeugkasten (Textliste, bewusst nicht klickbar) */}
+          <div>
+            <h2 className="text-[16px] font-medium text-ink mb-2">Dein Werkzeugkasten</h2>
+            <ul className="flex flex-col gap-3">
+              <li className="text-[14px] text-ink-2 leading-[1.6]">
+                <span className="text-ink font-medium">Wie geht's dir?</span> — Eine Skala von 1 bis 10, schnell erfasst, bevor ein Gespräch beginnt.
+              </li>
+              <li className="text-[14px] text-ink-2 leading-[1.6]">
+                <span className="text-ink font-medium">Mein Spiegel</span> — Deine Erkenntnisse aus den Gesprächen, an einem Ort gesammelt. Plus eine Akte, die zeigt, welche Themen bei dir wiederkehren.
+              </li>
+              <li className="text-[14px] text-ink-2 leading-[1.6]">
+                <span className="text-ink font-medium">Verstehen</span> — Eine Bibliothek häufiger Muster. Taucht eines davon auch bei dir auf, markiert die App es als „aus deinen Gesprächen".
+              </li>
+              <li className="text-[14px] text-ink-2 leading-[1.6]">
+                <span className="text-ink font-medium">Innere Stimmen</span> <span className="text-ink-3">(Premium)</span> — Wiederkehrende innere Anteile, die du mit der Zeit selbst benennen kannst.
+              </li>
+            </ul>
           </div>
 
           {/* Block 2 — Jerome */}
@@ -175,6 +194,14 @@ export function HowItWorksScreen() {
             <button onClick={() => navigate('/profile')} className="text-[13px] text-ink-3 hover:text-ink-2 mt-2 hover:underline">
               Datenschutzerklärung lesen →
             </button>
+          </div>
+
+          {/* Block 3b — Kostenlos vs. Premium */}
+          <div>
+            <h2 className="text-[16px] font-medium text-ink mb-2">Kostenlos vs. Premium</h2>
+            <p className="text-[14px] text-ink-2 leading-[1.7]">
+              Kostenlos kannst du 3 Coach-Gespräche im Monat führen, die Skalenfrage unbegrenzt nutzen und bis zu 10 Erkenntnisse in deinem Spiegel sammeln. Premium hebt diese Grenzen auf und schaltet die Inneren Stimmen frei. Was Premium kostet, geben wir bekannt, sobald es verfügbar ist.
+            </p>
           </div>
 
           {/* Block 4 — Systemisches Coaching */}

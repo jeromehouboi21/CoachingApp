@@ -14,7 +14,7 @@ const FEATURES_PREMIUM = [
   'Vollständiges Coach-Gedächtnis',
   'Mein Spiegel: unbegrenzte Erkenntnisse',
   'Gesprächsverlauf & Zusammenfassungen',
-  'Innere Stimmen Modul (demnächst)',
+  'Innere Stimmen Modul',
   'Direkter Kontakt zu Jerome',
 ]
 
