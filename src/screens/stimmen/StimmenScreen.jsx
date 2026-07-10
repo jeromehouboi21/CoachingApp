@@ -106,6 +106,7 @@ export function StimmenScreen() {
   const [candidateVoices, setCandidateVoices] = useState([])
   const [entriesByVoice, setEntriesByVoice] = useState({})
   const [loading, setLoading] = useState(true)
+  const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
     if (!user || !isPremium) { setLoading(false); return }
@@ -128,7 +129,15 @@ export function StimmenScreen() {
         .select('label, voice_id')
         .eq('user_id', user.id)
         .not('voice_id', 'is', null),
-    ]).then(([{ data: named }, { data: candidates }, { data: entries }]) => {
+      // Nur die Anzahl, keine Inhalte — Kandidaten vor dem ersten
+      // Ansprechen im Chat bleiben inhaltlich verborgen.
+      supabase
+        .from('inner_voices')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .eq('status', 'candidate')
+        .is('introduced_at', null),
+    ]).then(([{ data: named }, { data: candidates }, { data: entries }, { count: pending }]) => {
       setNamedVoices(named ?? [])
       setCandidateVoices(candidates ?? [])
       const grouped = {}
@@ -137,6 +146,7 @@ export function StimmenScreen() {
         grouped[e.voice_id].push(e.label)
       }
       setEntriesByVoice(grouped)
+      setPendingCount(pending ?? 0)
       setLoading(false)
     })
   }, [user, isPremium])
@@ -171,10 +181,22 @@ export function StimmenScreen() {
           <div className="w-16 h-16 bg-premium-light rounded-full flex items-center justify-center mb-5">
             <Flame size={24} color="var(--color-premium)" />
           </div>
-          <h3 className="font-display text-[18px] text-ink mb-2">Deine Stimmen zeigen sich erst mit der Zeit</h3>
-          <p className="text-[14px] text-ink-2 leading-relaxed max-w-xs mb-5">
-            Je mehr du mit deinem Coach sprichst, desto klarer wird das Bild.
-          </p>
+          {pendingCount > 0 ? (
+            <>
+              <h3 className="font-display text-[18px] text-ink mb-2">Da deutet sich schon etwas an</h3>
+              <p className="text-[14px] text-ink-2 leading-relaxed max-w-xs mb-5">
+                Dein Coach hat ein wiederkehrendes Muster bemerkt. Sprich einfach weiter —
+                er wird es im richtigen Moment ansprechen, dann zeigt es sich auch hier.
+              </p>
+            </>
+          ) : (
+            <>
+              <h3 className="font-display text-[18px] text-ink mb-2">Deine Stimmen zeigen sich erst mit der Zeit</h3>
+              <p className="text-[14px] text-ink-2 leading-relaxed max-w-xs mb-5">
+                Je mehr du mit deinem Coach sprichst, desto klarer wird das Bild.
+              </p>
+            </>
+          )}
           <button
             onClick={() => navigate('/coach')}
             className="bg-accent text-white text-[13px] font-medium px-5 py-2.5 rounded-full hover:bg-accent-2 transition-colors"

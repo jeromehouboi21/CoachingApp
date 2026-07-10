@@ -997,6 +997,7 @@ Deno.serve(async (req) => {
           .eq('status', 'candidate')
           .not('introduced_at', 'is', null)
           .lt('introduced_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order('introduced_at', { ascending: true })
           .limit(1)
           .maybeSingle();
 

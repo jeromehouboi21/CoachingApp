@@ -195,9 +195,11 @@ BEREITS BENANNTE INNERE STIMMEN DIESES NUTZERS (falls vorhanden):
 {EXISTING_VOICES}
 
 Prüfe zuerst: Passt eines der obigen Muster eindeutig zu einer bereits
-benannten Stimme (thematisch, nicht nur oberflächlich ähnlich)? Wenn ja,
-gib deren id in "existing_voice_id" zurück und liste die passenden
-Eintrag-IDs in "cluster_entry_ids".
+erkannten Stimme — benannt oder noch unbenannter Kandidat — (thematisch,
+nicht nur oberflächlich ähnlich)? Wenn ja, gib deren id in
+"existing_voice_id" zurück und liste die passenden Eintrag-IDs in
+"cluster_entry_ids". Das gilt unabhängig davon, ob die Stimme schon einen
+Namen hat.
 
 Nur falls keine bestehende Stimme passt: Prüfe, ob mehrere der Einträge
 thematisch so eng zusammengehören, dass sie eine gemeinsame, wiederkehrende
@@ -230,18 +232,24 @@ async function generateEmbedding(text: string, openaiKey: string): Promise<numbe
   }
 }
 
-async function runPrompt(anthropic: Anthropic, prompt: string, conversationText: string): Promise<any> {
+async function runPrompt(anthropic: Anthropic, prompt: string, conversationText: string, label: string, logger: ReturnType<typeof createLogger>): Promise<any> {
+  let raw = '';
   try {
     const response = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
+      max_tokens: 2000,
       messages: [{ role: 'user', content: `${prompt}\n\nGespräch:\n${conversationText}` }],
     });
-    const raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
+    raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
     // Strip markdown code fences that models sometimes add despite "NUR JSON" instruction
     const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
     return JSON.parse(text);
-  } catch {
+  } catch (err) {
+    logger.error('runPrompt failed — returning empty result', {
+      label,
+      error: err instanceof Error ? err.message : String(err),
+      rawResponsePreview: raw.slice(0, 300),
+    });
     return {};
   }
 }
@@ -369,13 +377,13 @@ Deno.serve(async (req) => {
 
     // 2. Alle Analysen parallel ausführen (Resonanzkarte ab 3. Gespräch)
     const [sessionNotes, fileUpdates, profileUpdates, anonSummary, reflection, resonanceUpdate] = await Promise.all([
-      runPrompt(anthropic, SESSION_NOTES_PROMPT, conversationText),
-      runPrompt(anthropic, fileUpdatePrompt, conversationText),
-      runPrompt(anthropic, profileUpdatePrompt, conversationText),
-      runPrompt(anthropic, ANONYMOUS_SUMMARY_PROMPT, conversationText),
-      runPrompt(anthropic, REFLECTION_PROMPT, conversationText),
+      runPrompt(anthropic, SESSION_NOTES_PROMPT, conversationText, 'session_notes', logger),
+      runPrompt(anthropic, fileUpdatePrompt, conversationText, 'file_update', logger),
+      runPrompt(anthropic, profileUpdatePrompt, conversationText, 'profile_update', logger),
+      runPrompt(anthropic, ANONYMOUS_SUMMARY_PROMPT, conversationText, 'anonymous_summary', logger),
+      runPrompt(anthropic, REFLECTION_PROMPT, conversationText, 'reflection', logger),
       conversationCount >= 3
-        ? runPrompt(anthropic, resonancePrompt, conversationText)
+        ? runPrompt(anthropic, resonancePrompt, conversationText, 'resonance_update', logger)
         : Promise.resolve(null),
     ]);
 
@@ -490,15 +498,17 @@ Deno.serve(async (req) => {
       const unlinkedEntries = (fileEntries ?? []).filter((e: any) => !e.voice_id && e.confidence >= 3);
 
       if (unlinkedEntries.length >= 3) {
-        const { data: namedVoices } = await supabase
+        const { data: existingVoices } = await supabase
           .from('inner_voices')
-          .select('id, name, description')
+          .select('id, name, status, description')
           .eq('user_id', userId)
-          .eq('status', 'named');
+          .in('status', ['named', 'candidate']);
 
-        const existingVoicesContext = namedVoices?.length
-          ? namedVoices.map((v: any) => `[${v.id}] ${v.name}: ${v.description ?? ''}`).join('\n')
-          : 'Noch keine benannten Stimmen vorhanden.';
+        const existingVoicesContext = existingVoices?.length
+          ? existingVoices.map((v: any) =>
+              `[${v.id}] ${v.status === 'named' ? v.name : '(noch unbenannter Kandidat)'}: ${v.description ?? ''}`
+            ).join('\n')
+          : 'Noch keine Stimmen vorhanden.';
 
         const voiceClusterPrompt = VOICE_CLUSTER_PROMPT
           .replace('{ENTRIES}', JSON.stringify(unlinkedEntries.map((e: any) => ({
@@ -506,7 +516,7 @@ Deno.serve(async (req) => {
           }))))
           .replace('{EXISTING_VOICES}', existingVoicesContext);
 
-        const voiceCandidate = await runPrompt(anthropic, voiceClusterPrompt, conversationText);
+        const voiceCandidate = await runPrompt(anthropic, voiceClusterPrompt, conversationText, 'voice_cluster', logger);
 
         if (voiceCandidate.existing_voice_id && voiceCandidate.cluster_entry_ids?.length) {
           const { error: linkError } = await supabase.from('coach_file_entries')
@@ -533,15 +543,27 @@ Deno.serve(async (req) => {
             .single();
 
           if (voiceError) {
-            logger.error('inner_voices insert failed', { error: voiceError.message, conversationId });
+            logger.error('inner_voices insert failed', {
+              error: voiceError.message, conversationId, userId,
+              clusterEntryIds: voiceCandidate.cluster_entry_ids,
+            });
           } else {
-            const { error: linkError } = await supabase.from('coach_file_entries')
+            const { error: linkError, count } = await supabase.from('coach_file_entries')
               .update({ voice_id: newVoice.id })
-              .in('id', voiceCandidate.cluster_entry_ids);
-            if (linkError) {
-              logger.error('inner_voices link to new voice failed', { error: linkError.message, conversationId, voiceId: newVoice.id });
+              .in('id', voiceCandidate.cluster_entry_ids)
+              .select('id', { count: 'exact' });
+
+            if (linkError || !count) {
+              logger.error('inner_voices link to new voice failed — rolling back orphaned voice row', {
+                error: linkError?.message ?? 'zero rows linked',
+                conversationId, voiceId: newVoice.id,
+                clusterEntryIds: voiceCandidate.cluster_entry_ids,
+              });
+              // Keine verwaiste Stimmen-Zeile ohne verknüpfte Einträge stehen lassen —
+              // sonst sammeln sich unsichtbare "Geister-Kandidaten" in der DB an.
+              await supabase.from('inner_voices').delete().eq('id', newVoice.id);
             } else {
-              logger.info('inner_voices candidate created', { conversationId, voiceId: newVoice.id, entryCount: voiceCandidate.cluster_entry_ids.length });
+              logger.info('inner_voices candidate created', { conversationId, voiceId: newVoice.id, entryCount: count });
             }
           }
         }
