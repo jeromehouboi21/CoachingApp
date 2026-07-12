@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, History } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
 import { useMemory } from '../../hooks/useMemory'
@@ -403,14 +403,24 @@ export function CoachScreen() {
             <h1 className="font-display text-[24px] text-ink">Dein Begleiter</h1>
             <p className="text-[13px] text-ink-3">Fragen, die dich anders denken lassen</p>
           </div>
-          <button
-            onClick={handleNewConversation}
-            disabled={isLoading}
-            className="flex items-center gap-1.5 bg-surface-2 text-ink text-[13px] font-medium px-3 py-1.5 rounded-full border border-[var(--color-border)] hover:bg-accent-light hover:text-accent transition-all disabled:opacity-50"
-          >
-            <Plus size={14} />
-            Neues Gespräch
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/verlauf')}
+              aria-label="Gesprächsverlauf öffnen"
+              title="Gesprächsverlauf"
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-border)] text-ink-2 hover:bg-accent-light hover:text-accent transition-all"
+            >
+              <History size={15} />
+            </button>
+            <button
+              onClick={handleNewConversation}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 bg-surface-2 text-ink text-[13px] font-medium px-3 py-1.5 rounded-full border border-[var(--color-border)] hover:bg-accent-light hover:text-accent transition-all disabled:opacity-50"
+            >
+              <Plus size={14} />
+              Neues Gespräch
+            </button>
+          </div>
         </div>
         <div className="flex items-center justify-between mt-2">
           <div className="flex items-center gap-2">
