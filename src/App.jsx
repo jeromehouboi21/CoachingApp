@@ -20,6 +20,7 @@ import { AusGespraechen } from './screens/verstehen/AusGespraechen'
 import { HistoryScreen } from './screens/history/HistoryScreen'
 import { ImpressumScreen } from './screens/legal/ImpressumScreen'
 import { DatenschutzScreen } from './screens/legal/DatenschutzScreen'
+import { CoachingAgreementScreen } from './screens/legal/CoachingAgreementScreen'
 
 function LoadingScreen() {
   return (
@@ -72,6 +73,9 @@ export default function App() {
 
       {/* Gesprächsverlauf: eigenes Vollbild-Layout wie Verstehen-Detailscreens, kein BottomNav */}
       <Route path="/verlauf" element={<ProtectedRoute><HistoryScreen /></ProtectedRoute>} />
+
+      {/* Coaching-Vereinbarung: nachträglicher Rückblick inkl. Zustimmungsdatum, nur eingeloggt sinnvoll */}
+      <Route path="/vereinbarung" element={<ProtectedRoute><CoachingAgreementScreen /></ProtectedRoute>} />
 
       {/* Haupt-App mit BottomNav */}
       <Route element={<AppShell />}>

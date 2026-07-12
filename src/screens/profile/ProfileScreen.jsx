@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, History } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, History, Handshake } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -128,6 +128,7 @@ export function ProfileScreen() {
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setShowBetaModal(true) } }] : []),
+          { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },
           { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
           { icon: FileText, label: 'Impressum', action: () => navigate('/impressum') },
         ].map(({ icon: Icon, label, action }) => (
