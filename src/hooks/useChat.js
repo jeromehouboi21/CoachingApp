@@ -394,7 +394,7 @@ export function useChat(userId, memory, session) {
 
     const { data, error } = await supabase
       .from('messages')
-      .select('id, role, content, created_at')
+      .select('id, role, content, created_at, message_type')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
 
@@ -406,7 +406,7 @@ export function useChat(userId, memory, session) {
       return false
     }
 
-    setMessages(data.map(m => ({ role: m.role, content: m.content, id: m.id })))
+    setMessages(data.map(m => ({ role: m.role, content: m.content, id: m.id, messageType: m.message_type })))
     setConversationId(convId)
     ragContextRef.current = null
     briefingRef.current = null
@@ -543,6 +543,7 @@ export function useChat(userId, memory, session) {
       let fullContent = ''
       let firstToken = true
       let totalChunks = 0
+      let messageType = 'standard'
 
       while (true) {
         const { done, value } = await reader.read()
@@ -555,6 +556,14 @@ export function useChat(userId, memory, session) {
             if (data === '[DONE]') break
             try {
               const parsed = JSON.parse(data)
+              if (parsed.meta?.messageType) {
+                messageType = parsed.meta.messageType
+                setMessages(prev => {
+                  const updated = [...prev]
+                  updated[updated.length - 1] = { ...updated[updated.length - 1], messageType }
+                  return updated
+                })
+              }
               if (parsed.text) {
                 if (firstToken) {
                   logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
@@ -584,6 +593,7 @@ export function useChat(userId, memory, session) {
           conversation_id: conversationId,
           role: 'assistant',
           content: fullContent,
+          message_type: messageType,
         })
       }
     } catch (err) {

@@ -5,6 +5,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
 import { useMemory } from '../../hooks/useMemory'
 import { ChatBubble } from '../../components/coach/ChatBubble'
+import { CrisisResponseCard } from '../../components/coach/CrisisResponseCard'
 import { TypingIndicator } from '../../components/coach/TypingIndicator'
 import { ChatInput } from '../../components/coach/ChatInput'
 import { QuickReplies } from '../../components/coach/QuickReplies'
@@ -445,7 +446,11 @@ export function CoachScreen() {
             : { cleanText: msg.content, naming: null }
           return (
             <div key={msg.id}>
-              <ChatBubble role={msg.role} content={cleanText} isError={msg.isError} />
+              {msg.messageType === 'crisis_response' ? (
+                <CrisisResponseCard content={cleanText} />
+              ) : (
+                <ChatBubble role={msg.role} content={cleanText} isError={msg.isError} />
+              )}
               {naming && !isLoading && !handledVoiceIds.has(naming.voiceId) && (
                 <VoiceNamingChips
                   naming={naming}

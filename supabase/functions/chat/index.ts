@@ -1,5 +1,6 @@
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
 import { createClient } from 'npm:@supabase/supabase-js';
+import { detectCrisis } from './crisisDetection.ts';
 
 function createLogger(source: string, requestId?: string, userId?: string) {
   const supabase = createClient(
@@ -388,6 +389,47 @@ allowDismiss: true
 
 Formuliere davor 1-2 einladende Sätze, z.B. "Wie würdest du diese Stimme
 nennen, wenn du magst?"
+`;
+
+// BLOCK 0 — Krisenfall. Kein optionaler Kontext wie die anderen Blöcke,
+// sondern eine Weiche, die bei akuter Suizid-/Selbstverletzungsgefahr die
+// normale Coaching-Haltung ersetzt (nicht ergänzt) — siehe
+// konzept-krisenprotokoll-suizidalitaet-v1_1.md, Teil 2.
+const CRISIS_RESPONSE_BLOCK = `
+## KRISENFALL — diese Anweisung übersteuert alle anderen Verhaltensregeln
+
+Der Mensch hat gerade etwas geschrieben, das auf akute Suizidgedanken oder
+Selbstverletzungsabsicht hindeutet. Jetzt gilt NICHT die sonstige Regel,
+nur Fragen zu stellen. Jetzt gilt:
+
+1. Nimm es ernst — ohne Dramatik, ohne Schock, ohne Floskeln wie
+   "Das tut mir sehr leid zu hören". Direkt, ruhig, klar.
+2. Sprich es offen an. Nicht ausweichen, nicht umformulieren, nicht
+   "das klingt nach viel" sagen, wenn tatsächlich Suizidgedanken da sind.
+3. Gib die Kontaktinformationen unten VOLLSTÄNDIG UND UNVERÄNDERT weiter —
+   in genau dieser Form, nicht umschreiben, nicht kürzen.
+4. Stelle danach höchstens EINE offene, nicht drängende Frage
+   ("Bist du gerade sicher?" oder "Ist gerade jemand bei dir?").
+5. Biete an, dass das Gespräch hier weitergehen kann — aber mach klar,
+   dass die Hotline die Menschen sind, die in diesem Moment wirklich
+   helfen können. Du bist kein Ersatz dafür.
+6. Kein Vertrösten, keine Coaching-Fragen zu Mustern oder Ursachen in
+   dieser Antwort. Das kann später kommen, jetzt nicht.
+
+PFLICHTTEXT (unverändert einfügen):
+
+"Das klingt sehr ernst — und ich möchte, dass du gerade Unterstützung hast,
+die mehr kann als ich.
+
+Die TelefonSeelsorge ist rund um die Uhr, kostenlos und anonym erreichbar:
+📞 0800 111 0 111 oder 0800 111 0 222 oder 116 123
+💬 Chat/Mail: telefonseelsorge.de
+
+Falls du in unmittelbarer Gefahr bist: 112 (Rettungsdienst) oder 110 (Polizei).
+
+Ich bin weiter da, wenn du reden willst — aber bitte melde dich auch dort."
+
+Maximal 4-5 Sätze insgesamt, plus der Pflichttext. Kein Coaching-Jargon.
 `;
 
 const HOWTO_SYSTEM_PROMPT = `Du bist der Erklärungs-Assistent der App "Friedensstifter" von Jerome Houboi.
@@ -837,6 +879,12 @@ Deno.serve(async (req) => {
   global: { headers: { Authorization: `Bearer ${token}` } },
   auth: { persistSession: false },
 })
+  // Echter Service-Role-Client, OHNE Nutzer-Token — nur für crisis_events, dessen
+  // RLS-Policy bewusst jeden direkten Zugriff blockiert (auch den des eigenen
+  // Nutzers). Siehe fix-admin-users-service-role-v1.md für den Hintergrund:
+  // der Client oben läuft wegen des Authorization-Headers effektiv als
+  // "authenticated", nicht als service_role.
+  const serviceClient = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
   const { data: { user }, error: authError } = await supabase.auth.getUser(token);
   if (authError || !user) {
     logger.warn('invalid token', { error: authError?.message });
@@ -885,7 +933,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, requestId } = body as any;
+    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, requestId, conversationId } = body as any;
 
     // Jetzt logger mit requestId + userId neu erstellen — alle weiteren Logs sind korrelierbar
     logger = createLogger('chat', requestId ?? undefined, user.id);
@@ -1008,10 +1056,41 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Krisenerkennung (Konzept-Dokument, Teil 1) — läuft nur bei einer echten
+    // Nutzer-Nachricht (nicht bei synthetischen Eröffnungen wie Wellness-Check/
+    // Briefing/Entry-Kontext, dort ist messages leer) und nicht im Howto-Modus
+    // (dort greift die bestehende, generischere Krisen-Anweisung im Basis-Prompt).
+    let crisisDetected = false;
+    let crisisConfidence: 'low' | 'medium' | 'high' | null = null;
+    const lastUserMessage = Array.isArray(messages)
+      ? [...messages].reverse().find((m: any) => m.role === 'user')
+      : null;
+
+    if (!howtoMode && lastUserMessage?.content) {
+      const classification = await detectCrisis(anthropic, lastUserMessage.content);
+      if (classification.acute_risk && classification.confidence !== 'low') {
+        crisisDetected = true;
+        crisisConfidence = classification.confidence;
+        logger.warn('Crisis detected in user message', { requestId, confidence: classification.confidence });
+
+        const { error: crisisInsertError } = await serviceClient.from('crisis_events').insert({
+          user_id: user.id,
+          conversation_id: conversationId || null,
+          confidence: classification.confidence,
+          excerpt: lastUserMessage.content.slice(0, 300),
+        });
+        if (crisisInsertError) {
+          logger.error('crisis_events insert failed', { error: crisisInsertError.message, requestId });
+        }
+      }
+    }
+
     // Normaler Chat — Streaming
-    const systemPrompt = howtoMode
-      ? HOWTO_SYSTEM_PROMPT
-      : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
+    const systemPrompt = crisisDetected
+      ? CRISIS_RESPONSE_BLOCK
+      : howtoMode
+        ? HOWTO_SYSTEM_PROMPT
+        : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
 
     if (wellnessCheck) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';
@@ -1033,7 +1112,9 @@ Deno.serve(async (req) => {
     const streamStart = Date.now();
     const stream = await anthropic.messages.stream({
       model: 'claude-sonnet-4-5',
-      max_tokens: 400,
+      // Der Pflichttext im Krisenfall (Hotline-Nummern + Fließtext) braucht mehr
+      // Raum als eine normale Antwort — darf niemals abgeschnitten werden.
+      max_tokens: crisisDetected ? 700 : 400,
       system: systemPrompt,
       messages: apiMessages,
     });
@@ -1042,6 +1123,12 @@ Deno.serve(async (req) => {
     const readable = new ReadableStream({
       async start(controller) {
         let tokenCount = 0;
+        // Meta-Signal VOR dem ersten Text-Chunk: teilt dem Frontend mit, dass diese
+        // Antwort als CrisisResponseCard statt als normale Chat-Bubble gerendert
+        // werden soll (siehe useChat.js/CoachScreen.jsx).
+        if (crisisDetected) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ meta: { messageType: 'crisis_response' } })}\n\n`));
+        }
         try {
           for await (const chunk of stream) {
             if (chunk.type === 'content_block_delta' &&
