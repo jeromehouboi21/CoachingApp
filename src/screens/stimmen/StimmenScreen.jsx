@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Flame, Lock, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { useStreak } from '../../hooks/useStreak'
 import { supabase } from '../../lib/supabase'
 
 function ActivityDots({ count }) {
@@ -99,7 +100,8 @@ function LockedState({ onUpgrade }) {
 }
 
 export function StimmenScreen() {
-  const { user, profile } = useAuth()
+  const { user, profile, updateProfile } = useAuth()
+  const { updateStreak } = useStreak()
   const navigate = useNavigate()
   const isPremium = profile?.plan === 'premium' || profile?.plan === 'tester'
   const [namedVoices, setNamedVoices] = useState([])
@@ -110,6 +112,7 @@ export function StimmenScreen() {
 
   useEffect(() => {
     if (!user || !isPremium) { setLoading(false); return }
+    updateStreak(profile, updateProfile)
     Promise.all([
       supabase
         .from('inner_voices')

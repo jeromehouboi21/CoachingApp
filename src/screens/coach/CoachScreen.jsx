@@ -4,6 +4,7 @@ import { Plus, History } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
 import { useMemory } from '../../hooks/useMemory'
+import { useStreak } from '../../hooks/useStreak'
 import { ChatBubble } from '../../components/coach/ChatBubble'
 import { CrisisResponseCard } from '../../components/coach/CrisisResponseCard'
 import { TypingIndicator } from '../../components/coach/TypingIndicator'
@@ -93,7 +94,8 @@ function shouldShowReturnGreeting(briefing, profile) {
 }
 
 export function CoachScreen() {
-  const { user, session, profile } = useAuth()
+  const { user, session, profile, updateProfile } = useAuth()
+  const { updateStreak } = useStreak()
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
@@ -235,6 +237,7 @@ export function CoachScreen() {
     }
     setShowQuickReplies(false)
     await sendMessage(content, inputMode)
+    updateStreak(profile, updateProfile)
   }
 
   // processedRef: verhindert, dass derselbe conversationId-Wert mehrfach clientseitig

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useStreak } from '../../hooks/useStreak'
 import { supabase } from '../../lib/supabase'
 import { ChevronLeft } from 'lucide-react'
 
@@ -120,13 +121,15 @@ const PATTERN_DATA = {
 export function MusterDetail() {
   const { key } = useParams()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, profile, updateProfile } = useAuth()
+  const { updateStreak } = useStreak()
   const [personalExcerpt, setPersonalExcerpt] = useState(null)
 
   const pattern = PATTERN_DATA[key]
 
   useEffect(() => {
     if (!user || !key) return
+    updateStreak(profile, updateProfile)
     supabase
       .from('pattern_references')
       .select('excerpt')
@@ -138,6 +141,7 @@ export function MusterDetail() {
       .then(({ data }) => {
         if (data?.excerpt) setPersonalExcerpt(data.excerpt)
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, key])
 
   if (!pattern) {

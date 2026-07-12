@@ -3,11 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { WELLNESS_SCORES, WELLNESS_CONTEXT_CHIPS, getWellnessRange } from '../../lib/prompts'
 import { createLogger } from '../../lib/logger'
+import { useAuth } from '../../hooks/useAuth'
+import { useStreak } from '../../hooks/useStreak'
 
 const logger = createLogger('WellnessCheckScreen')
 
 export function WellnessCheckScreen() {
   const navigate = useNavigate()
+  const { profile, updateProfile } = useAuth()
+  const { updateStreak } = useStreak()
   const [score, setScore] = useState(5)
   const [selectedChips, setSelectedChips] = useState([])
   const [freeText, setFreeText] = useState('')
@@ -40,6 +44,8 @@ export function WellnessCheckScreen() {
       hasContext: contextParts.length > 0,
       chipSelected: selectedChips.length > 0,
     })
+
+    updateStreak(profile, updateProfile)
 
     navigate('/coach', {
       replace: true,
