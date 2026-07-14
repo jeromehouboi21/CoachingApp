@@ -9,14 +9,14 @@ const StepDots = ({ current, total }) => (
   </div>
 )
 
-export function Step3bAgreement({ onNext }) {
+export function Step3bAgreement({ onNext, current = 4, total = 5 }) {
   const [agreed, setAgreed] = useState(false)
 
   return (
     <div className="flex flex-col min-h-screen px-6 py-10 animate-[fadeSlideUp_0.4s_ease]">
       <div className="flex items-center justify-between mb-10">
         <span className="font-display text-[28px] text-ink">Friedensstifter</span>
-        <StepDots current={4} total={5} />
+        <StepDots current={current} total={total} />
       </div>
 
       <div className="mb-6">

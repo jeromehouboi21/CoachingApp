@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
-import { supabase } from '../../lib/supabase'
 
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -39,10 +38,12 @@ export function Step4Auth({ onSuccess, onboardingData }) {
 
       if (!userId) throw new Error('Registrierung fehlgeschlagen — kein User erhalten.')
 
-      // Profile-Update mit userId aus signUp() — KEIN getUser() danach
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
+      // Profile-Update mit userId aus signUp() — KEIN getUser() danach.
+      // updateProfile() aus useAuth() statt rohem Query-Aufruf, damit der
+      // lokale profile-State im Hook sofort mitzieht (relevant für
+      // ProtectedRoute's checkCoachingAgreement-Prüfung direkt danach).
+      try {
+        await updateProfile({
           onboarding_completed: true,
           onboarding_data: onboardingData,
           consent_given_at: new Date().toISOString(),
@@ -50,9 +51,7 @@ export function Step4Auth({ onSuccess, onboardingData }) {
           coaching_agreement_accepted_at: new Date().toISOString(),
           coaching_agreement_version: '1.0',
         })
-        .eq('id', userId)
-
-      if (updateError) {
+      } catch (updateError) {
         console.error('Profile update failed:', updateError)
         // Nicht werfen — Registrierung trotzdem fortsetzen
       }

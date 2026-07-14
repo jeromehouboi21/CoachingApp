@@ -35,9 +35,13 @@ function LoadingScreen() {
 }
 
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading, checkCoachingAgreement } = useAuth()
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/landing" replace />
+  // Eingeladene Nutzer sind zwar authentifiziert, haben die Coaching-
+  // Vereinbarung aber ggf. noch nicht akzeptiert — dann zurück ins Onboarding
+  // statt in die App zu lassen.
+  if (checkCoachingAgreement(profile) !== 'valid') return <Navigate to="/onboarding" replace />
   return children
 }
 
@@ -50,16 +54,18 @@ function AdminRoute({ children }) {
 }
 
 export default function App() {
-  const { user, loading } = useAuth()
+  const { user, profile, loading, checkCoachingAgreement } = useAuth()
 
   if (loading) return <LoadingScreen />
+
+  const onboardingDone = user && checkCoachingAgreement(profile) === 'valid'
 
   return (
     <Routes>
       {/* Öffentliche Einstiegs-Screens */}
       <Route path="/landing" element={user ? <Navigate to="/home" replace /> : <LandingScreen />} />
       <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <AuthScreen />} />
-      <Route path="/onboarding" element={user ? <Navigate to="/home" replace /> : <OnboardingFlow />} />
+      <Route path="/onboarding" element={onboardingDone ? <Navigate to="/home" replace /> : <OnboardingFlow />} />
       <Route path="/welcome" element={<ProtectedRoute><WelcomeScreen /></ProtectedRoute>} />
 
       {/* "Wie es funktioniert" — kein AppShell, eigenes Layout */}
