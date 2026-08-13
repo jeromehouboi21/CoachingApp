@@ -18,6 +18,7 @@ import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
 import { MusterDetail } from './screens/verstehen/MusterDetail'
 import { AusGespraechen } from './screens/verstehen/AusGespraechen'
 import { HistoryScreen } from './screens/history/HistoryScreen'
+import { BetaSurveyScreen } from './screens/feedback/BetaSurveyScreen'
 import { ImpressumScreen } from './screens/legal/ImpressumScreen'
 import { DatenschutzScreen } from './screens/legal/DatenschutzScreen'
 import { CoachingAgreementScreen } from './screens/legal/CoachingAgreementScreen'
@@ -91,6 +92,7 @@ export default function App() {
         <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
         <Route path="/verstehen" element={<ProtectedRoute><VorstehenScreen /></ProtectedRoute>} />
         <Route path="/stimmen" element={<ProtectedRoute><StimmenScreen /></ProtectedRoute>} />
+        <Route path="/feedback" element={<ProtectedRoute><BetaSurveyScreen /></ProtectedRoute>} />
       </Route>
 
       {/* Admin-Nutzerverwaltung — eigenständiger Vollbild-Screen, kein Bestandteil der normalen Nutzer-Navigation */}
