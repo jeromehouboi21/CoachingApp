@@ -1,0 +1,39 @@
+# Supabase CLI – Projekt-Konfiguration (nur die für Deploys relevanten Einstellungen)
+#
+# verify_jwt = false für ALLE Functions: Die JWT-Prüfung passiert im Code
+# (supabase/functions/_shared/auth.ts → requireUser / requireInternalCaller).
+# Der Gateway-Schalter "Verify JWT with legacy secret" muss aus bleiben, weil er
+# Tokens der neuen Signing-Keys ablehnt und den Cron-Aufruf (x-cron-secret) blockiert.
+# Ohne diese Datei schaltet `supabase functions deploy` den Schalter wieder EIN.
+
+project_id = "dpvqysabgycdjawkdrah"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.post-conversation]
+verify_jwt = false
+
+[functions.pre-session-briefing]
+verify_jwt = false
+
+[functions.rag-search]
+verify_jwt = false
+
+[functions.validate-invite-code]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false
+
+[functions.admin-users]
+verify_jwt = false
+
+[functions.admin-feedback]
+verify_jwt = false
+
+[functions.admin-invite-user]
+verify_jwt = false
+
+[functions.supervision]
+verify_jwt = false
