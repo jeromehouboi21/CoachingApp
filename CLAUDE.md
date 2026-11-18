@@ -396,7 +396,7 @@ perfektionismus_blockade → Perfektionismus-Blockade
 | Coach-Gedächtnis | Begrenzt | Vollständig |
 | Innere Stimmen | — | ✓ |
 
-Counter: `profiles.sessions_used_this_month` · Reset: Cron am 1. des Monats
+Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** über RPC `consume_session` in der `chat`-Function (idempotent pro Konversation, `conversations.session_counted_at`) · Reset: Cron-Job `reset-monthly-sessions` am 1. des Monats (seit Migration 023) · Limit gilt für alle außer `plan = 'premium'`; Krisenantwort, Howto-FAQ und Gedächtnis-Extraktion sind ausgenommen
 
 ---
 
@@ -415,9 +415,27 @@ Counter: `profiles.sessions_used_this_month` · Reset: Cron am 1. des Monats
 - Fehlermeldung im Chat: "Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da."
 - Alle Edge Functions verwenden `_shared/logger.ts` für strukturiertes Logging
 
+### Sicherheitsmuster (Security-Paket A, Pflicht)
+- **Jede Edge Function** ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` (Cron) aus `supabase/functions/_shared/auth.ts` auf; Admin-Functions zusätzlich `requireAdmin(ctx)`.
+- Identität **nur** aus dem JWT (`ctx.user.id`), nie aus Body-Feldern wie `userId`. Jede `conversationId` mit `assertConversationOwner()` prüfen, bevor gelesen oder geschrieben wird. IDs aus Modellausgaben nur übernehmen, wenn sie dem Nutzer gehören; Writes über `admin` zusätzlich mit `.eq('user_id', userId)`.
+- `admin` = echter service_role-Client ohne Nutzer-Token; `userClient` = Rolle `authenticated` (für RPCs mit `auth.uid()`, z. B. `consume_session`).
+- Fehlerantworten nur als `{ error: <code> }` (`errorResponse`), keine `error.message`-Texte an den Client.
+- Gateway-Schalter „Verify JWT“ bleibt aus — festgeschrieben in `supabase/config.toml` (`verify_jwt = false` je Function). Neue Function → dort eintragen.
+- **RLS:** Jede neue Tabelle bekommt RLS, Policies **nur `to authenticated`** (nie `public`/`anon`) und gezielte GRANTs nach tatsächlicher Frontend-Nutzung. `anon` hat keine Tabellenrechte. Neue SECURITY-DEFINER-Funktionen: `set search_path = ''`, schema-qualifizierte Namen, `revoke … from public, anon`, `grant` nur an die Rolle, die sie braucht.
+- Privilegierte Profilfelder (`is_admin`, `plan`, `session_limit`, `sessions_used_this_month`, `is_beta_tester`, `invited_*`, `consent_ip`) sind per Trigger server-only. Der Client legt keine Profile an (Name über `signUp({ options: { data: { display_name } } })`).
+
+### Log-Regel (absolut)
+> Erlaubt in Logs: IDs (`userId`, `conversationId`, `requestId`), Zähler, Längen, Dauer, HTTP-Status, Fehlercodes, Fehlertyp, Prompt-**Label**.
+> Verboten in Logs: Nachrichteninhalte, Prompts, Modellausgaben (auch nicht als Preview), Akte-, Profil- und Stimmen-Felder, Zusammenfassungen, E-Mail-Adressen, Namen.
+> Fehlermeldungen von `JSON.parse` enthalten Ausschnitte des geparsten Textes und dürfen deshalb **nicht** geloggt werden. Stattdessen nur `parse_failed`, `outputLength` und gegebenenfalls die Position.
+
+Beide Logger (`src/lib/logger.ts`, `supabase/functions/_shared/logger.ts`) schicken Daten durch `sanitizeLogData()` — das ist nur ein Sicherheitsnetz, die Aufrufstelle bleibt verantwortlich. Für Fehler `describeError(err)` verwenden. Auch Einladungscodes nie loggen. `app_logs`: Client nur Insert eigener Zeilen, 30 Tage Aufbewahrung.
+
 ### Vor jedem Deployment
 - Sprachprinzip-Audit: alle UI-Texte auf verbotene Wörter prüfen
 - Migrations in Supabase ausführen (`supabase db push`)
+- Edge Functions deployen mit `supabase functions deploy <namen> --no-verify-jwt`
+- **Angriffstest:** `npm run security:test` → alle PASS (Testkonten in `.env.security.local`, Vorlage `.env.security.example`; `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein)
 
 ---
 
@@ -432,6 +450,7 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...        # optional, für Embeddings
 SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
+CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault als 'cron_secret'
 ```
 
 ---
@@ -450,3 +469,10 @@ SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
 | `008_v2_2.sql` | coach_file_entries · coachee_profile · session_notes |
 | `009_v2_4.sql` | resonance_map (Idee 05) |
 | `010_v2_5.sql` | profiles.plan + 'tester' · invite_codes · redeem_invite_code RPC |
+| `011`–`022` | Consent-Felder, Coaching-Vereinbarung, post_processed_*, Grants, inner_voices, Admin-Felder (is_admin, is_beta_tester, session_limit, invited_*), linked_value, Gesprächsverlauf, crisis_events, feedback_surveys |
+| `023_session_counting.sql` | conversations.session_counted_at · RPC consume_session · Schutz-Trigger server-eigener conversations-Spalten · pg_net · Cron reset-monthly-sessions + weekly-supervision (x-cron-secret aus Vault) |
+| `024_protect_profile_privileges.sql` | Trigger trg_protect_profile_privileges (privilegierte Profilfelder server-only) |
+| `025_rls_hardening.sql` | Least-Privilege-GRANTs + Policies nur für authenticated · anon ohne Rechte · feedback_survey_scores security_invoker · Funktionen mit festem search_path |
+| `026_app_logs_hardening.sql` | app_logs nur Insert eigener Zeilen · metadata ≤ 8 KB · Altbestand bereinigt · Cron purge-app-logs (30 Tage) |
+
+Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

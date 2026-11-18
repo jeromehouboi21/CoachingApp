@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: Juli 2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick
+> Stand: November 2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04)
 
 ---
 
@@ -606,7 +606,9 @@ Zentrale Datei für alle UI-nahen Texte und Konfigurationen.
 
 #### `src/lib/logger.ts`
 
-Frontend-Logger. Schreibt **immer** auf die Browser-Console und **zusätzlich** für `info`/`warn`/`error` in die `app_logs`-Tabelle via Supabase Anon Key.
+Frontend-Logger. Schreibt auf die Browser-Console und **zusätzlich** für `info`/`warn`/`error` in die `app_logs`-Tabelle — **nur wenn eingeloggt** (`setLoggerUserId()` gesetzt), sonst nur Console. Scheitert der Insert, kommt einmalig ein `console.warn` (ohne Endlosschleife).
+
+Jedes `data`-Objekt läuft vor Console und DB durch **`sanitizeLogData()`** (Security-Paket A, S-04): Schlüssel mit Inhalten (`content`, `messages`, `text`, `email`, `display_name`, `excerpt`, `description`, `summary`, `details`, `body`, `topic` …) werden zu `{ redacted: true, length }`, Strings auf 200 Zeichen gekürzt, Arrays zu `{ type, length }`. Das Netz ersetzt nicht saubere Aufrufstellen — siehe Log-Regel in [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a).
 
 ```ts
 export function setLoggerUserId(id: string | null)
@@ -623,7 +625,9 @@ logger.error(msg, data)   // Console + DB (mit stack_trace)
 
 ## 5. Backend — Supabase Edge Functions
 
-Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. `admin-invite-user` nutzt zusätzlich optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`).
+Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. `admin-invite-user` nutzt zusätzlich optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`), `supervision` das Secret `CRON_SECRET`.
+
+**Sicherheitsmuster v2 (Pflicht, Security-Paket A):** Jede Function ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` aus `_shared/auth.ts` auf. Die Identität kommt **ausschließlich** aus dem JWT, nie aus dem Body; jede `conversationId` wird mit `assertConversationOwner()` geprüft (403). Gateway-Schalter „Verify JWT“ ist aus (`supabase/config.toml`), die Prüfung passiert im Code. Details: [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a).
 
 ---
 
@@ -649,9 +653,14 @@ Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `S
 **Output:** Server-Sent Events Stream
 `data: {"meta": {"messageType": "crisis_response"}}` (nur bei Krisenfall, vor dem ersten Text-Chunk) → `data: {"text": "Hallo"}` (wiederholt) → `data: [DONE]`
 
+**Modi:** Gesprächsmodus (Standard, `conversationId` **Pflicht**), `howtoMode` (FAQ, zählt nicht), `extractMemory` (Gedächtnis-Extraktion, zählt nicht). Howto und Extraktion laufen auch bei erreichtem Limit.
+
+**Grenzen:** Body ≤ 200 KB, jede `content` ≤ 8.000 Zeichen, ≤ 400 Einträge (sonst `413`). Ans Modell gehen höchstens die letzten 60 Nachrichten (lange Gespräche werden gekürzt statt abgelehnt).
+
 **Vor dem eigentlichen Prompt-Aufbau, in dieser Reihenfolge:**
-1. **Serverseitige Limit-Durchsetzung** — `profiles.session_limit` vs. `sessions_used_this_month`, blockiert mit `429` wenn erreicht (Nutzer mit `plan === 'premium'` ausgenommen)
-2. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht, nicht im Howto-Modus. Bei `acute_risk` + Confidence ≥ medium: Insert in `crisis_events` (via echtem Service-Role-Client, siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster)) und `systemPrompt` wird **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`
+0. **Auth + Eigentum** — `requireUser`, Body-Limits, `assertConversationOwner` (400/401/403/413)
+1. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Bei `acute_risk` + Confidence ≥ medium: Insert in `crisis_events` (über `admin`, den echten Service-Role-Client) und `systemPrompt` wird **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`. Läuft **vor** der Limit-Prüfung: Eine Krisenantwort wird auch bei erreichtem Limit ausgeliefert (Entscheidung 18.11.2026).
+2. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'Session limit reached' }` (außer Krisenfall). RPC-Fehler → `500`, kein Durchlassen.
 3. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
 4. **Wirkmechanismus-Rhythmus** (`offerMechanism`) — alle 4 Coach-Antworten (ab der 3.) wird aktiv ein Mechanismus angeboten, unabhängig davon ob im Gesagten etwas "offensichtlich" ist
 
@@ -697,10 +706,12 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 
 **Input:**
 ```json
-{ "messages": [...], "conversationId": "uuid", "userId": "uuid" }
+{ "messages": [...], "conversationId": "uuid" }
 ```
 
-**Überspringt** wenn `messages.length < 3`. Idempotent über `conversations.post_processed_message_count`.
+**Sicherheit:** Nutzer nur aus dem JWT (`requireUser`). Ein mitgeschicktes `userId` wird ignoriert; weicht es ab, wird `userId mismatch` geloggt (Angriffssignal). `conversationId` ist Pflicht und wird **vor** allem anderen auf Eigentum geprüft. IDs aus der Modellausgabe (`entry_id`, `cluster_entry_ids`, `existing_voice_id`) werden nur übernommen, wenn sie zu den eigenen Einträgen/Stimmen gehören; alle Writes filtern zusätzlich auf `user_id` (Schutz gegen Prompt-Injection).
+
+**Überspringt** wenn `messages.length < 3`. Idempotent über `conversations.post_processed_message_count`. Verarbeitet höchstens die letzten 200 Nachrichten.
 
 **Ablauf:**
 
@@ -718,7 +729,7 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 **Technische Details:**
 - `max_tokens: 2000` pro Prompt (Anfang 2026 auf 1500 → 2000 angehoben, war zu knapp für Cluster-Beschreibung + Namensvorschläge)
 - JSON-Code-Fence-Stripping vor `JSON.parse`
-- `runPrompt()` loggt jeden Fehler (Label + Rohausgabe-Preview) statt ihn stillschweigend als `{}` zurückzugeben — jeder DB-Write prüft und loggt sein eigenes Ergebnis (kein blindes `await` mehr)
+- `runPrompt()` loggt jeden Fehler statt ihn stillschweigend als `{}` zurückzugeben — **ohne Inhalte**: `{ label, parseError: 'parse_failed', outputLength, position? }` bzw. Fehlertyp/Status bei API-Fehlern (keine Rohausgabe-Preview mehr). Jeder DB-Write prüft und loggt sein eigenes Ergebnis (nur Fehlercode).
 - Logging: `Started` / `Completed` / jeder Schritt einzeln via `_shared/logger.ts`
 
 ---
@@ -750,7 +761,7 @@ Das Frontend-Check `shouldShowReturnGreeting()` prüft 5 Bedingungen: `openThrea
 2. pgvector-Suche in `experience_patterns` (Cosine Similarity > 0.78)
 3. Top-3 anonyme Erfahrungen als Kontext zurück
 
-**Fallback:** Wenn kein `OPENAI_API_KEY` → leeres Array.
+**Fallback:** Wenn kein `OPENAI_API_KEY` → leeres Array. Nur für eingeloggte Nutzer (`requireUser`), Query-Text auf 2.000 Zeichen gekürzt. `match_experiences` ist nur für `service_role` ausführbar.
 
 ---
 
@@ -759,8 +770,9 @@ Das Frontend-Check `shouldShowReturnGreeting()` prüft 5 Bedingungen: `openThrea
 **Aufgerufen von:** `OnboardingFlow` Step 4, nach Eingabe eines Invite-Codes.
 
 - Validiert Code-Syntax + Gültigkeit + Max-Uses
-- Ruft `redeem_invite_code` RPC auf (SECURITY DEFINER)
+- Ruft `redeem_invite_code` RPC über den `service_role`-Client auf (SECURITY DEFINER, **nur für service_role ausführbar**), ausschließlich für `user.id` aus dem JWT
 - Setzt `profiles.plan = 'tester'`
+- Loggt nie den Code selbst (Geheimnis), nur das Ergebnis
 
 Zweiter, direkterer Weg zum gleichen Ziel: `admin-invite-user` (siehe unten) — beide Wege bestehen parallel.
 
@@ -780,15 +792,18 @@ Siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster) für das gemeinsame S
 
 ### `delete-account` — Account-Löschung
 
-- Löscht alle User-Daten (CASCADE über RLS)
-- Hard-Delete des Auth-Users via `service_role`
+- Löscht ausschließlich `user.id` aus dem JWT (jede ID im Body wird ignoriert)
+- Prüft jedes Lösch-Ergebnis; scheitert ein Schritt → `500 delete_incomplete`, der Auth-Account bleibt bestehen (Wiederholung möglich, kein stilles Scheitern)
+- Hard-Delete des Auth-Users via `service_role`; `inner_voices`, `crisis_events`, `feedback_surveys` hängen per CASCADE an `auth.users`
 - Aufgerufen von `ProfileScreen` nach Bestätigungs-Modal
 
 ---
 
 ### `supervision` — Wöchentliche KI-Supervision
 
-**Läuft per Cron** (wöchentlich). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
+**Läuft per Cron** (`weekly-supervision`, Mo 06:00 UTC, über `pg_net`). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
+
+**Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. Hinweis: `supervision_logs.improvement_recs` wird vom Frontend aktuell nicht an `chat` übergeben (BLOCK 5 faktisch inaktiv, siehe S-12).
 
 ---
 
@@ -801,7 +816,22 @@ createLogger(source: string, requestId?: string, userId?: string)
 // → { debug, info, warn, error, time }
 ```
 
-`debug` → nur Console. `info/warn/error` → Console + DB.
+`debug` → nur Console. `info/warn/error` → Console + DB. Alle Daten laufen durch `sanitizeLogData()`; `Error`-Objekte werden auf Typ/Code und eine gekürzte Meldung reduziert, `SyntaxError` (JSON.parse) nur als `parse_failed`. `describeError(err)` liefert loggbare Fehlerfelder ohne Inhalte.
+
+---
+
+### `_shared/auth.ts` (Security-Paket A, S-03)
+
+| Export | Zweck |
+|---|---|
+| `requireUser(req)` | Token aus `Authorization: Bearer`, Prüfung über `admin.auth.getUser(token)` → `{ user, token, admin, userClient }`; sonst `401` |
+| `admin` | echter service_role-Client **ohne** Nutzer-Token (umgeht RLS) — nur für Daten, deren Eigentum geprüft ist |
+| `userClient` | anon-Key + Nutzer-Token → Rolle `authenticated`, `auth.uid()` gesetzt (z. B. für `consume_session`) |
+| `assertConversationOwner(admin, id, userId)` | UUID-Format (400) + Eigentum (403) |
+| `requireAdmin(ctx)` | `profiles.is_admin` über `admin` prüfen (403) |
+| `requireInternalCaller(req)` | service_role-Bearer oder `x-cron-secret` (401) |
+| `readJsonBody(req, maxBytes)` / `validateMessages()` | Größenlimits (413), JSON-Fehler ohne Inhalt (400) |
+| `errorResponse()` / `jsonResponse()` | einheitliche Antworten `{ error: <code> }` ohne Fehlertexte |
 
 ---
 
@@ -829,7 +859,9 @@ is_beta_tester                    BOOLEAN DEFAULT false      -- v3.x, über Admi
 session_limit                     INTEGER DEFAULT 3          -- v3.x, null = unbegrenzt, individuell pro Nutzer
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users           -- v3.x
+consent_ip                        TEXT                        -- v2.7, wird aktuell nicht befüllt
 ```
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Name kommt über `signUp({ options: { data: { display_name } } })`).
 
 **`conversations`**
 ```
@@ -844,7 +876,9 @@ open_thread_intensity TEXT  ('low' | 'medium' | 'high')
 post_processed_at            TIMESTAMPTZ  -- v2.9, Idempotenz-Guard
 post_processed_message_count INTEGER      -- v2.9
 updated_at    TIMESTAMPTZ    -- v3.2, per Trigger bei jeder neuen Message aktualisiert
+session_counted_at           TIMESTAMPTZ  -- Migration 023, gesetzt von consume_session
 ```
+Trigger **`trg_protect_conversation_server_columns`** (Migration 023): Clients können `session_counted_at`, `post_processed_at`, `post_processed_message_count` weder beim Insert setzen noch ändern.
 Trigger `trg_touch_conversation_updated_at` (AFTER INSERT ON messages) hält `updated_at` aktuell — Grundlage für die Sortierung im Gesprächsverlauf.
 
 **`messages`**
@@ -1023,13 +1057,40 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 ### RPCs
 
-**`get_conversation_history()`** — `SECURITY INVOKER`, liefert die Gesprächsliste des eingeloggten Nutzers (Datum, Nachrichtenanzahl, `main_topic`/erste Nutzer-Nachricht) für `/verlauf`, ohne N+1-Queries. `GRANT EXECUTE ... TO authenticated`.
+**`get_conversation_history()`** — `SECURITY INVOKER`, `search_path = ''`, liefert die Gesprächsliste des eingeloggten Nutzers (Datum, Nachrichtenanzahl, `main_topic`/erste Nutzer-Nachricht) für `/verlauf`, ohne N+1-Queries. Ausführbar nur für `authenticated`.
 
-**`redeem_invite_code()`** — `SECURITY DEFINER`, löst einen Invite-Code ein (v2.5).
+**`consume_session(p_conversation_id)`** — `SECURITY DEFINER`, `search_path = ''` (Migration 023). Zählt atomar und idempotent: Ist `conversations.session_counted_at` gesetzt → `{ allowed: true, counted: false }`. Sonst Limit-Prüfung (`plan <> 'premium'` und `session_limit` nicht null) → bei Überschreitung `{ allowed: false, used, limit }`, sonst `session_counted_at` setzen und `sessions_used_this_month + 1`. Fremde Konversation → `42501`. Ausführbar für `authenticated` (aufgerufen von `chat` mit dem Nutzer-Token).
 
-### RLS-Prinzip
+**`redeem_invite_code(p_code, p_user_id)`** — `SECURITY DEFINER`, `search_path = ''`, löst einen Invite-Code ein. **Nur für `service_role` ausführbar** (vorher für jeden inkl. anon — Befund K-2).
 
-Alle Tabellen haben Row Level Security aktiviert. Grundregel: `auth.uid() = user_id`. Ausnahme `crisis_events` (siehe oben — bewusst für niemanden außer `service_role` lesbar/schreibbar). Edge Functions arbeiten mit dem `SUPABASE_SERVICE_ROLE_KEY` — **aber Vorsicht:** wird zusätzlich ein Nutzer-`Authorization`-Header gesetzt, bestimmt PostgREST die effektive Rolle über den JWT, nicht über den Key — der Client läuft dann effektiv als `authenticated`, nicht als `service_role`. Details siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster).
+**`match_experiences()`** — pgvector-Suche, nur für `service_role`.
+
+### Cron-Jobs (pg_cron + pg_net)
+
+| Job | Zeitplan (UTC) | Aufgabe |
+|---|---|---|
+| `reset-monthly-sessions` | `0 0 1 * *` | `sessions_used_this_month = 0` (Migration 023) |
+| `weekly-supervision` | `0 6 * * 1` | `supervision` per `net.http_post` mit `x-cron-secret` aus Vault |
+| `purge-app-logs` | `17 3 * * *` | `app_logs` älter als 30 Tage löschen (Migration 026) |
+
+### RLS-Prinzip (Least Privilege, Migration 025)
+
+Alle Tabellen haben RLS. Policies gelten **nur für `authenticated`**, nie für `public`/`anon`; `anon` hat keinerlei Tabellenrechte. Client-Rechte entsprechen der tatsächlichen Nutzung im Frontend:
+
+| Tabelle | Rechte `authenticated` | Bedingung |
+|---|---|---|
+| `profiles` | SELECT, UPDATE | `id = auth.uid()` + Schutz-Trigger |
+| `conversations` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` + Schutz-Trigger |
+| `messages` | SELECT, INSERT | Konversation gehört dem Nutzer |
+| `insights` | SELECT, INSERT, UPDATE, DELETE | `user_id = auth.uid()`; `conversation_id` nur eigene |
+| `user_memory` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` |
+| `inner_voices` | SELECT, UPDATE | `user_id = auth.uid()` |
+| `coach_file_entries`, `coachee_profile`, `session_notes`, `pattern_references` | SELECT | `user_id = auth.uid()` |
+| `user_feedback`, `feedback_surveys` | INSERT | `user_id = auth.uid()` |
+| `app_logs` | INSERT | `user_id = auth.uid()` (Migration 026) |
+| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, View `feedback_survey_scores` | **keine** | nur service_role |
+
+Die View `feedback_survey_scores` hat `security_invoker = true`. Neue Tabellen bekommen per Default-Privileg weiterhin Rechte für `authenticated` → **jede neue Tabelle braucht RLS + explizite Policies + gezielte GRANTs**. Edge Functions arbeiten über `_shared/auth.ts` (siehe [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a)).
 
 ---
 
@@ -1233,8 +1294,9 @@ Ab der nächsten sendMessage(): ragContext wird an /chat mitgesendet
 **Wichtig (Fix, siehe `session_limit` oben):** `isPaidUser` in `CoachScreen`/`HistoryScreen` prüft **nur** `plan === 'premium'` — `'tester'` galt früher fälschlich als unbegrenzt, wodurch individuelle Admin-Limits wirkungslos waren.
 
 **Zähler:** `profiles.sessions_used_this_month`
-**Durchsetzung:** clientseitig (`handleSend()`, UX) **und** serverseitig (`chat/index.ts`, harte Grenze mit `429`)
-**Reset:** Cron am 1. des Monats (via Supabase Cron)
+**Zählung:** ausschließlich serverseitig und idempotent pro Konversation über `consume_session` (beim ersten `chat`-Aufruf im Gesprächsmodus). Wellness, Briefing, Entry-Kontext zählen sofort beim Start; ein Standard-Gespräch bei der ersten Nutzer-Nachricht; „Neues Gespräch“ zählt beim nächsten Schreiben; Fortsetzen zählt nicht; Howto-FAQ und Gedächtnis-Extraktion zählen nie. Der Client schreibt den Zähler nicht mehr (Schutz-Trigger).
+**Durchsetzung:** serverseitig (`consume_session` in `chat`, `429` → Limit-Modal über `onSessionLimit`), clientseitig nur UX-Vorprüfung in `handleSend()` (bereits gezählte Gespräche dürfen weiterlaufen). Krisenantwort, Howto und Extraktion sind vom Limit ausgenommen.
+**Reset:** Cron-Job `reset-monthly-sessions` am 1. des Monats, 00:00 UTC (seit Migration 023 — vorher existierte kein Reset)
 **Upgrade-Flow:** Limit-Modal → `/premium`
 
 ---
@@ -1260,6 +1322,26 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistS
 `callerClient` wird ausschließlich für die eine `getUser()`-Zeile gebraucht. Alle eigentlichen Abfragen/Schreibvorgänge (inkl. `auth.admin.listUsers()`, `auth.admin.inviteUserByEmail()`) laufen über den zweiten Client.
 
 `chat/index.ts` nutzt für die meisten Aufrufe (z. B. `inner_voices`) weiterhin den einfachen Ein-Client-Ansatz — unschädlich, weil diese Calls ausschließlich mit den eigenen Daten des angemeldeten Nutzers arbeiten und die entsprechende RLS-Policy genau das erlaubt. Für `crisis_events` (RLS blockiert *jeden* direkten Zugriff) wird dort zusätzlich ein `serviceClient` nach demselben Zwei-Client-Muster verwendet.
+
+### Sicherheitsmuster v2 (Security-Paket A)
+
+Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` prüft das Token über den echten service_role-Client (`admin.auth.getUser(token)`) und liefert zusätzlich `userClient` (anon-Key + Nutzer-Token, Rolle `authenticated`). Regeln für **jede** Function, auch neue:
+
+1. Erste Zeile nach dem CORS-Preflight: `requireUser(req)` (Nutzer-Functions) bzw. `requireInternalCaller(req)` (Cron). Admin-Functions zusätzlich `requireAdmin(ctx)`.
+2. Identität nur aus `ctx.user.id`. Body-Felder wie `userId` nie als Identität verwenden.
+3. Jede Objekt-ID aus dem Body (`conversationId` …) vor dem ersten Zugriff auf Eigentum prüfen (`assertConversationOwner`). IDs aus Modellausgaben nur übernehmen, wenn sie zu den eigenen Daten gehören; Writes über `admin` immer zusätzlich mit `.eq('user_id', userId)`.
+4. Body-Größe und Felder begrenzen (`readJsonBody`, `validateMessages`).
+5. Fehlerantworten nur als `{ error: <code> }` (`errorResponse`) — keine `error.message`-Texte an den Client.
+6. Gateway-Schalter „Verify JWT“ bleibt aus (`supabase/config.toml` → `verify_jwt = false` je Function; ohne die Datei schaltet `supabase functions deploy` ihn wieder ein).
+
+**Log-Regel (S-04):**
+> Erlaubt in Logs: IDs (`userId`, `conversationId`, `requestId`), Zähler, Längen, Dauer, HTTP-Status, Fehlercodes, Fehlertyp, Prompt-**Label**.
+> Verboten in Logs: Nachrichteninhalte, Prompts, Modellausgaben (auch nicht als Preview), Akte-, Profil- und Stimmen-Felder, Zusammenfassungen, E-Mail-Adressen, Namen, Einladungscodes.
+> Fehlermeldungen von `JSON.parse` enthalten Ausschnitte des geparsten Textes und dürfen deshalb **nicht** geloggt werden. Stattdessen nur `parse_failed`, `outputLength` und gegebenenfalls die Position.
+
+`app_logs`: Client darf nur eigene Zeilen einfügen (nichts lesen), `metadata` ≤ 8 KB, Aufbewahrung 30 Tage (`purge-app-logs`).
+
+**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz und anonymen Zugriff. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein.
 
 ### Admin-Berechtigung
 
@@ -1293,12 +1375,15 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
 SITE_URL=                    # optional, Fallback: https://app.friedensstifter.coach (nur admin-invite-user)
+CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als 'cron_secret'
 ```
+
+`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der zwei Testkonten für `npm run security:test`.
 
 ### Deployment
 
 - **Frontend:** Vercel (Auto-Deploy aus `main`-Branch)
-- **Edge Functions:** `supabase functions deploy <name>`
+- **Edge Functions:** `supabase functions deploy <name>` — `supabase/config.toml` hält `verify_jwt = false` für alle Functions fest (zur Sicherheit zusätzlich `--no-verify-jwt`)
 - **Migrationen:** `supabase db push` vor jedem Deployment das DB-Änderungen enthält
 - **Domain:** `app.friedensstifter.coach` (Vercel Custom Domain)
 
@@ -1309,3 +1394,5 @@ SITE_URL=                    # optional, Fallback: https://app.friedensstifter.c
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
 3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `rag-search`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`
+4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
+5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller`; Log-Regel beachten
