@@ -403,6 +403,34 @@ async function testsAnonymous() {
     record(15, `${name} mit anon-Key als Bearer`, okStatus.join('/'),
       okStatus.includes(anonBearer.status) ? PASS : FAIL, `HTTP ${anonBearer.status}`);
   }
+
+  // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
+  // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
+  // bzw. fremde conversationId → abgelehnt vor jedem Modellaufruf).
+  {
+    const statuses = [];
+    for (let i = 0; i < 7; i++) {
+      const r = await callFunction('validate-invite-code', { token: b.token, body: { code: `SECTEST-INVALID-${i}` } });
+      statuses.push(r.status);
+      if (r.status === 429) break;
+    }
+    record(16, 'validate-invite-code Durchprobieren (7 Codes)', '429 spätestens beim 6.',
+      statuses.includes(429) ? PASS : FAIL, statuses.join(','));
+  }
+  {
+    const statuses = [];
+    for (let i = 0; i < 12; i++) {
+      const r = await callFunction('chat', {
+        token: b.token,
+        body: { messages: [{ role: 'user', content: 'Hallo' }], conversationId: a.conv.id, requestId: 'sectest-rl' },
+      });
+      statuses.push(r.status);
+      if (r.status === 429) break;
+    }
+    const rest = statuses.filter(s => s !== 429 && s !== 403);
+    record(17, 'chat Flut (12 Anfragen/Minute)', '429 spätestens bei der 11.',
+      statuses.includes(429) && rest.length === 0 ? PASS : FAIL, statuses.join(','));
+  }
 }
 
 // ── Ausgabe ──────────────────────────────────────────────────────────────────

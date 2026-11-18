@@ -4,6 +4,7 @@ import { createLogger, describeError } from '../_shared/logger.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
+import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 import { findSimilarExperiences } from '../_shared/rag.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
@@ -1061,6 +1062,11 @@ Deno.serve(async (req) => {
     const isHowto = !isExtract && !!howtoMode;
     const isCoaching = !isExtract && !isHowto;
 
+    // Rate-Limit pro Nutzer, vor jeder teuren Arbeit. Fail-open: Bei einem DB-Fehler läuft
+    // das Gespräch weiter (protokolliert), die Monatszählung (consume_session) bleibt strikt.
+    await enforceRateLimit(admin, user.id,
+      isExtract ? RATE_LIMITS.extract : isHowto ? RATE_LIMITS.howto : RATE_LIMITS.chat, logger, true);
+
     const allMessages = validateMessages(body.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS });
     logger.info('Request received', {
       requestId: safeRequestId, messageCount: allMessages.length,
@@ -1314,6 +1320,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    if (error instanceof RateLimitError) return rateLimitResponse(error, CORS_HEADERS);
     if (error instanceof HttpError) {
       if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
       else logger.warn('Request rejected', { code: error.code, status: error.status });

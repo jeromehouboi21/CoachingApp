@@ -399,6 +399,8 @@ perfektionismus_blockade → Perfektionismus-Blockade
 
 Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** über RPC `consume_session` in der `chat`-Function (idempotent pro Konversation, `conversations.session_counted_at`) · Reset: Cron-Job `reset-monthly-sessions` am 1. des Monats (seit Migration 023) · Limit gilt für alle außer `plan = 'premium'`; Krisenantwort, Howto-FAQ und Gedächtnis-Extraktion sind ausgenommen
 
+**Rate-Limits pro Nutzer** (Migration 029, RPC `consume_rate_limits`, Werte zentral in `supabase/functions/_shared/rateLimit.ts`): `chat` Gespräch 10/Minute + 200/Tag · Howto 30/Stunde · Extraktion 30/Tag · `post-conversation` 60/Tag · `validate-invite-code` 5/Stunde + 10/Tag. Antwort `429 { error: 'rate_limited', retryAfter }` + `Retry-After`-Header; das Frontend zeigt dann einen Hinweis inkl. Telefonseelsorge statt des Limit-Modals (`src/lib/rateLimit.js`). chat/post-conversation fail-open bei DB-Fehler (protokolliert), Invite-Code fail-closed. Zähler werden täglich nach 2 Tagen gelöscht (Cron `purge-rate-limits`).
+
 ---
 
 ## 9. Konventionen & Regeln
@@ -477,5 +479,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `026_app_logs_hardening.sql` | app_logs nur Insert eigener Zeilen · metadata ≤ 8 KB · Altbestand bereinigt · Cron purge-app-logs (30 Tage) |
 | `027_signup_consent_and_limit.sql` | session_limit Default 20 · handle_new_user übernimmt Einwilligung/Vereinbarung/Onboarding aus den signUp-Metadaten (Fix: Passwort musste zweimal gesetzt werden) |
 | `028_conversation_context.sql` | conversation_context (RAG-Ergebnis pro Gespräch, nur service_role) · S-12 |
+| `029_rate_limits.sql` | rate_limit_counters · RPC consume_rate_limits (nur service_role) · Cron purge-rate-limits |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

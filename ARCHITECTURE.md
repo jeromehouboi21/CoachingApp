@@ -655,7 +655,7 @@ Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `S
 **Grenzen:** Body ≤ 200 KB, jede `content` ≤ 8.000 Zeichen, ≤ 400 Einträge (sonst `413`). Ans Modell gehen höchstens die letzten 60 Nachrichten (lange Gespräche werden gekürzt statt abgelehnt).
 
 **Vor dem eigentlichen Prompt-Aufbau, in dieser Reihenfolge:**
-0. **Auth + Eigentum** — `requireUser`, Body-Limits, `assertConversationOwner` (400/401/403/413)
+0. **Auth + Eigentum** — `requireUser`, Body-Limits, **Rate-Limit** je Modus (`enforceRateLimit`, 429 `rate_limited`, siehe [Abschnitt 9](#9-freemium-logik)), `assertConversationOwner` (400/401/403/413)
 1. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Bei `acute_risk` + Confidence ≥ medium: Insert in `crisis_events` (über `admin`, den echten Service-Role-Client) und `systemPrompt` wird **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`. Läuft **vor** der Limit-Prüfung: Eine Krisenantwort wird auch bei erreichtem Limit ausgeliefert (Entscheidung 18.11.2026).
 2. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'Session limit reached' }` (außer Krisenfall). RPC-Fehler → `500`, kein Durchlassen.
 3. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
@@ -1287,6 +1287,8 @@ Folgende Turns: rag_context aus conversation_context
 **Zähler:** `profiles.sessions_used_this_month`
 **Zählung:** ausschließlich serverseitig und idempotent pro Konversation über `consume_session` (beim ersten `chat`-Aufruf im Gesprächsmodus). Wellness, Briefing, Entry-Kontext zählen sofort beim Start; ein Standard-Gespräch bei der ersten Nutzer-Nachricht; „Neues Gespräch“ zählt beim nächsten Schreiben; Fortsetzen zählt nicht; Howto-FAQ und Gedächtnis-Extraktion zählen nie. Der Client schreibt den Zähler nicht mehr (Schutz-Trigger).
 **Durchsetzung:** serverseitig (`consume_session` in `chat`, `429` → Limit-Modal über `onSessionLimit`), clientseitig nur UX-Vorprüfung in `handleSend()` (bereits gezählte Gespräche dürfen weiterlaufen). Krisenantwort, Howto und Extraktion sind vom Limit ausgenommen.
+
+**Rate-Limits pro Nutzer** (Migration 029, RPC `consume_rate_limits`, Werte zentral in `supabase/functions/_shared/rateLimit.ts`): `chat` Gespräch 10/Minute + 200/Tag · Howto 30/Stunde · Extraktion 30/Tag · `post-conversation` 60/Tag · `validate-invite-code` 5/Stunde + 10/Tag. Antwort `429 { error: 'rate_limited', retryAfter }` + `Retry-After`-Header; das Frontend zeigt dann einen Hinweis inkl. Telefonseelsorge statt des Limit-Modals (`src/lib/rateLimit.js`). chat/post-conversation fail-open bei DB-Fehler (protokolliert), Invite-Code fail-closed. Zähler werden täglich nach 2 Tagen gelöscht (Cron `purge-rate-limits`).
 **Reset:** Cron-Job `reset-monthly-sessions` am 1. des Monats, 00:00 UTC (seit Migration 023 — vorher existierte kein Reset)
 **Upgrade-Flow:** Limit-Modal → `/premium`
 

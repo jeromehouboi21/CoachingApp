@@ -5,6 +5,7 @@ import { ChatBubble } from '../../components/coach/ChatBubble'
 import { TypingIndicator } from '../../components/coach/TypingIndicator'
 import { ChatInput } from '../../components/coach/ChatInput'
 import { supabase } from '../../lib/supabase'
+import { readRateLimit, rateLimitMessage } from '../../lib/rateLimit'
 
 const OPENING = "Hast du Fragen zur App — wie sie funktioniert, was sie kostet, oder ob sie das Richtige für dich ist? Ich beantworte sie gerne."
 
@@ -55,6 +56,15 @@ export function HowItWorksScreen() {
         }
       )
 
+      const rateLimited = await readRateLimit(response)
+      if (rateLimited) {
+        setMessages(prev => {
+          const updated = [...prev]
+          updated[updated.length - 1] = { ...updated[updated.length - 1], content: rateLimitMessage(rateLimited.retryAfter), isError: true }
+          return updated
+        })
+        return
+      }
       if (!response.ok) throw new Error('API error')
 
       const reader = response.body.getReader()

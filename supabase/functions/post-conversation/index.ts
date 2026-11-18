@@ -8,6 +8,7 @@ import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
+import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 
 const SESSION_NOTES_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Erstelle strukturierte Session-Notes für deine Coach-Akte.
@@ -306,6 +307,7 @@ Deno.serve(async (req) => {
     logger = createLogger('post-conversation', undefined, userId);
 
     const body = await readJsonBody(req, MAX_BODY_BYTES);
+    await enforceRateLimit(supabase, userId, RATE_LIMITS.postConversation, logger, true);
     if (body.userId !== undefined && body.userId !== userId) {
       // Angriffssignal: jemand versucht, im Namen eines anderen Nutzers zu verarbeiten
       logger.warn('userId mismatch');
@@ -758,6 +760,7 @@ Deno.serve(async (req) => {
     return jsonResponse({ ok: true }, CORS_HEADERS);
 
   } catch (error: unknown) {
+    if (error instanceof RateLimitError) return rateLimitResponse(error, CORS_HEADERS);
     if (error instanceof HttpError) {
       if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
       else logger.warn('Request rejected', { code: error.code, status: error.status });

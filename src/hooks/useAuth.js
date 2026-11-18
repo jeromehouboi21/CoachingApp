@@ -54,6 +54,7 @@ export function useAuth() {
             const result = await res.json()
             if (result.ok) {
               logger.info('Pending invite code redeemed')
+              loadProfile(session.user.id) // Tester-Status sofort sichtbar
             } else {
               logger.warn('Pending invite code invalid', { status: res.status, reason: result.error ?? null })
             }

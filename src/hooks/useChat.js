@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES, FIRST_OPENING_MESSAGE } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
+import { readRateLimit, rateLimitMessage } from '../lib/rateLimit'
 
 const logger = createLogger('useChat')
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -98,6 +99,12 @@ export function useChat(userId, session, options = {}) {
         }
       )
 
+      const rateLimited = await readRateLimit(response)
+      if (rateLimited) {
+        logger.warn('Rate limit reached (server)', { requestId, retryAfter: rateLimited.retryAfter })
+        setMessages([{ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
+        return
+      }
       if (response.status === 429) {
         logger.warn('Session limit reached (server)', { requestId })
         setMessages([])
@@ -219,6 +226,12 @@ export function useChat(userId, session, options = {}) {
         }
       )
 
+      const rateLimited = await readRateLimit(response)
+      if (rateLimited) {
+        logger.warn('Rate limit reached (server)', { requestId, retryAfter: rateLimited.retryAfter })
+        setMessages([{ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
+        return
+      }
       if (response.status === 429) {
         logger.warn('Session limit reached (server)', { requestId })
         setMessages([])
@@ -319,6 +332,12 @@ export function useChat(userId, session, options = {}) {
         }
       )
 
+      const rateLimited = await readRateLimit(response)
+      if (rateLimited) {
+        logger.warn('Rate limit reached (server)', { requestId, retryAfter: rateLimited.retryAfter })
+        setMessages([{ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
+        return
+      }
       if (response.status === 429) {
         logger.warn('Session limit reached (server)', { requestId })
         setMessages([])
@@ -506,6 +525,12 @@ export function useChat(userId, session, options = {}) {
         }
       )
 
+      const rateLimited = await readRateLimit(response)
+      if (rateLimited) {
+        logger.warn('Rate limit reached (server)', { requestId, conversationId: activeConvId, retryAfter: rateLimited.retryAfter })
+        setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() + 1 }])
+        return
+      }
       if (response.status === 429) {
         logger.warn('Session limit reached (server)', { requestId, conversationId: activeConvId })
         // Platzhalter-Bubble entfernen, Limit-Modal zeigen

@@ -6,6 +6,7 @@
 
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { HttpError, requireUser, readJsonBody, errorResponse, jsonResponse } from '../_shared/auth.ts';
+import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +33,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ ok: false, error: 'missing_code' }, CORS_HEADERS, 400);
     }
 
+    // Schutz gegen Durchprobieren von Codes. Fail-closed: ohne Zähler kein Einlösen.
+    await enforceRateLimit(admin, user.id, RATE_LIMITS.inviteCode, logger, false);
+
     // Atomar einlösen via RPC (SECURITY DEFINER)
     const { data, error } = await admin.rpc('redeem_invite_code', {
       p_code: code,
@@ -48,6 +52,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(data, CORS_HEADERS);
 
   } catch (error: unknown) {
+    if (error instanceof RateLimitError) return rateLimitResponse(error, CORS_HEADERS);
     if (error instanceof HttpError) {
       if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
       return errorResponse(error, CORS_HEADERS);
