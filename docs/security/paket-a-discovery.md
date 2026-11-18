@@ -235,7 +235,12 @@ Bekannte Schlüssel mit Inhalten in `app_logs.metadata`: `rawResponsePreview`, `
 
 ## 6. Live-Abgleich (Audit vom 18.11.2026, `audit-combined.sql`)
 
-Noch ausstehend: **G (Cron-Jobs)** und **Security-Advisor-Warnungen**.
+Noch ausstehend: **Security-Advisor-Warnungen**.
+
+**G Cron-Jobs:** genau ein Job, `weekly-supervision` (jobid 1, `0 6 * * 1`, aktiv). Er ruft `net.http_post(…/functions/v1/supervision)` mit `Authorization: Bearer sb_publishable_…` auf.
+- `pg_net` ist **nicht installiert** (siehe J) → der Job schlägt vermutlich bei jedem Lauf fehl; Supervision läuft faktisch nicht.
+- Bearer ist der öffentliche Publishable-Key (kein Leck). Er reicht nach `requireInternalCaller` aber nicht mehr → Umstellung auf `x-cron-secret`, Secret aus Supabase Vault statt Klartext im Cron-Befehl.
+- **Es gibt keinen Monats-Reset-Job.** `sessions_used_this_month` wird nie zurückgesetzt; die Doku (CLAUDE.md, ARCHITECTURE.md Abschn. 9) beschreibt einen Reset, den es nicht gibt. → Job `reset-monthly-sessions` kommt in Migration 023.
 
 | Abschnitt | Live-Zustand | Abweichung von den Migrationen / Bewertung |
 |---|---|---|
