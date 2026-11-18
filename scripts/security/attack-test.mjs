@@ -54,11 +54,11 @@ const OWNED_TABLES = [
 // messages hat keine user_id – Eigentum über conversation_id
 const MESSAGE_TABLE = { name: 'messages', conv: 'conversation_id' };
 // Interne Tabellen: Client darf gar nichts sehen
-const INTERNAL_TABLES = ['app_logs', 'experience_patterns', 'coach_reflections', 'supervision_logs', 'invite_codes', 'crisis_events'];
+const INTERNAL_TABLES = ['app_logs', 'experience_patterns', 'coach_reflections', 'supervision_logs', 'invite_codes', 'crisis_events', 'conversation_context'];
 const ALL_TABLE_NAMES = [...OWNED_TABLES.map(t => t.name), MESSAGE_TABLE.name, ...INTERNAL_TABLES];
 
 const EDGE_FUNCTIONS = [
-  'chat', 'post-conversation', 'pre-session-briefing', 'rag-search', 'validate-invite-code',
+  'chat', 'post-conversation', 'pre-session-briefing', 'validate-invite-code',
   'delete-account', 'admin-users', 'admin-feedback', 'admin-invite-user', 'supervision',
 ];
 
@@ -312,6 +312,11 @@ async function testsAsB(a, b) {
       const text = JSON.stringify(r.json ?? {});
       const leaked = [a.userId, a.conv.id, ...a.fileEntryIds].filter(id => text.includes(id)).length;
       record(9, 'pre-session-briefing nur B-Daten', 'keine A-IDs', leaked === 0 ? PASS : FAIL, `A-IDs gefunden=${leaked}`);
+      // S-12: Akte, Resonanzkarte und Gesprächsinhalte gehen nicht mehr an den Client
+      const forbidden = ['coachFile', 'resonanceMap', 'entries', 'lastTopicSummary', 'summary', 'text', 'topicHint']
+        .filter(k => text.includes(`"${k}"`));
+      record(9, 'pre-session-briefing ohne Akte/Resonanzkarte (S-12)', 'nur Eckdaten',
+        forbidden.length === 0 ? PASS : FAIL, forbidden.length ? `Felder: ${forbidden.join(', ')}` : 'ok');
     }
   }
 

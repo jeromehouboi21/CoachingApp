@@ -249,23 +249,24 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | Function | Trigger | Zweck |
 |---|---|---|
 | `chat` | Jede Chat-Nachricht | Anthropic API Proxy, Streaming, buildSystemPrompt |
-| `pre-session-briefing` | CoachScreen Mount | Letztes Gespräch + offener Faden → Briefing-Objekt |
+| `pre-session-briefing` | CoachScreen Mount | Nur Eckdaten für die Wiederkehr-Begrüßung (`daysSince`, `conversationCount`, `openThread.intensity`) – keine Akte, keine Inhalte (S-12) |
 | `post-conversation` | Nach Gespräch (fire-and-forget) | RAG-Eintrag, Selbstreflexion, open_thread, pattern_references |
 | `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
-| `rag-search` | Erste Nutzer-Nachricht | Semantische Ähnlichkeitssuche in experience_patterns |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
 
 ### `chat` — System-Prompt Aufbau
+
+**Kontext lädt `chat` selbst (S-12):** Akte, Profil, Resonanzkarte, Briefing, Legacy-Gedächtnis, RAG und Supervision kommen aus der DB (`loadCoachContext`). Entsprechende Body-Felder werden ignoriert; vom Client kommen nur `messages`, `conversationId`, `wellnessCheck` und `entryContext` (typ- und längengeprüft). RAG läuft einmal pro Gespräch beim ersten Nutzer-Input (`_shared/rag.ts`) und wird in `conversation_context` gespeichert (kein Client-Zugriff).
 
 `buildSystemPrompt()` baut den Prompt in dieser Reihenfolge:
 
 ```
 BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennung)
-  + BLOCK 1: Briefing       (Pre-Session, nur wenn conversationCount > 1)
+  + BLOCK 1: Briefing       (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch)
   + BLOCK 2: Coach-Akte     (coach_file_entries + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte  (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext    (Anonyme Erfahrungen)
-  + BLOCK 5: Supervision    (Wöchentliche Empfehlung)
+  + BLOCK 5: Supervision    (Wöchentliche Empfehlung · nur mit Secret SUPERVISION_IN_PROMPT=1, derzeit aus)
   + BLOCK 6: Wellness-Check (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
 ```
 
@@ -318,7 +319,7 @@ startWellnessConversation(wc)       → Coach antwortet sofort auf Wellness-Scor
 startBriefingConversation(briefing) → Coach antwortet sofort auf offenen Faden
 ```
 
-Beim `sendMessage` werden mitgeschickt: `messages`, `memory`, `ragContext`, `briefing`.
+Beim `sendMessage` werden mitgeschickt: `messages`, `conversationId`, `requestId` – sonst nichts (Kontext lädt der Server).
 
 ### CoachScreen — Eröffnungslogik (3 Varianten)
 
@@ -475,5 +476,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `025_rls_hardening.sql` | Least-Privilege-GRANTs + Policies nur für authenticated · anon ohne Rechte · feedback_survey_scores security_invoker · Funktionen mit festem search_path |
 | `026_app_logs_hardening.sql` | app_logs nur Insert eigener Zeilen · metadata ≤ 8 KB · Altbestand bereinigt · Cron purge-app-logs (30 Tage) |
 | `027_signup_consent_and_limit.sql` | session_limit Default 20 · handle_new_user übernimmt Einwilligung/Vereinbarung/Onboarding aus den signUp-Metadaten (Fix: Passwort musste zweimal gesetzt werden) |
+| `028_conversation_context.sql` | conversation_context (RAG-Ergebnis pro Gespräch, nur service_role) · S-12 |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

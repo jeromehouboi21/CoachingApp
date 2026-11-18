@@ -17,9 +17,6 @@ verify_jwt = false
 [functions.pre-session-briefing]
 verify_jwt = false
 
-[functions.rag-search]
-verify_jwt = false
-
 [functions.validate-invite-code]
 verify_jwt = false
 

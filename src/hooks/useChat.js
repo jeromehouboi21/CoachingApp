@@ -10,31 +10,9 @@ function generateRequestId() {
   return crypto.randomUUID().slice(0, 8)
 }
 
-async function fetchRagContext(firstMessage, accessToken) {
-  try {
-    const response = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/rag-search`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': ANON_KEY,
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ firstMessage }),
-      }
-    )
-    if (!response.ok) return null
-    const { experiences } = await response.json()
-    return experiences?.length ? experiences : null
-  } catch {
-    return null
-  }
-}
-
 // options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 antwortet
 // (Monatslimit erreicht). Die Zählung selbst passiert serverseitig (consume_session).
-export function useChat(userId, memory, session, options = {}) {
+export function useChat(userId, session, options = {}) {
   const onSessionLimitRef = useRef(options.onSessionLimit)
   onSessionLimitRef.current = options.onSessionLimit
   // Konversationen, für die der Server bereits eine Sitzung gezählt hat (oder die
@@ -46,22 +24,14 @@ export function useChat(userId, memory, session, options = {}) {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [conversationId, setConversationId] = useState(null)
-  // RAG-Kontext wird nach der ersten Nutzer-Nachricht gesetzt und für alle weiteren verwendet
-  const ragContextRef = useRef(null)
-  const isFirstUserMessageRef = useRef(true)
-  // Aktuelles Briefing — wird beim Senden mitgeschickt
-  const briefingRef = useRef(null)
-  // Coach-Akte — wird beim Senden mitgeschickt
-  const coachFileRef = useRef(null)
+  // Akte, Briefing, Resonanzkarte, Gedächtnis und RAG lädt die chat-Function selbst
+  // (Security S-12) — der Client schickt nur Nachrichten und den Eröffnungsanlass.
 
   // Wellness-Start: kein sichtbarer User-Turn, Coach antwortet direkt aus dem System-Prompt
-  const startWellnessConversation = useCallback(async (wellnessCheck, coachFile = null) => {
+  const startWellnessConversation = useCallback(async (wellnessCheck) => {
     setMessages([])
     setConversationId(null)
     pendingConvRef.current = null
-    ragContextRef.current = null
-    coachFileRef.current = coachFile
-    isFirstUserMessageRef.current = false
 
     let convId = null
     if (userId) {
@@ -122,10 +92,7 @@ export function useChat(userId, memory, session, options = {}) {
           body: JSON.stringify({
             messages: [],
             conversationId: convId,
-            memory: memory || null,
-            ragContext: null,
             wellnessCheck,
-            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
@@ -200,18 +167,14 @@ export function useChat(userId, memory, session, options = {}) {
     } finally {
       setIsLoading(false)
     }
-  }, [userId, memory, session])
+  }, [userId, session])
 
   // Wiederkehr-Begrüßung: Coach öffnet automatisch mit einem ersten Turn
   // (basierend auf offenem Faden aus dem letzten Gespräch)
-  const startBriefingConversation = useCallback(async (briefing, coachFile = null) => {
+  const startBriefingConversation = useCallback(async () => {
     setMessages([])
     setConversationId(null)
     pendingConvRef.current = null
-    ragContextRef.current = null
-    briefingRef.current = briefing
-    coachFileRef.current = coachFile
-    isFirstUserMessageRef.current = false
 
     let convId = null
     if (userId) {
@@ -251,9 +214,6 @@ export function useChat(userId, memory, session, options = {}) {
           body: JSON.stringify({
             messages: [],
             conversationId: convId,
-            memory: memory || null,
-            briefing,
-            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
@@ -309,17 +269,14 @@ export function useChat(userId, memory, session, options = {}) {
     } finally {
       setIsLoading(false)
     }
-  }, [userId, memory, session])
+  }, [userId, session])
 
   // Entry-Kontext-Start: Coach öffnet automatisch mit themenspezifischer Antwort
   // Priorität über Wiederkehr-Begrüßung, aber NICHT über Wellness-Check
-  const startEntryContextConversation = useCallback(async (entryContext, coachFile = null) => {
+  const startEntryContextConversation = useCallback(async (entryContext) => {
     setMessages([])
     setConversationId(null)
     pendingConvRef.current = null
-    ragContextRef.current = null
-    coachFileRef.current = coachFile
-    isFirstUserMessageRef.current = false
 
     let convId = null
     if (userId) {
@@ -356,9 +313,7 @@ export function useChat(userId, memory, session, options = {}) {
           body: JSON.stringify({
             messages: [],
             conversationId: convId,
-            memory: memory || null,
             entryContext,
-            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
@@ -414,7 +369,7 @@ export function useChat(userId, memory, session, options = {}) {
     } finally {
       setIsLoading(false)
     }
-  }, [userId, memory, session])
+  }, [userId, session])
 
   // Lädt ein bestehendes Gespräch aus dem Verlauf und macht es zum aktiven
   // Gespräch, damit es über sendMessage() ganz normal weitergeführt werden kann.
@@ -440,29 +395,18 @@ export function useChat(userId, memory, session, options = {}) {
     setConversationId(convId)
     pendingConvRef.current = null
     countedConvIdsRef.current.add(convId) // bereits gezählt (serverseitig über session_counted_at)
-    ragContextRef.current = null
-    briefingRef.current = null
-    coachFileRef.current = null
-    // isFirstUserMessageRef auf true: ragContext wurde nicht persistiert und ist
-    // nach dem Reload leer — beim nächsten Nutzer-Input soll die RAG-Suche
-    // daher noch einmal laufen (siehe fetchRagContext oben).
-    isFirstUserMessageRef.current = true
 
     logger.info('Conversation resumed', { conversationId: convId, messageCount: data.length })
     return true
   }, [userId])
 
-  const startNewConversation = useCallback(async (isFirstEver = false, coachFile = null) => {
+  const startNewConversation = useCallback(async (isFirstEver = false) => {
     const opening = isFirstEver
       ? FIRST_OPENING_MESSAGE
       : OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
     const firstMessage = { role: 'assistant', content: opening, id: Date.now() }
     setMessages([firstMessage])
     setConversationId(null)
-    ragContextRef.current = null
-    briefingRef.current = null
-    coachFileRef.current = coachFile
-    isFirstUserMessageRef.current = true
 
     if (userId) {
       const createConversation = async () => {
@@ -532,14 +476,6 @@ export function useChat(userId, memory, session, options = {}) {
       return
     }
 
-    // RAG-Suche beim ersten Nutzer-Input (fire-and-forget, parallel zum Streaming)
-    if (isFirstUserMessageRef.current) {
-      isFirstUserMessageRef.current = false
-      fetchRagContext(content, accessToken).then(ctx => {
-        ragContextRef.current = ctx
-      })
-    }
-
     const assistantMessage = { role: 'assistant', content: '', id: Date.now() + 1 }
     setMessages(prev => [...prev, assistantMessage])
 
@@ -565,10 +501,6 @@ export function useChat(userId, memory, session, options = {}) {
           body: JSON.stringify({
             messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
             conversationId: activeConvId,
-            memory: memory || null,
-            ragContext: ragContextRef.current || null,
-            briefing: briefingRef.current || null,
-            coachFile: coachFileRef.current || null,
             requestId,
           }),
         }
@@ -660,7 +592,7 @@ export function useChat(userId, memory, session, options = {}) {
     } finally {
       setIsLoading(false)
     }
-  }, [messages, isLoading, userId, conversationId, memory, session])
+  }, [messages, isLoading, userId, conversationId, session])
 
   // Nach Gesprächsende: Gedächtnis + Erkenntnis via Haiku extrahieren
   const extractMemoryAndInsight = useCallback(async () => {

@@ -4,6 +4,7 @@ import { createLogger, describeError } from '../_shared/logger.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
+import { findSimilarExperiences } from '../_shared/rag.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -822,6 +823,203 @@ Maximal 1 Satz.`;
 }
 
 
+// ── Serverseitiger Gesprächskontext (Security S-12) ─────────────────────────
+// Akte, Profil, Resonanzkarte, Briefing, Legacy-Gedächtnis, RAG und Supervision
+// lädt chat selbst. Entsprechende Body-Felder des Clients werden ignoriert.
+
+// Supervision-Empfehlung (BLOCK 5) nur, wenn ausdrücklich eingeschaltet
+// (Secret SUPERVISION_IN_PROMPT=1). Entscheidung 18.11.2026: vorerst aus.
+const SUPERVISION_IN_PROMPT = (Deno.env.get('SUPERVISION_IN_PROMPT') ?? '').trim() === '1';
+
+interface CoachContext {
+  memory?: UserMemory;
+  coachFile?: CoachFile;
+  briefing?: PreSessionBriefing;
+  ragContext?: string[];
+  supervisionNote?: string;
+}
+
+function relativeDateLabel(daysSince: number): string {
+  return daysSince === 0 ? 'heute' :
+    daysSince === 1 ? 'gestern' :
+    daysSince < 7   ? `vor ${daysSince} Tagen` :
+    daysSince < 14  ? 'letzte Woche' :
+                      `vor ${Math.floor(daysSince / 7)} Wochen`;
+}
+
+// deno-lint-ignore no-explicit-any
+async function loadCoachContext(admin: any, userId: string, convId: string, firstUserMessage: string | undefined, logger: any): Promise<CoachContext> {
+  try {
+    const none = Promise.resolve({ data: null, error: null });
+    const [entriesRes, profileRes, resonanceRes, lastConvRes, countRes, ctxRes, supervisionRes] = await Promise.all([
+      admin.from('coach_file_entries')
+        .select('id, category, label, description, example, confidence, status, linked_value')
+        .eq('user_id', userId)
+        .neq('status', 'resolved')
+        .order('confidence', { ascending: false })
+        .limit(80),
+      admin.from('coachee_profile')
+        .select('occupation, relationship_status, family_situation, life_phase, current_focus, known_values, known_stressors, known_resources')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      admin.from('resonance_map')
+        .select('opening_patterns, closing_patterns, effective_styles, resonant_metaphors, preferred_pace')
+        .eq('user_id', userId)
+        .maybeSingle(),
+      // Letztes abgeschlossenes Gespräch (ohne das laufende)
+      admin.from('conversations')
+        .select('created_at, summary, open_thread, open_thread_intensity, title')
+        .eq('user_id', userId)
+        .neq('id', convId)
+        .not('summary', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      admin.from('conversations')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .neq('id', convId)
+        .not('summary', 'is', null),
+      admin.from('conversation_context')
+        .select('rag_context')
+        .eq('conversation_id', convId)
+        .eq('user_id', userId)
+        .maybeSingle(),
+      SUPERVISION_IN_PROMPT
+        ? admin.from('supervision_logs')
+            .select('improvement_recs')
+            .not('improvement_recs', 'is', null)
+            .order('week_start', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        : none,
+    ]);
+
+    const failed: Record<string, string> = {};
+    const check = (name: string, res: { error: { code?: string } | null }) => {
+      if (res.error) failed[name] = res.error.code ?? 'unknown';
+    };
+    check('coach_file_entries', entriesRes);
+    check('coachee_profile', profileRes);
+    check('resonance_map', resonanceRes);
+    check('last_conversation', lastConvRes);
+    check('conversation_count', countRes);
+    check('conversation_context', ctxRes);
+    check('supervision_logs', supervisionRes);
+
+    const ctx: CoachContext = {};
+
+    // BLOCK 2 + 3: Coach-Akte, Profil, Resonanzkarte
+    const entries = (entriesRes.data ?? []) as CoachFileEntry[];
+    ctx.coachFile = {
+      entries,
+      profile: profileRes.data ?? undefined,
+      resonanceMap: resonanceRes.data ?? undefined,
+    };
+
+    // Legacy-Fallback: user_memory nur, wenn die Akte noch leer ist
+    if (!entries.length && !failed.coach_file_entries) {
+      const memRes = await admin.from('user_memory')
+        .select('themes, patterns, strengths, context')
+        .eq('user_id', userId)
+        .maybeSingle();
+      check('user_memory', memRes);
+      if (memRes.data) ctx.memory = memRes.data as UserMemory;
+    }
+
+    // BLOCK 1: Briefing in jedem Folgegespräch (Entscheidung 18.11.2026)
+    const lastConv = lastConvRes.data;
+    if (lastConv?.summary) {
+      const daysSince = Math.floor((Date.now() - new Date(lastConv.created_at).getTime()) / 86400000);
+      const dateLabel = relativeDateLabel(daysSince);
+      ctx.briefing = {
+        lastConversationDate: dateLabel,
+        daysSince,
+        lastTopicSummary: lastConv.summary,
+        conversationCount: (countRes.count ?? 1) + 1,
+        openThread: lastConv.open_thread ? {
+          text: lastConv.open_thread,
+          intensity: lastConv.open_thread_intensity ?? 'low',
+          topicHint: lastConv.title ?? undefined,
+          conversationDate: dateLabel,
+        } : null,
+      };
+    }
+
+    // BLOCK 4: RAG — einmal pro Gespräch beim ersten Nutzer-Input, danach aus der DB
+    let ragStatus = 'none';
+    if (ctxRes.data) {
+      const stored = ctxRes.data.rag_context;
+      ctx.ragContext = Array.isArray(stored) ? stored.filter((x: unknown) => typeof x === 'string') : [];
+      ragStatus = 'stored';
+    } else if (firstUserMessage && !failed.conversation_context) {
+      const rag = await findSimilarExperiences(admin, firstUserMessage);
+      ragStatus = rag.status;
+      if (rag.status === 'match_failed') failed.match_experiences = rag.code ?? 'unknown';
+      if (rag.status === 'ok') {
+        ctx.ragContext = rag.experiences;
+        const { error: upsertError } = await admin.from('conversation_context').upsert(
+          { conversation_id: convId, user_id: userId, rag_context: rag.experiences },
+          { onConflict: 'conversation_id', ignoreDuplicates: true },
+        );
+        check('conversation_context_upsert', { error: upsertError });
+      }
+    }
+
+    // BLOCK 5: Supervision (nur mit Schalter)
+    const recs = supervisionRes.data?.improvement_recs;
+    if (typeof recs === 'string' && recs.trim()) ctx.supervisionNote = recs.trim().slice(0, 2000);
+
+    if (Object.keys(failed).length) {
+      logger.warn('coach context partially unavailable', { conversationId: convId, failed });
+    }
+    logger.info('Coach context loaded', {
+      conversationId: convId,
+      entryCount: entries.length,
+      hasProfile: !!profileRes.data,
+      hasResonanceMap: !!resonanceRes.data,
+      hasLegacyMemory: !!ctx.memory,
+      hasBriefing: !!ctx.briefing,
+      hasOpenThread: !!ctx.briefing?.openThread,
+      ragStatus,
+      ragCount: ctx.ragContext?.length ?? 0,
+      hasSupervision: !!ctx.supervisionNote,
+    });
+    return ctx;
+  } catch (error: unknown) {
+    // Gespräch läuft ohne Kontext weiter, Fehler wird protokolliert
+    logger.error('coach context load failed', { conversationId: convId, ...describeError(error) });
+    return {};
+  }
+}
+
+// Vom Client weiterhin erlaubt (Eröffnungsanlass, eigene Eingaben) — nur typ- und längengeprüft
+function sanitizeWellnessCheck(v: unknown): WellnessCheck | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  // deno-lint-ignore no-explicit-any
+  const w = v as any;
+  const score = Number(w.score);
+  if (!Number.isInteger(score) || score < 1 || score > 10) return undefined;
+  const str = (x: unknown, n: number) => (typeof x === 'string' ? x.slice(0, n) : '');
+  return { score, label: str(w.label, 60), emoji: str(w.emoji, 16), context: str(w.context, 500) || undefined };
+}
+
+const ENTRY_SOURCES = ['pattern', 'tagesimpuls', 'verstehen', 'spiegel', 'direct'] as const;
+function sanitizeEntryContext(v: unknown): EntryContext | undefined {
+  if (!v || typeof v !== 'object') return undefined;
+  // deno-lint-ignore no-explicit-any
+  const e = v as any;
+  if (!ENTRY_SOURCES.includes(e.source)) return undefined;
+  const str = (x: unknown, n: number) => (typeof x === 'string' && x.trim() ? x.slice(0, n) : undefined);
+  return {
+    source: e.source,
+    topic: str(e.topic, 120),
+    topicKey: str(e.topicKey, 64),
+    impulse: str(e.impulse, 300),
+    insightText: str(e.insightText, 600),
+  };
+}
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
@@ -850,10 +1048,11 @@ Deno.serve(async (req) => {
 
     // 2. Body mit Größenlimit lesen
     const body = await readJsonBody(req, MAX_BODY_BYTES);
-    const {
-      memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck,
-      briefing, coachFile, entryContext, requestId, conversationId,
-    } = body as any;
+    // memory, coachFile, briefing, ragContext, supervisionNote aus dem Body werden
+    // bewusst ignoriert (S-12) — chat lädt diesen Kontext selbst.
+    const { extractMemory, howtoMode, requestId, conversationId } = body as any;
+    const wellnessCheck = sanitizeWellnessCheck((body as any).wellnessCheck);
+    const entryContext = sanitizeEntryContext((body as any).entryContext);
     const safeRequestId = typeof requestId === 'string' ? requestId.slice(0, 64) : undefined;
     logger = createLogger('chat', safeRequestId, user.id);
 
@@ -931,6 +1130,12 @@ Deno.serve(async (req) => {
     //    Krisenantwort auch bei erreichtem Limit ausgeliefert wird (Entscheidung 18.11.2026).
     let crisisDetected = false;
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+
+    // Kontext parallel zur Krisenerkennung laden (wirft nie, siehe loadCoachContext)
+    const firstUserMessage = allMessages.find((m) => m.role === 'user')?.content;
+    const contextPromise: Promise<CoachContext> = isCoaching && convId
+      ? loadCoachContext(admin, user.id, convId, firstUserMessage, logger)
+      : Promise.resolve({});
 
     if (isCoaching && lastUserMessage?.content) {
       const classification = await detectCrisis(anthropic, lastUserMessage.content);
@@ -1034,6 +1239,8 @@ Deno.serve(async (req) => {
     }
 
     // Normaler Chat — Streaming
+    const { memory, ragContext, supervisionNote, briefing, coachFile } =
+      crisisDetected || !isCoaching ? {} as CoachContext : await contextPromise;
     const systemPrompt = crisisDetected
       ? CRISIS_RESPONSE_BLOCK
       : isHowto

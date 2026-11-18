@@ -140,8 +140,7 @@ CoachingApp/
 │   │   │   ├── index.ts                 ← Claude API Proxy + System-Prompt-Builder + Limit-/Krisen-Check
 │   │   │   └── crisisDetection.ts       ← Leichte Klassifikation auf akute Suizidalität
 │   │   ├── post-conversation/index.ts   ← Post-Processing (7+ parallele/sequentielle Prompts)
-│   │   ├── pre-session-briefing/index.ts← Briefing-Objekt für Wiederkehr-Begrüßung
-│   │   ├── rag-search/index.ts          ← Semantische Ähnlichkeitssuche
+│   │   ├── pre-session-briefing/index.ts← Eckdaten für die Wiederkehr-Begrüßung
 │   │   ├── validate-invite-code/index.ts← Invite-Code-Einlösung (Selbstregistrierung)
 │   │   ├── admin-users/index.ts         ← Admin: Nutzerliste + Beta-/Limit-Verwaltung
 │   │   ├── admin-feedback/index.ts      ← Admin: Feedback-Liste inkl. Name/E-Mail
@@ -497,10 +496,10 @@ Exports:
   isLoading            — Boolean (während Stream läuft)
   conversationId       — UUID | null
 
-  startNewConversation(isFirstEver, coachFile)
-  startWellnessConversation(wellnessCheck, coachFile)
-  startBriefingConversation(briefing, coachFile)
-  startEntryContextConversation(entryContext, coachFile)
+  startNewConversation(isFirstEver)
+  startWellnessConversation(wellnessCheck)
+  startBriefingConversation()
+  startEntryContextConversation(entryContext)
   sendMessage(content, inputMode)
   extractMemoryAndInsight()
   loadConversation(conversationId)     — lädt bestehendes Gespräch aus dem Verlauf, kein countSession()
@@ -508,10 +507,8 @@ Exports:
 ```
 
 **Interne Refs (keine Re-Renders):**
-- `ragContextRef` — wird nach erster Nutzer-Nachricht befüllt (fire-and-forget); nach `loadConversation()` zurückgesetzt, damit RAG beim nächsten Turn erneut läuft
-- `briefingRef` — aktives Briefing-Objekt für nachfolgende `sendMessage`-Aufrufe
-- `coachFileRef` — Coach-Akte für den aktuellen System-Prompt
-- `isFirstUserMessageRef` — steuert wann RAG-Suche getriggert wird
+- `countedConvIdsRef`, `pendingConvRef` — UX-Limitprüfung und Konversationsanlage
+- Kein Coach-Kontext im Client: Akte, Briefing, Resonanzkarte, Gedächtnis und RAG lädt `chat` selbst (S-12)
 
 **Streaming-Ablauf in `sendMessage`:**
 1. User-Nachricht in State + DB speichern
@@ -640,15 +637,15 @@ Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `S
 {
   "messages":       [{ "role": "user|assistant", "content": "..." }],
   "conversationId": "uuid",
-  "memory":         { "themes": [], "patterns": [], "strengths": [], "context": {} },
-  "ragContext":     [...],
-  "briefing":       { "openThread": "...", "conversationCount": 3, "daysSince": 5 },
   "entryContext":   { "source": "pattern", "topic": "innerer_kritiker" },
-  "coachFile":      { "entries": [...], "profile": {...} },
   "wellnessCheck":  { "score": 4, "label": "Nicht so gut", "emoji": "😕", "context": "..." },
   "requestId":      "abc12345"
 }
 ```
+
+`memory`, `coachFile`, `briefing`, `ragContext`, `supervisionNote` im Body werden **ignoriert** (S-12). `wellnessCheck` (Score 1–10, Texte gekürzt) und `entryContext` (Quelle aus fester Liste, Texte gekürzt) werden geprüft übernommen – sie steuern nur den eigenen Prompt.
+
+**Serverseitiger Kontext (`loadCoachContext`, parallel zur Krisenerkennung):** `coach_file_entries` (inkl. `linked_value`), `coachee_profile`, `resonance_map`, `user_memory` (nur wenn die Akte leer ist), letztes abgeschlossenes Gespräch ohne das laufende (→ Briefing), `conversation_context` (gespeichertes RAG-Ergebnis) und – nur mit Secret `SUPERVISION_IN_PROMPT=1` – die neueste `supervision_logs.improvement_recs`. Fehlt eine Quelle, läuft das Gespräch ohne diesen Block weiter; protokolliert wird `coach context partially unavailable` mit Tabellenname und Fehlercode. RAG (`_shared/rag.ts`): beim ersten Nutzer-Input eines Gesprächs Embedding (Timeout 2,5 s) + `match_experiences`, Ergebnis in `conversation_context`; danach aus der DB.
 
 **Output:** Server-Sent Events Stream
 `data: {"meta": {"messageType": "crisis_response"}}` (nur bei Krisenfall, vor dem ersten Text-Chunk) → `data: {"text": "Hallo"}` (wiederholt) → `data: [DONE]`
@@ -674,11 +671,11 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Kapazität-vs-W
                               blinde Flecken, Regelkreise, Ressourcen, Perspektivwechsel)
   + MECHANISM_OFFER_BLOCK    (nur im Rhythmus-Turn)
   + VOICE_INTRODUCE_BLOCK / VOICE_NAMING_BLOCK (nur je nach Taktung, nie beide gleichzeitig)
-  + BLOCK 1: Briefing        (Pre-Session, nur wenn conversationCount > 1)
+  + BLOCK 1: Briefing        (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch, Entscheidung 18.11.2026)
   + BLOCK 2: Coach-Akte      (coach_file_entries inkl. linked_value + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte   (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext     (Anonyme Erfahrungen aus experience_patterns)
-  + BLOCK 5: Supervision     (Wöchentliche Empfehlung)
+  + BLOCK 5: Supervision     (Wöchentliche Empfehlung · nur mit SUPERVISION_IN_PROMPT=1, derzeit aus)
   + BLOCK 6: Wellness-Check  (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
   + BLOCK 7: Entry-Kontext   (v2.6 — woher kommt der Mensch: pattern/tagesimpuls/verstehen/spiegel)
 ```
@@ -742,26 +739,22 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 ```json
 {
   "briefing": {
-    "openThread": "...", "openThreadIntensity": "low|medium|high",
-    "conversationCount": 12, "daysSince": 3, "lastConversationSummary": "..."
-  },
-  "coachFile": { "entries": [...], "profile": {...} }
+    "daysSince": 3,
+    "conversationCount": 12,
+    "openThread": { "intensity": "low|medium|high" }
+  }
 }
 ```
+
+Seit S-12 keine Akte, Resonanzkarte, Zusammenfassung oder Faden-Text mehr – das lädt `chat` selbst.
 
 Das Frontend-Check `shouldShowReturnGreeting()` prüft 5 Bedingungen: `openThread` vorhanden · `conversationCount > 1` · `daysSince >= 2` · ≥5 Tage seit `last_return_greeting_at` · kein Wellness-Check/Entry-Kontext/Resume in Navigation state.
 
 ---
 
-### `rag-search` — Semantische Suche
+### ~~`rag-search`~~ — entfernt (S-12)
 
-**Aufgerufen von:** `useChat.js` nach der ersten Nutzer-Nachricht (fire-and-forget).
-
-1. OpenAI `text-embedding-3-small` Embedding der ersten Nachricht
-2. pgvector-Suche in `experience_patterns` (Cosine Similarity > 0.78)
-3. Top-3 anonyme Erfahrungen als Kontext zurück
-
-**Fallback:** Wenn kein `OPENAI_API_KEY` → leeres Array. Nur für eingeloggte Nutzer (`requireUser`), Query-Text auf 2.000 Zeichen gekürzt. `match_experiences` ist nur für `service_role` ausführbar.
+Die Function hat anonyme Erfahrungen anderer Nutzer an den Client geliefert. Die Suche läuft jetzt in `chat` über `_shared/rag.ts` (siehe oben); die Ergebnisse verlassen den Server nicht.
 
 ---
 
@@ -803,7 +796,7 @@ Siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster) für das gemeinsame S
 
 **Läuft per Cron** (`weekly-supervision`, Mo 06:00 UTC, über `pg_net`). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
 
-**Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. Hinweis: `supervision_logs.improvement_recs` wird vom Frontend aktuell nicht an `chat` übergeben (BLOCK 5 faktisch inaktiv, siehe S-12).
+**Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. `supervision_logs.improvement_recs` lädt `chat` selbst, aber nur mit Secret `SUPERVISION_IN_PROMPT=1` (derzeit aus, S-12).
 
 ---
 
@@ -1263,18 +1256,16 @@ Keine Echtzeit-Benachrichtigung an Jerome — wöchentliche Sichtung (siehe cris
 ### RAG-Kontext-Flow
 
 ```
-sendMessage() — erste Nutzer-Nachricht in diesem Gespräch
+chat — Gesprächsmodus, conversation_context für diese Konversation fehlt noch
   ↓
-fetchRagContext(content, accessToken) [fire-and-forget, parallel zum Stream]
+erste Nutzer-Nachricht des Gesprächs → _shared/rag.ts
+  → OpenAI Embedding (text-embedding-3-small, Timeout 2,5 s)
+  → match_experiences (Cosine Similarity > 0.78, Top 3)
   ↓
-POST /functions/v1/rag-search
-  → OpenAI Embedding (text-embedding-3-small)
-  → pgvector Cosine Similarity in experience_patterns (threshold: 0.78)
-  → Top-3 anonyme Erfahrungen
+Ergebnis in conversation_context (nur service_role) + direkt in BLOCK 4
   ↓
-ragContextRef.current = experiences
-  ↓
-Ab der nächsten sendMessage(): ragContext wird an /chat mitgesendet
+Folgende Turns: rag_context aus conversation_context
+(Embedding fehlgeschlagen → nichts gespeichert, nächster Turn versucht es erneut)
 ```
 
 ---
@@ -1393,6 +1384,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
-3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `rag-search`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`
+3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
 5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller`; Log-Regel beachten

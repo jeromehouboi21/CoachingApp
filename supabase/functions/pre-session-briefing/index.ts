@@ -1,7 +1,9 @@
 // supabase/functions/pre-session-briefing/index.ts
 // Aufgerufen wenn ein Nutzer den Coach Screen öffnet.
-// Gibt das Briefing-Objekt zurück — das Frontend entscheidet ob eine
-// Wiederkehr-Begrüßung gezeigt wird.
+// Gibt nur die Eckdaten zurück, die das Frontend für die Entscheidung über die
+// Wiederkehr-Begrüßung braucht. Akte, Profil, Resonanzkarte und Gesprächsinhalte
+// (Zusammenfassung, offener Faden) lädt chat selbst (Security S-12) und gehen
+// nicht an den Client.
 // Sicherheitsmuster v2: Identität nur aus dem JWT, alle Abfragen mit user.id.
 
 import { createLogger, describeError } from '../_shared/logger.ts';
@@ -28,7 +30,7 @@ Deno.serve(async (req) => {
     // 1. Letztes abgeschlossenes Gespräch laden (mit summary)
     const { data: lastConv, error: lastConvError } = await supabase
       .from('conversations')
-      .select('id, created_at, summary, open_thread, open_thread_intensity, title')
+      .select('created_at, open_thread, open_thread_intensity')
       .eq('user_id', user.id)
       .not('summary', 'is', null)
       .order('created_at', { ascending: false })
@@ -49,59 +51,20 @@ Deno.serve(async (req) => {
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id);
 
-    // 3. Relative Zeitangabe berechnen
     const daysSince = Math.floor(
       (Date.now() - new Date(lastConv.created_at).getTime()) / (1000 * 60 * 60 * 24),
     );
-    const dateLabel =
-      daysSince === 0 ? 'heute' :
-      daysSince === 1 ? 'gestern' :
-      daysSince < 7   ? `vor ${daysSince} Tagen` :
-      daysSince < 14  ? 'letzte Woche' :
-                        `vor ${Math.floor(daysSince / 7)} Wochen`;
 
-    // 4. Coach-Akte + Personenprofil + Resonanzkarte laden (für buildSystemPrompt)
-    const [{ data: fileEntries }, { data: coacheeProfile }, { data: resonanceMap }] = await Promise.all([
-      supabase
-        .from('coach_file_entries')
-        .select('id, category, label, description, example, confidence, status')
-        .eq('user_id', user.id)
-        .neq('status', 'resolved')
-        .order('confidence', { ascending: false }),
-      supabase
-        .from('coachee_profile')
-        .select('occupation, relationship_status, family_situation, life_phase, current_focus, known_values, known_stressors, known_resources')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-      supabase
-        .from('resonance_map')
-        .select('opening_patterns, closing_patterns, effective_styles, resonant_metaphors, preferred_pace')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-    ]);
-
-    // 5. Briefing + coachFile zusammenstellen
     const briefing = {
-      lastConversationDate: dateLabel,
       daysSince,
-      lastTopicSummary: lastConv.summary,
       conversationCount: count ?? 1,
-      openThread: lastConv.open_thread ? {
-        text: lastConv.open_thread,
-        intensity: lastConv.open_thread_intensity ?? 'low',
-        topicHint: lastConv.title ?? undefined,
-        conversationDate: dateLabel,
-      } : null,
+      openThread: lastConv.open_thread
+        ? { intensity: lastConv.open_thread_intensity ?? 'low' }
+        : null,
     };
 
-    const coachFile = {
-      entries: fileEntries ?? [],
-      profile: coacheeProfile ?? undefined,
-      resonanceMap: resonanceMap ?? undefined,
-    };
-
-    logger.info('Briefing built', { conversationCount: count ?? 0, entryCount: fileEntries?.length ?? 0, hasOpenThread: !!lastConv.open_thread });
-    return jsonResponse({ briefing, coachFile }, CORS_HEADERS);
+    logger.info('Briefing built', { conversationCount: count ?? 0, hasOpenThread: !!lastConv.open_thread });
+    return jsonResponse({ briefing }, CORS_HEADERS);
 
   } catch (error: unknown) {
     if (error instanceof HttpError) {

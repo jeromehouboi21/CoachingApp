@@ -101,7 +101,7 @@ export function CoachScreen() {
   const { memory, updateMemory } = useMemory(user?.id)
   // Sitzungen zählt der Server (consume_session in der chat-Function). Bei 429
   // zeigt der Screen das Limit-Modal und lädt das Profil neu.
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight, loadConversation, isConversationCounted } = useChat(user?.id, memory, session, {
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight, loadConversation, isConversationCounted } = useChat(user?.id, session, {
     onSessionLimit: () => { setShowLimitModal(true); refreshProfile() },
   })
   const bottomRef = useRef(null)
@@ -185,18 +185,17 @@ export function CoachScreen() {
         )
         const data = response.ok ? await response.json() : null
         const briefing = data?.briefing ?? null
-        const coachFile = data?.coachFile ?? null
         const isFirstEver = !briefing || briefing.conversationCount === 0
 
         // VARIANTE 4: Entry-Kontext (Priorität über Wiederkehr-Begrüßung)
         if (entryCtx && entryCtx.source !== 'direct') {
           logger.info('Entry context start', { source: entryCtx.source })
-          await startEntryContextConversation(entryCtx, coachFile)
+          await startEntryContextConversation(entryCtx)
           refreshProfile()
         // VARIANTE 1: Wiederkehr-Begrüßung mit offenem Faden
         } else if (briefing && shouldShowReturnGreeting(briefing, profile)) {
           logger.info('Return greeting triggered', { intensity: briefing.openThread?.intensity })
-          await startBriefingConversation(briefing, coachFile)
+          await startBriefingConversation()
           refreshProfile()
           // last_return_greeting_at aktualisieren (fire-and-forget)
           supabase
@@ -207,7 +206,7 @@ export function CoachScreen() {
         } else {
           // VARIANTE 2: Normaler Start
           logger.debug('Standard entry', { isFirstEver, hasOpenThread: !!briefing?.openThread })
-          startNewConversation(isFirstEver, coachFile)
+          startNewConversation(isFirstEver)
         }
       } catch {
         startNewConversation()
