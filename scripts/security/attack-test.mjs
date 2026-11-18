@@ -404,6 +404,9 @@ async function testsAnonymous() {
       okStatus.includes(anonBearer.status) ? PASS : FAIL, `HTTP ${anonBearer.status}`);
   }
 
+}
+
+async function testsRateLimits(a, b) {
   // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
   // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
   // bzw. fremde conversationId → abgelehnt vor jedem Modellaufruf).
@@ -460,6 +463,7 @@ function printResults() {
 
   await testsAsB(a, b);
   await testsAnonymous();
+  await testsRateLimits(a, b);
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen
   // der Testkonten auf anderen Geräten (Standard von signOut() ist 'global').
