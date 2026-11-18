@@ -235,7 +235,17 @@ Bekannte Schlüssel mit Inhalten in `app_logs.metadata`: `rawResponsePreview`, `
 
 ## 6. Live-Abgleich (Audit vom 18.11.2026, `audit-combined.sql`)
 
-Noch ausstehend: **Security-Advisor-Warnungen**.
+**Security Advisor (18.11.2026, 16:55):**
+
+| Level | Lint | Objekt | Bewertung / Maßnahme |
+|---|---|---|---|
+| ERROR | `security_definer_view` | `feedback_survey_scores` | K-5 → `security_invoker = true` + `revoke` (Hotfix / 025) |
+| WARN | `anon_/authenticated_security_definer_function_executable` | `redeem_invite_code` | K-2 → `revoke execute` (Hotfix / 025) |
+| WARN | `anon_/authenticated_security_definer_function_executable` | `handle_new_user` | Trigger-Funktion, per RPC praktisch nicht sinnvoll aufrufbar → trotzdem `revoke execute` + `search_path = ''` (025) |
+| WARN | `function_search_path_mutable` | `handle_new_user`, `match_experiences`, `touch_conversation_updated_at`, `get_conversation_history` | `set search_path = ''` + schema-qualifizierte Namen (025) |
+| WARN | `extension_in_public` | `vector` | **Nicht in Paket A.** Verschieben ändert Spaltentypen/Indizes (`experience_patterns.embedding`) und braucht eigenes Wartungsfenster. Begründet offen. |
+| WARN | `auth_leaked_password_protection` | Auth | S-07, nicht Paket A |
+| INFO | `rls_enabled_no_policy` | `invite_codes`, `supervision_logs` | **Gewollt** (Deny-all). Nach 025 kommen weitere Tabellen ohne Policy hinzu (`experience_patterns`, `coach_reflections`, `resonance_map`, `app_logs` nur Insert …). INFO-Meldungen dieser Art sind dann erwartet. |
 
 **G Cron-Jobs:** genau ein Job, `weekly-supervision` (jobid 1, `0 6 * * 1`, aktiv). Er ruft `net.http_post(…/functions/v1/supervision)` mit `Authorization: Bearer sb_publishable_…` auf.
 - `pg_net` ist **nicht installiert** (siehe J) → der Job schlägt vermutlich bei jedem Lauf fehl; Supervision läuft faktisch nicht.
