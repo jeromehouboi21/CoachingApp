@@ -1,7 +1,7 @@
 # Security-Paket A – Abschlussbericht
 
 **Stand:** 18.11.2026 · Branch `security/paket-a` · Grundlage: Handoff „Security-Paket A (S-01 bis S-04)“
-**Ergebnis:** Alle vier Maßnahmen umgesetzt und deployed. Angriffstest nach Paket A: **102 PASS · 0 FAIL · 1 SKIP** (SKIP = `supervision`, siehe Abschn. 4). Smoke-Tests von Welle 1 und Welle 2 bestanden.
+**Ergebnis:** Alle vier Maßnahmen umgesetzt und deployed. Angriffstest nach Paket A: **104 PASS · 0 FAIL · 0 SKIP** (inkl. `supervision`). Smoke-Tests von Welle 1 und Welle 2 bestanden.
 Details zur Bestandsaufnahme: [`paket-a-discovery.md`](paket-a-discovery.md).
 
 ---
@@ -70,9 +70,8 @@ Verifikation: `npm run build` fehlerfrei; alle 10 Functions bestehen `deno check
 |---|---|---|---|---|
 | **Baseline** (vor Paket A, 17:22) | 87 | 14 | 2 | Fragebogen-View (28 fremde Zeilen), 4× Profilfelder, `post-conversation`/`chat` mit fremder Konversation, `redeem_invite_code` ×2, anon-Insert `app_logs`, `post-conversation`/`rag-search` ohne Auth ×4 |
 | Nach Welle 1 (18:00) | 94 | 8 | 1 | Profilfelder ×4, Fragebogen-View, `redeem_invite_code` ×2, anon-Insert `app_logs` (alle für Welle 2 erwartet) |
-| **Nach Paket A** (18:18) | **102** | **0** | 1 | – |
-
-Verbleibender SKIP: `supervision` ohne Auth wurde nicht aufgerufen, weil `set ATTACK_TEST_SUPERVISION=1 && …` in cmd.exe den Wert mit Leerzeichen setzt. Skript ist korrigiert (Commit `a8fef8f`); ein Lauf mit Supervision steht noch aus (Abschn. 5). Der Code-Pfad (`requireInternalCaller`) ist identisch zu den übrigen 401-Prüfungen.
+| Nach Paket A (18:18) | 102 | 0 | 1 | – (SKIP: `supervision`, Flag wegen Leerzeichen aus cmd.exe nicht erkannt; Skript korrigiert in `a8fef8f`) |
+| **Nach Paket A, inkl. Supervision** (18:22) | **104** | **0** | **0** | – |
 
 ---
 
@@ -88,7 +87,7 @@ Verbleibender SKIP: `supervision` ohne Auth wurde nicht aufgerufen, weil `set AT
 - [x] **J-4** Migrationen 024–026 eingespielt
 - [x] **J-4** Smoke-Test Welle 2 bestanden (Profil, Insights, Stimmen, Feedback, Einladung, Invite-Code, Verlauf)
 - [x] **J-4** `pg_cron` aktiv, Job `purge-app-logs` sichtbar
-- [ ] **J-5** Angriffstest einmal mit Supervision: `set ATTACK_TEST_SUPERVISION=1&& npm run security:test` (ohne Leerzeichen vor `&&`) → erwartet 103 PASS
+- [x] **J-5** Angriffstest mit Supervision: 104 PASS · 0 FAIL · 0 SKIP
 - [ ] **J-5** Optional: Supervision-Cron einmal per SQL auslösen und `net._http_response` prüfen (erwartet `200`)
 - [ ] **J-5** Security Advisor erneut prüfen: erwartet nur noch `extension_in_public` (vector), `auth_leaked_password_protection` (S-07) und INFO „RLS enabled, no policy“ (gewollt)
 - [ ] **J-5** Doku-Commits nach `main` mergen und pushen (`18aa3bb`, `a8fef8f` und dieser Bericht)
