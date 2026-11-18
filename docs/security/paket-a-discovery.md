@@ -233,7 +233,27 @@ Bekannte Schlüssel mit Inhalten in `app_logs.metadata`: `rawResponsePreview`, `
 
 ---
 
-## 6. Offene Fragen an Jerome (vor Phase 2)
+## 6. Live-Abgleich (Audit vom 18.11.2026, `audit-combined.sql`)
+
+Noch ausstehend: **G (Cron-Jobs)** und **Security-Advisor-Warnungen**.
+
+| Abschnitt | Live-Zustand | Abweichung von den Migrationen / Bewertung |
+|---|---|---|
+| A RLS | Alle 19 Tabellen `rls_enabled = true`, keine `forced` | ✅ wie erwartet |
+| B Policies | Alle Policies aus den Migrationen vorhanden (Namen identisch). **Zusätzlich per Dashboard angelegt:** „Service role full access“ (ALL, `service_role`, `true`/`true`) auf `app_logs`, `coach_file_entries`, `coach_reflections`, `coachee_profile`, `experience_patterns`, `insights`, `pattern_references`, `session_notes`; „Service role can insert app_logs“ (INSERT, `service_role`) | **Drift.** Harmlos (service_role hat ohnehin `BYPASSRLS`), aber nicht im Repo. Werden in 025 entfernt, damit Repo = Live. |
+| C Grants | **anon:** auf allen Tabellen nur `REFERENCES, TRIGGER, TRUNCATE`, außer `app_logs` (zusätzlich `INSERT`). **authenticated:** volle Rechte (`SELECT, INSERT, UPDATE, DELETE, TRUNCATE, …`) auf **allen** Tabellen inkl. `crisis_events`, `invite_codes`, `experience_patterns`, `supervision_logs`, `coach_reflections` und der View `feedback_survey_scores` | **Drift:** anon wurde früher per Hand teilweise beschnitten (nicht im Repo). `TRUNCATE` umgeht RLS – über PostgREST nicht erreichbar, trotzdem entziehen. Bei authenticated schützt bei Tabellen nur RLS; bei der **View** nichts (→ K-5). |
+| D Funktionen | `redeem_invite_code`: SECURITY DEFINER, `search_path=public`, **anon_exec = true, auth_exec = true**. `handle_new_user`: SECURITY DEFINER ohne `search_path`. `match_experiences`, `get_conversation_history`, `touch_conversation_updated_at`: von anon ausführbar. pgvector-Funktionen liegen im Schema `public`. | **K-2 bestätigt.** pgvector in `public` → Advisor-Warnung „extension in public“; Verschieben ist riskant (Spaltentyp `vector`) und nicht Teil von Paket A. |
+| E Trigger | `on_auth_user_created` (auth.users), `trg_touch_conversation_updated_at` (messages). Nichts auf `profiles`/`conversations`. | ✅ wie erwartet |
+| F Realtime | leer | ✅ nichts zu tun |
+| H app_logs | `id, created_at, level, source, message, request_id, user_id, metadata (jsonb), error_detail, stack_trace` | ✅ wie 005; JSON-Spalte = `metadata` |
+| I Views | `feedback_survey_scores`: `options = null` (kein `security_invoker`), **auth_select = true**, anon_select = false | **K-5 bestätigt: Jeder eingeloggte Nutzer kann alle Fragebogen-Antworten aller Nutzer lesen** (`GET /rest/v1/feedback_survey_scores`). Die View wird von der App nicht genutzt. |
+| J Extensions | `pg_cron 1.6.4`, `vector 0.8.0`, `pgcrypto`, `uuid-ossp`, `supabase_vault`, `pg_stat_statements`. **Kein `pg_net`.** | Ohne `pg_net` kann kein Cron-Job eine Edge Function per HTTP aufrufen → `supervision` läuft vermutlich **gar nicht** per Cron (G klärt das). |
+| K Spalten | `profiles.session_limit` Default **3**, `plan` Default `'free'`, `consent_ip` vorhanden, keine Payment-Spalten. `conversations` ohne `session_counted_at`. | ✅ Werte für Migration 024 bestätigt |
+| L Default-Privilegien | Für von `postgres` angelegte Tabellen: anon `Dxtm`, authenticated `arwdDxtm`. Für Funktionen von `postgres`: nur `postgres=X` (kein PUBLIC). | Neue Tabellen bekommen automatisch volle authenticated-Rechte → RLS bleibt Pflicht für jede neue Tabelle. Neue Funktionen brauchen explizites `grant execute` (in 023 vorgesehen). |
+| M app_logs | 5.081 Zeilen, **5.068 älter als 30 Tage**, 251 ohne User. Mit Inhalten: `label` 212, `pattern` 19, `email` 9, `code` (Einladungscodes) 9, `body`/`details` 9, `rawResponsePreview` 5, `topic` 3; `error_detail` 123 | Löschfrist entfernt fast alles. Die restlichen 13 Zeilen werden in 026 von Inhaltsschlüsseln befreit. Auffällig: Nur 13 Zeilen in 30 Tagen. Entweder gab es kaum Nutzung, oder das Logging fällt still aus (bei Phase 2 prüfen). |
+| N Profile | 10 Profile, alle `tester`, keins unbegrenzt, 1 Admin | ✅ unauffällig |
+
+## 7. Offene Fragen an Jerome (vor Phase 2)
 
 1. **Zählzeitpunkt.** Serverseitig kann `chat` nur zählen, wenn es aufgerufen wird. Vorschlag: Eine Konversation zählt beim **ersten `chat`-Aufruf mit dieser `conversationId`**. Folgen:
    - Wellness, Briefing, Entry-Kontext: zählen wie heute sofort beim Start.
