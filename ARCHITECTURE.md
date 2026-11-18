@@ -856,12 +856,12 @@ coaching_agreement_accepted_at    TIMESTAMPTZ
 coaching_agreement_version        TEXT ('1.0')
 is_admin                          BOOLEAN DEFAULT false      -- v3.x, manuell im SQL-Editor gesetzt
 is_beta_tester                    BOOLEAN DEFAULT false      -- v3.x, über Admin-Bereich steuerbar
-session_limit                     INTEGER DEFAULT 3          -- v3.x, null = unbegrenzt, individuell pro Nutzer
+session_limit                     INTEGER DEFAULT 20         -- v3.x (Default 20 seit Migration 027), null = unbegrenzt, individuell pro Nutzer
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users           -- v3.x
 consent_ip                        TEXT                        -- v2.7, wird aktuell nicht befüllt
 ```
-Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Name kommt über `signUp({ options: { data: { display_name } } })`).
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version` und `coaching_agreement_version` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
 
 **`conversations`**
 ```
@@ -1283,7 +1283,7 @@ Ab der nächsten sendMessage(): ragContext wird an /chat mitgesendet
 
 | Feature | Free | Premium | Tester |
 |---|---|---|---|
-| Coach-Gespräche | `profile.session_limit` (Default 3, individuell setzbar) | Unbegrenzt | wie Free, eigener `session_limit`-Wert (Admin-Bereich, z. B. 300/500) |
+| Coach-Gespräche | `profile.session_limit` (Default 20, individuell setzbar) | Unbegrenzt | wie Free, eigener `session_limit`-Wert (Admin-Bereich, z. B. 300/500) |
 | Mein Spiegel | 10 Erkenntnisse (UI-seitig) | Unbegrenzt + Export | wie Free |
 | Deine Akte | Erste Karte je Sektion offen | Vollständig + Zeitachse | wie Free |
 | Verstehen-Modul | Allgemeine Muster | + Persönliche Gesprächsreferenzen | wie Free |

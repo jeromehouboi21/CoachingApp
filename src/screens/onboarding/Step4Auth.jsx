@@ -17,7 +17,7 @@ const StepDots = ({ current, total }) => (
 )
 
 export function Step4Auth({ onSuccess, onboardingData }) {
-  const { signUp, signIn, sendMagicLink, updateProfile } = useAuth()
+  const { signUp, signIn, sendMagicLink } = useAuth()
   const [mode, setMode] = useState('register') // register | login | magic
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,30 +34,22 @@ export function Step4Auth({ onSuccess, onboardingData }) {
     setError('')
     setLoading('register')
     try {
-      // signUp() gibt { user, session } direkt zurück
-      const data = await signUp(email, password)
+      // Einwilligung, Coaching-Vereinbarung und Onboarding-Antworten gehen als
+      // Registrierungs-Metadaten mit; der DB-Trigger handle_new_user schreibt sie
+      // beim Anlegen des Profils (Zeitstempel serverseitig, Migration 027). Ein
+      // Client-Update direkt nach signUp() scheiterte bei aktiver E-Mail-Bestätigung
+      // (noch keine Session) — dadurch landeten neue Nutzer im Invite-Flow und mussten
+      // das Passwort ein zweites Mal setzen.
+      const data = await signUp(email, password, undefined, {
+        onboarding_completed: true,
+        onboarding_data: onboardingData,
+        consent_version: '1.0',
+        coaching_agreement_version: '1.0',
+      })
       const userId = data.user?.id
       const accessToken = data.session?.access_token
 
       if (!userId) throw new Error('Registrierung fehlgeschlagen — kein User erhalten.')
-
-      // Profile-Update mit userId aus signUp() — KEIN getUser() danach.
-      // updateProfile() aus useAuth() statt rohem Query-Aufruf, damit der
-      // lokale profile-State im Hook sofort mitzieht (relevant für
-      // ProtectedRoute's checkCoachingAgreement-Prüfung direkt danach).
-      try {
-        await updateProfile({
-          onboarding_completed: true,
-          onboarding_data: onboardingData,
-          consent_given_at: new Date().toISOString(),
-          consent_version: '1.0',
-          coaching_agreement_accepted_at: new Date().toISOString(),
-          coaching_agreement_version: '1.0',
-        })
-      } catch (updateError) {
-        logger.error('Profile update after sign-up failed', updateError)
-        // Nicht werfen — Registrierung trotzdem fortsetzen
-      }
 
       // Invite-Code einlösen (optional)
       if (inviteCode.trim() && accessToken) {

@@ -84,14 +84,16 @@ export function useAuth() {
     setLoading(false)
   }
 
-  async function signUp(email, password, displayName) {
-    // Der Name geht als Metadaten an Supabase Auth; der DB-Trigger handle_new_user
-    // legt damit die profiles-Zeile an. Kein Client-Insert/Upsert in profiles mehr
-    // (Security-Paket A, S-01: privilegierte Profilfelder sind server-only).
+  // meta: zusätzliche Registrierungsangaben (Onboarding, Einwilligung, Vereinbarung).
+  // Name und meta gehen als Metadaten an Supabase Auth; der DB-Trigger handle_new_user
+  // legt damit die profiles-Zeile an (Migration 027). Kein Client-Insert/Upsert in
+  // profiles — das funktioniert auch bei aktiver E-Mail-Bestätigung, wenn nach signUp()
+  // noch keine Session besteht.
+  async function signUp(email, password, displayName, meta = {}) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: displayName || email.split('@')[0] } },
+      options: { data: { ...meta, display_name: displayName || email.split('@')[0] } },
     })
     if (error) {
       logger.error('Sign up failed', error)

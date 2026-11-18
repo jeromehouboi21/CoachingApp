@@ -200,7 +200,7 @@ export function HowItWorksScreen() {
           <div>
             <h2 className="text-[16px] font-medium text-ink mb-2">Kostenlos vs. Premium</h2>
             <p className="text-[14px] text-ink-2 leading-[1.7]">
-              Kostenlos kannst du 3 Coach-Gespräche im Monat führen, die Skalenfrage unbegrenzt nutzen und bis zu 10 Erkenntnisse in deinem Spiegel sammeln. Premium hebt diese Grenzen auf und schaltet die Inneren Stimmen frei. Was Premium kostet, geben wir bekannt, sobald es verfügbar ist.
+              Kostenlos kannst du 20 Coach-Gespräche im Monat führen, die Skalenfrage unbegrenzt nutzen und bis zu 10 Erkenntnisse in deinem Spiegel sammeln. Premium hebt diese Grenzen auf und schaltet die Inneren Stimmen frei. Was Premium kostet, geben wir bekannt, sobald es verfügbar ist.
             </p>
           </div>
 

@@ -390,7 +390,7 @@ perfektionismus_blockade → Perfektionismus-Blockade
 
 | Feature | Free | Premium |
 |---|---|---|
-| KI-Coach Gespräche | 3/Monat | Unbegrenzt |
+| KI-Coach Gespräche | 20/Monat (`session_limit` Default 20 seit Migration 027) | Unbegrenzt |
 | Mein Spiegel | 10 Erkenntnisse | Unbegrenzt + Export |
 | Verstehen-Modul | Allgemeine Muster | + Persönliche Gesprächsreferenzen |
 | Coach-Gedächtnis | Begrenzt | Vollständig |
@@ -474,5 +474,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `024_protect_profile_privileges.sql` | Trigger trg_protect_profile_privileges (privilegierte Profilfelder server-only) |
 | `025_rls_hardening.sql` | Least-Privilege-GRANTs + Policies nur für authenticated · anon ohne Rechte · feedback_survey_scores security_invoker · Funktionen mit festem search_path |
 | `026_app_logs_hardening.sql` | app_logs nur Insert eigener Zeilen · metadata ≤ 8 KB · Altbestand bereinigt · Cron purge-app-logs (30 Tage) |
+| `027_signup_consent_and_limit.sql` | session_limit Default 20 · handle_new_user übernimmt Einwilligung/Vereinbarung/Onboarding aus den signUp-Metadaten (Fix: Passwort musste zweimal gesetzt werden) |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

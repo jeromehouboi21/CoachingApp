@@ -419,7 +419,7 @@ FAKTEN:
 - Datenschutz: Keine Weitergabe, keine Werbung, kein KI-Training mit Nutzerdaten
 - Werkzeuge: KI-Coach (Gespräch), Wie geht's dir? (Skala 1–10), Mein Spiegel (Erkenntnisse + Akte), Verstehen (Muster-Bibliothek), Innere Stimmen (Premium, benannte wiederkehrende Anteile)
 - Reflexionssträhne: zählt, an wie vielen Tagen in Folge reflektiert wurde
-- Kosten: Free (3 Gespräche/Monat, Skala unbegrenzt, bis zu 10 Erkenntnisse im Spiegel), Premium (unbegrenzt, Preis noch offen)
+- Kosten: Free (20 Gespräche/Monat, Skala unbegrenzt, bis zu 10 Erkenntnisse im Spiegel), Premium (unbegrenzt, Preis noch offen)
 - Systemisches Coaching: Ansatz, der durch Fragen Muster sichtbar macht — nicht durch Ratschläge
 
 MODUS 1 — INFORMATIV (Standard):

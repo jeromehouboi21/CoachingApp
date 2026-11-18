@@ -486,7 +486,7 @@ export function CoachScreen() {
       {showLimitModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
           <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
-            <h3 className="font-display text-[22px] text-ink mb-2">Alle {profile?.session_limit ?? 3} Gespräche für diesen Monat genutzt</h3>
+            <h3 className="font-display text-[22px] text-ink mb-2">Alle {profile?.session_limit ?? 20} Gespräche für diesen Monat genutzt</h3>
             <p className="text-[14px] text-ink-2 mb-5">Upgrade auf Premium für unbegrenzte Gespräche — oder buche ein persönliches Gespräch mit Jerome.</p>
             <div className="flex flex-col gap-3">
               <button onClick={() => navigate('/premium')} className="w-full bg-accent text-white py-3 rounded-full font-medium">Premium entdecken</button>

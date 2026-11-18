@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check } from 'lucide-react'
 
 const FEATURES_FREE = [
-  '3 KI-Coach Gespräche pro Monat',
+  '20 KI-Coach Gespräche pro Monat',
   'Skalierungsfragen unbegrenzt',
   'Home-Screen & Impulsfragen',
   'Spracheingabe',
