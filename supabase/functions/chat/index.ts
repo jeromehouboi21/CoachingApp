@@ -956,6 +956,7 @@ async function loadCoachContext(admin: any, userId: string, convId: string, firs
       const rag = await findSimilarExperiences(admin, firstUserMessage);
       ragStatus = rag.status;
       if (rag.status === 'match_failed') failed.match_experiences = rag.code ?? 'unknown';
+      if (rag.status === 'embedding_failed') failed.embedding = rag.code ?? 'unknown';
       if (rag.status === 'ok') {
         ctx.ragContext = rag.experiences;
         const { error: upsertError } = await admin.from('conversation_context').upsert(

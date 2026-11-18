@@ -8,7 +8,8 @@ type AdminClient = any;
 const MAX_QUERY_CHARS = 2000;
 const EMBEDDING_TIMEOUT_MS = 2500;
 
-async function generateEmbedding(text: string, openaiKey: string): Promise<number[] | null> {
+// Fehlergrund nur als Code (HTTP-Status oder 'timeout'/'network'/'no_embedding'), nie Antworttext
+async function generateEmbedding(text: string, openaiKey: string): Promise<{ embedding: number[] | null; reason?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), EMBEDDING_TIMEOUT_MS);
   try {
@@ -21,11 +22,12 @@ async function generateEmbedding(text: string, openaiKey: string): Promise<numbe
       body: JSON.stringify({ model: 'text-embedding-3-small', input: text }),
       signal: controller.signal,
     });
-    if (!response.ok) return null;
+    if (!response.ok) return { embedding: null, reason: `http_${response.status}` };
     const data = await response.json();
-    return data.data?.[0]?.embedding ?? null;
-  } catch {
-    return null;
+    const embedding = data.data?.[0]?.embedding ?? null;
+    return embedding ? { embedding } : { embedding: null, reason: 'no_embedding' };
+  } catch (err) {
+    return { embedding: null, reason: err instanceof DOMException && err.name === 'AbortError' ? 'timeout' : 'network' };
   } finally {
     clearTimeout(timer);
   }
@@ -41,8 +43,8 @@ export async function findSimilarExperiences(admin: AdminClient, queryText: stri
   const text = queryText.trim().slice(0, MAX_QUERY_CHARS);
   if (!openaiKey || !text) return { status: 'skipped', experiences: [] };
 
-  const embedding = await generateEmbedding(text, openaiKey);
-  if (!embedding) return { status: 'embedding_failed', experiences: [] };
+  const { embedding, reason } = await generateEmbedding(text, openaiKey);
+  if (!embedding) return { status: 'embedding_failed', experiences: [], code: reason };
 
   const { data: similar, error } = await admin.rpc('match_experiences', {
     query_embedding: embedding,
