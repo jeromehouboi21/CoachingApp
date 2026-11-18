@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
+import { createLogger } from '../../lib/logger'
+
+const logger = createLogger('Step4Auth')
 
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
@@ -52,7 +55,7 @@ export function Step4Auth({ onSuccess, onboardingData }) {
           coaching_agreement_version: '1.0',
         })
       } catch (updateError) {
-        console.error('Profile update failed:', updateError)
+        logger.error('Profile update after sign-up failed', updateError)
         // Nicht werfen — Registrierung trotzdem fortsetzen
       }
 
@@ -73,11 +76,11 @@ export function Step4Auth({ onSuccess, onboardingData }) {
           )
           const result = await res.json()
           if (!result.ok) {
-            console.warn('Invite code invalid or already used:', result.error)
+            logger.warn('Invite code rejected', { status: res.status, reason: result.error ?? null })
             // Kein Fehler für den Nutzer — Registrierung läuft weiter (free plan)
           }
         } catch (inviteErr) {
-          console.warn('Invite code request failed:', inviteErr)
+          logger.warn('Invite code request failed', { errorType: inviteErr?.name ?? 'Error' })
           // Nicht werfen — Registrierung trotzdem fortsetzen
         }
       } else if (inviteCode.trim() && !accessToken) {

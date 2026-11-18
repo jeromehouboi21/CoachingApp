@@ -60,17 +60,27 @@ export function AdminUsersScreen() {
 
   const updateUser = async (userId, patch) => {
     setSavingId(userId)
-    await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({ userId, ...patch }),
-    })
-    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...patch } : u)))
-    setSavingId(null)
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ userId, ...patch }),
+      })
+      // Kein stilles Scheitern: lokalen Stand nur übernehmen, wenn der Server bestätigt
+      if (res.ok) {
+        setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...patch } : u)))
+      } else {
+        window.alert('Änderung konnte nicht gespeichert werden.')
+      }
+    } catch {
+      window.alert('Änderung konnte nicht gespeichert werden — Netzwerkfehler.')
+    } finally {
+      setSavingId(null)
+    }
   }
 
   const inviteUser = async (e) => {

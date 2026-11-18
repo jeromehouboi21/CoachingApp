@@ -1,5 +1,13 @@
 // supabase/functions/_shared/logger.ts
-// Zentraler Logger für alle Edge Functions — schreibt in app_logs via Service Role Key
+// Zentraler Logger für alle Edge Functions — schreibt in app_logs via Service Role Key.
+//
+// LOG-REGEL (Security-Paket A, S-04):
+// Erlaubt: IDs (userId, conversationId, requestId), Zähler, Längen, Dauer, HTTP-Status,
+//          Fehlercodes, Fehlertyp, Prompt-Label.
+// Verboten: Nachrichteninhalte, Prompts, Modellausgaben (auch nicht als Preview), Akte-,
+//          Profil- und Stimmen-Felder, Zusammenfassungen, E-Mail-Adressen, Namen.
+// JSON.parse-Fehlermeldungen enthalten Textausschnitte → nie loggen, nur 'parse_failed'.
+// sanitizeLogData() ist nur das Sicherheitsnetz — die Aufrufstellen bleiben verantwortlich.
 
 import { createClient } from 'npm:@supabase/supabase-js';
 
@@ -19,6 +27,41 @@ interface LogEntry {
   metadata?:     Record<string, unknown>;
   error_detail?: string;
   stack_trace?:  string;
+}
+
+const SENSITIVE_KEY = /^(content|contents|messages|text|prompt|system_?prompt|output|raw|raw_?output|raw_?response_?preview|preview|email|invited_?email|display_?name|full_?name|name|excerpt|description|example|summary|open_?thread|main_?topic|notes?|linked_?value|coach_?file|memory|briefing|rag_?context|wellness_?context|details|hint|body|topic|pattern)$/i;
+const MAX_STRING = 200;
+
+export function sanitizeLogData(value: unknown, depth = 0): unknown {
+  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (depth > 4) return '[depth-limit]';
+  if (typeof value === 'string') return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…[+${value.length - MAX_STRING}]` : value;
+  if (Array.isArray(value)) return { type: 'array', length: value.length };
+  if (value instanceof Error) return { name: value.name, code: (value as { code?: unknown }).code ?? null };
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = SENSITIVE_KEY.test(k)
+        ? { redacted: true, ...(typeof v === 'string' ? { length: v.length } : {}) }
+        : sanitizeLogData(v, depth + 1);
+    }
+    return out;
+  }
+  return String(value);
+}
+
+/** Fehler auf loggbare Felder reduzieren: Typ, Code, HTTP-Status — keine Meldungstexte mit Inhalten. */
+export function describeError(err: unknown): Record<string, unknown> {
+  if (err instanceof SyntaxError) return { errorType: 'SyntaxError', parseError: 'parse_failed' };
+  if (err && typeof err === 'object') {
+    const e = err as { name?: unknown; code?: unknown; status?: unknown };
+    return {
+      errorType: typeof e.name === 'string' ? e.name : 'Error',
+      ...(e.code != null ? { code: String(e.code) } : {}),
+      ...(typeof e.status === 'number' ? { status: e.status } : {}),
+    };
+  }
+  return { errorType: typeof err };
 }
 
 export function createLogger(source: string, requestId?: string, userId?: string) {
@@ -64,19 +107,25 @@ export function createLogger(source: string, requestId?: string, userId?: string
         level: 'error',
         source: 'logger',
         message: 'Failed to persist log entry to app_logs',
-        error_detail: error.message,
+        code: error.code ?? null,
       }));
     }
   };
 
   const log = (level: LogLevel, message: string, data?: unknown) => {
+    // Fehler: nur Typ/Code und eine gekürzte Meldung, Stacktrace gekürzt.
+    // Alles andere läuft durch das Redaction-Netz.
     const entry: LogEntry = {
       level, source, message,
       request_id: requestId,
       user_id: userId,
       ...(data instanceof Error
-        ? { error_detail: data.message, stack_trace: data.stack }
-        : data ? { metadata: data as Record<string, unknown> } : {}
+        ? {
+            metadata: describeError(data),
+            error_detail: data instanceof SyntaxError ? 'parse_failed' : data.message.slice(0, MAX_STRING),
+            stack_trace: data.stack?.slice(0, 2000),
+          }
+        : data ? { metadata: sanitizeLogData(data) as Record<string, unknown> } : {}
       ),
     };
     const promise = persist(entry);
@@ -107,3 +156,5 @@ export function createLogger(source: string, requestId?: string, userId?: string
     },
   };
 }
+
+export type Logger = ReturnType<typeof createLogger>;

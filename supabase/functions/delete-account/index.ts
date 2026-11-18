@@ -1,8 +1,10 @@
 // supabase/functions/delete-account/index.ts
 // Löscht alle Nutzerdaten und den Auth-Account.
 // Benötigt service_role — der anon-Key hat keine DELETE-Rechte auf auth.users.
+// Sicherheitsmuster v2: löscht ausschließlich user.id aus dem JWT, ignoriert jede ID aus dem Body.
 
-import { createClient } from 'npm:@supabase/supabase-js';
+import { createLogger, describeError } from '../_shared/logger.ts';
+import { HttpError, requireUser, errorResponse, jsonResponse } from '../_shared/auth.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -15,87 +17,72 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  let logger = createLogger('delete-account');
+
   try {
-    // Auth-Token prüfen
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // User aus Token extrahieren (service_role für auth.admin Zugriff)
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
-    }
-
+    const { user, admin: supabase } = await requireUser(req);
     const userId = user.id;
+    logger = createLogger('delete-account', undefined, userId);
 
-   // Schritt 1: Conversation IDs zuerst separat laden
-    const { data: conversations } = await supabase
+    const failures: string[] = [];
+    const check = (table: string, error: { code?: string } | null) => {
+      if (error) {
+        failures.push(table);
+        logger.error('delete failed', { table, code: error.code ?? null });
+      }
+    };
+
+    // Schritt 1: Conversation IDs zuerst separat laden
+    const { data: conversations, error: convError } = await supabase
       .from('conversations')
       .select('id')
       .eq('user_id', userId);
+    check('conversations(select)', convError);
 
-    const conversationIds = conversations?.map(c => c.id) ?? [];
+    const conversationIds = conversations?.map((c: { id: string }) => c.id) ?? [];
 
     // Schritt 2: Messages nur löschen wenn IDs vorhanden
     if (conversationIds.length > 0) {
-      await supabase
-        .from('messages')
-        .delete()
-        .in('conversation_id', conversationIds);
+      const { error } = await supabase.from('messages').delete().in('conversation_id', conversationIds);
+      check('messages', error);
     }
 
-    // Dann der Rest wie gehabt parallel
-    await Promise.all([
-      supabase.from('insights').delete().eq('user_id', userId),
-      supabase.from('pattern_references').delete().eq('user_id', userId),
-      supabase.from('user_feedback').delete().eq('user_id', userId),
-      supabase.from('coach_file_entries').delete().eq('user_id', userId),
-      supabase.from('coachee_profile').delete().eq('user_id', userId),
-      supabase.from('session_notes').delete().eq('user_id', userId),
-      supabase.from('resonance_map').delete().eq('user_id', userId),
-      supabase.from('user_memory').delete().eq('user_id', userId),
-    ]);
+    // Dann der Rest parallel
+    const tables = ['insights', 'pattern_references', 'user_feedback', 'coach_file_entries', 'coachee_profile',
+      'session_notes', 'resonance_map', 'user_memory'];
+    const results = await Promise.all(tables.map((t) => supabase.from(t).delete().eq('user_id', userId)));
+    results.forEach((r, i) => check(tables[i], r.error));
 
     // Gespräche löschen (Nachrichten sind bereits weg)
-    await supabase.from('conversations').delete().eq('user_id', userId);
+    check('conversations', (await supabase.from('conversations').delete().eq('user_id', userId)).error);
 
     // Profil löschen
-    await supabase.from('profiles').delete().eq('id', userId);
+    check('profiles', (await supabase.from('profiles').delete().eq('id', userId)).error);
 
-    // Auth-User löschen — erfordert service_role
-    const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
-    if (deleteError) {
-      console.error('Failed to delete auth user:', deleteError.message);
-      return new Response(JSON.stringify({ error: 'Failed to delete account' }), {
-        status: 500,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      });
+    // Kein stilles Scheitern: Wenn ein Schritt fehlschlägt, bleibt der Auth-Account
+    // bestehen, damit die Löschung wiederholt werden kann.
+    if (failures.length > 0) {
+      return jsonResponse({ error: 'delete_incomplete' }, CORS_HEADERS, 500);
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    });
+    // Auth-User löschen — erfordert service_role. inner_voices, crisis_events und
+    // feedback_surveys hängen per ON DELETE CASCADE an auth.users.
+    const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+    if (deleteError) {
+      logger.error('Failed to delete auth user', describeError(deleteError));
+      return jsonResponse({ error: 'Failed to delete account' }, CORS_HEADERS, 500);
+    }
 
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    console.error('delete-account error:', message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-    });
+    // Ohne user_id loggen: Das Profil existiert nicht mehr (FK app_logs.user_id → profiles).
+    createLogger('delete-account').info('Account deleted', { tableCount: tables.length + 3 });
+    return jsonResponse({ success: true }, CORS_HEADERS);
+
+  } catch (error: unknown) {
+    if (error instanceof HttpError) {
+      if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('delete-account error', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });

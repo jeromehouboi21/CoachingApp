@@ -94,15 +94,18 @@ function shouldShowReturnGreeting(briefing, profile) {
 }
 
 export function CoachScreen() {
-  const { user, session, profile, updateProfile } = useAuth()
+  const { user, session, profile, updateProfile, refreshProfile } = useAuth()
   const { updateStreak } = useStreak()
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight, loadConversation } = useChat(user?.id, memory, session)
+  // Sitzungen zählt der Server (consume_session in der chat-Function). Bei 429
+  // zeigt der Screen das Limit-Modal und lädt das Profil neu.
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight, loadConversation, isConversationCounted } = useChat(user?.id, memory, session, {
+    onSessionLimit: () => { setShowLimitModal(true); refreshProfile() },
+  })
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
-  const sessionCountedRef = useRef(false)
   // Refs für Navigation-State — sofort bei Mount gelesen, bevor React Router location.state verändern kann
   const entryContextRef = useRef(location.state?.entryContext ?? null)
   const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
@@ -141,7 +144,7 @@ export function CoachScreen() {
     // VARIANTE 0: Bestehendes Gespräch aus dem Verlauf fortsetzen.
     // Höchste Priorität — expliziter Klick des Nutzers auf ein konkretes Gespräch
     // darf nicht von Wellness-Check/Wiederkehr-Begrüßung überschrieben werden.
-    // Zählt bewusst nicht als neue Session (kein countSession()-Aufruf hier).
+    // Zählt nicht als neue Session (serverseitig über session_counted_at abgedeckt).
     if (resumeId) {
       logger.info('Resuming conversation from history', { conversationId: resumeId })
       setShowQuickReplies(false)
@@ -150,7 +153,6 @@ export function CoachScreen() {
           logger.warn('Resume failed, falling back to new conversation', { conversationId: resumeId })
           startNewConversation()
           setShowQuickReplies(true)
-          countSession()
         }
       })
       return
@@ -159,8 +161,7 @@ export function CoachScreen() {
     // VARIANTE 3: Wellness-Check (höchste Priorität unter den automatischen Eröffnungen)
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
-      startWellnessConversation(wc)
-      countSession()
+      startWellnessConversation(wc).then(() => refreshProfile())
       return
     }
 
@@ -168,7 +169,7 @@ export function CoachScreen() {
     const loadAndStart = async () => {
       try {
         const accessToken = session?.access_token ?? null
-        if (!accessToken) { startNewConversation(); countSession(); return }
+        if (!accessToken) { startNewConversation(); return }
 
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pre-session-briefing`,
@@ -189,12 +190,14 @@ export function CoachScreen() {
 
         // VARIANTE 4: Entry-Kontext (Priorität über Wiederkehr-Begrüßung)
         if (entryCtx && entryCtx.source !== 'direct') {
-          logger.info('Entry context start', { source: entryCtx.source, topic: entryCtx.topic })
+          logger.info('Entry context start', { source: entryCtx.source })
           await startEntryContextConversation(entryCtx, coachFile)
+          refreshProfile()
         // VARIANTE 1: Wiederkehr-Begrüßung mit offenem Faden
         } else if (briefing && shouldShowReturnGreeting(briefing, profile)) {
           logger.info('Return greeting triggered', { intensity: briefing.openThread?.intensity })
           await startBriefingConversation(briefing, coachFile)
+          refreshProfile()
           // last_return_greeting_at aktualisieren (fire-and-forget)
           supabase
             .from('profiles')
@@ -209,34 +212,26 @@ export function CoachScreen() {
       } catch {
         startNewConversation()
       }
-      countSession()
     }
 
     loadAndStart()
   }, [user, profile]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const countSession = () => {
-    if (!sessionCountedRef.current && !isPaidUser) {
-      sessionCountedRef.current = true
-      supabase
-        .from('profiles')
-        .update({ sessions_used_this_month: (profile?.sessions_used_this_month || 0) + 1 })
-        .eq('id', user.id)
-        .then(() => logger.debug('Session counter incremented'))
-    }
-  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isLoading])
 
   const handleSend = async (content, inputMode = 'text') => {
-    if (!isPaidUser && sessionsLeft <= 0) {
+    // UX-Vorprüfung: Ein bereits gezähltes (laufendes oder fortgesetztes) Gespräch
+    // darf weitergehen. Maßgeblich ist der Server (429 → onSessionLimit).
+    const alreadyCounted = isConversationCounted(conversationId)
+    if (!isPaidUser && sessionsLeft <= 0 && !alreadyCounted) {
       setShowLimitModal(true)
       return
     }
     setShowQuickReplies(false)
     await sendMessage(content, inputMode)
+    if (!alreadyCounted) refreshProfile() // Zähler nach der ersten Nachricht aktualisieren
     updateStreak(profile, updateProfile)
   }
 
@@ -271,7 +266,6 @@ export function CoachScreen() {
           body: JSON.stringify({
             messages: msgs.map(m => ({ role: m.role, content: m.content })),
             conversationId: convId,
-            userId: user?.id,
           }),
         }
       )
@@ -282,7 +276,7 @@ export function CoachScreen() {
       // erwünscht und wird serverseitig durch die Idempotenz-Prüfung sauber
       // gehandhabt, falls beide durchkommen.
     }
-  }, [user?.id])
+  }, [])
 
   // messagesRef/conversationIdRef: synchrone Spiegel von messages/conversationId.
   // Notwendig, weil Event-Handler und die Unmount-Cleanup-Funktion sonst einen

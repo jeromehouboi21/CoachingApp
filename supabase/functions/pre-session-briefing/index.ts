@@ -2,60 +2,45 @@
 // Aufgerufen wenn ein Nutzer den Coach Screen öffnet.
 // Gibt das Briefing-Objekt zurück — das Frontend entscheidet ob eine
 // Wiederkehr-Begrüßung gezeigt wird.
+// Sicherheitsmuster v2: Identität nur aus dem JWT, alle Abfragen mit user.id.
 
-import { createClient } from 'npm:@supabase/supabase-js';
+import { createLogger, describeError } from '../_shared/logger.ts';
+import { HttpError, requireUser, errorResponse, jsonResponse } from '../_shared/auth.ts';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 Deno.serve(async (req) => {
   // CORS preflight — MUSS als erstes stehen
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  let logger = createLogger('pre-session-briefing');
+
   try {
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
-    }
-
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
-    // User aus Token ermitteln
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
-    }
+    const { user, admin: supabase } = await requireUser(req);
+    logger = createLogger('pre-session-briefing', undefined, user.id);
 
     // 1. Letztes abgeschlossenes Gespräch laden (mit summary)
-    const { data: lastConv } = await supabase
+    const { data: lastConv, error: lastConvError } = await supabase
       .from('conversations')
       .select('id, created_at, summary, open_thread, open_thread_intensity, title')
       .eq('user_id', user.id)
       .not('summary', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
+    if (lastConvError) {
+      logger.error('last conversation fetch failed', { code: lastConvError.code });
+      throw new HttpError(500, 'briefing_failed');
+    }
 
     if (!lastConv) {
-      return new Response(JSON.stringify({ briefing: null }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
+      return jsonResponse({ briefing: null }, CORS_HEADERS);
     }
 
     // 2. Gesprächsanzahl gesamt
@@ -115,15 +100,15 @@ Deno.serve(async (req) => {
       resonanceMap: resonanceMap ?? undefined,
     };
 
-    return new Response(JSON.stringify({ briefing, coachFile }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
+    logger.info('Briefing built', { conversationCount: count ?? 0, entryCount: fileEntries?.length ?? 0, hasOpenThread: !!lastConv.open_thread });
+    return jsonResponse({ briefing, coachFile }, CORS_HEADERS);
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
+    if (error instanceof HttpError) {
+      if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('Unhandled error', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });

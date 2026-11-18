@@ -31,6 +31,7 @@ export function useAuth() {
       setSession(session ?? null)
 
       if (session?.user) {
+        setLoggerUserId(session.user.id)
         loadProfile(session.user.id)
 
         // Pending Invite Code einlösen (nach E-Mail-Bestätigung)
@@ -52,12 +53,12 @@ export function useAuth() {
             )
             const result = await res.json()
             if (result.ok) {
-              logger.info('Pending invite code redeemed', { code: pendingCode })
+              logger.info('Pending invite code redeemed')
             } else {
-              logger.warn('Pending invite code invalid', { code: pendingCode, error: result.error })
+              logger.warn('Pending invite code invalid', { status: res.status, reason: result.error ?? null })
             }
           } catch (err) {
-            logger.warn('Failed to redeem pending invite code', err)
+            logger.warn('Failed to redeem pending invite code', { errorType: err?.name ?? 'Error' })
           }
         }
       } else {
@@ -84,18 +85,21 @@ export function useAuth() {
   }
 
   async function signUp(email, password, displayName) {
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    // Der Name geht als Metadaten an Supabase Auth; der DB-Trigger handle_new_user
+    // legt damit die profiles-Zeile an. Kein Client-Insert/Upsert in profiles mehr
+    // (Security-Paket A, S-01: privilegierte Profilfelder sind server-only).
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { display_name: displayName || email.split('@')[0] } },
+    })
     if (error) {
-      logger.error('Sign in failed', error)
+      logger.error('Sign up failed', error)
       throw error
     }
     if (data.user) {
       setLoggerUserId(data.user.id)
-      logger.info('User signed in', { method: 'password' })
-      await supabase.from('profiles').upsert({
-        id: data.user.id,
-        display_name: displayName || email.split('@')[0],
-      })
+      logger.info('User signed up', { method: 'password' })
     }
     return data
   }
@@ -126,6 +130,13 @@ export function useAuth() {
     logger.info('User signed out')
   }
 
+  // Profil neu laden (z. B. nach einem neuen Gespräch oder einem 429 vom Server),
+  // damit Zähler und Limit-Modal den serverseitigen Stand zeigen.
+  async function refreshProfile() {
+    if (!user) return
+    await loadProfile(user.id)
+  }
+
   async function updateProfile(updates) {
     if (!user) return
     const { data, error } = await supabase
@@ -153,5 +164,5 @@ export function useAuth() {
     return 'valid'
   }
 
-  return { user, session, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile, checkConsent, checkCoachingAgreement }
+  return { user, session, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile, refreshProfile, checkConsent, checkCoachingAgreement }
 }

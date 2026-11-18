@@ -1,8 +1,19 @@
 // supabase/functions/rag-search/index.ts
 // Aufgerufen beim Start eines neuen Gesprächs mit der ersten Nutzer-Nachricht.
 // Gibt Top-3 semantisch ähnliche anonyme Erfahrungen zurück.
+// Sicherheitsmuster v2: nur für eingeloggte Nutzer, Query-Text max. 2.000 Zeichen.
 
-import { createClient } from 'npm:@supabase/supabase-js';
+import { createLogger, describeError } from '../_shared/logger.ts';
+import { HttpError, requireUser, readJsonBody, errorResponse, jsonResponse } from '../_shared/auth.ts';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const MAX_QUERY_CHARS = 2000;
+const MAX_BODY_BYTES = 16 * 1024;
 
 async function generateEmbedding(text: string, openaiKey: string): Promise<number[] | null> {
   try {
@@ -27,47 +38,42 @@ async function generateEmbedding(text: string, openaiKey: string): Promise<numbe
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
-      }
-    });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  let logger = createLogger('rag-search');
+
   try {
-    const { firstMessage } = await req.json();
+    const { user, admin } = await requireUser(req);
+    logger = createLogger('rag-search', undefined, user.id);
+
+    const body = await readJsonBody(req, MAX_BODY_BYTES);
+    const firstMessage = typeof body.firstMessage === 'string' ? body.firstMessage.trim().slice(0, MAX_QUERY_CHARS) : '';
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
 
     // Ohne OpenAI Key kein RAG — leeres Array zurückgeben
-    if (!openaiKey || !firstMessage?.trim()) {
-      return new Response(JSON.stringify({ experiences: [] }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+    if (!openaiKey || !firstMessage) {
+      return jsonResponse({ experiences: [] }, CORS_HEADERS);
     }
 
     const embedding = await generateEmbedding(firstMessage, openaiKey);
     if (!embedding) {
-      return new Response(JSON.stringify({ experiences: [] }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+      logger.warn('embedding failed');
+      return jsonResponse({ experiences: [] }, CORS_HEADERS);
     }
 
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
-    const { data: similar, error } = await supabase.rpc('match_experiences', {
+    const { data: similar, error } = await admin.rpc('match_experiences', {
       query_embedding: embedding,
       match_threshold: 0.78,
       match_count: 3,
     });
 
-    if (error || !similar?.length) {
-      return new Response(JSON.stringify({ experiences: [] }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+    if (error) {
+      logger.error('match_experiences failed', { code: error.code });
+      return jsonResponse({ experiences: [] }, CORS_HEADERS);
+    }
+    if (!similar?.length) {
+      return jsonResponse({ experiences: [] }, CORS_HEADERS);
     }
 
     // Formatiere für den System-Prompt (lesbare Strings)
@@ -78,15 +84,15 @@ Deno.serve(async (req) => {
       return parts.join(' | ');
     });
 
-    return new Response(JSON.stringify({ experiences }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    logger.info('RAG results', { count: experiences.length });
+    return jsonResponse({ experiences }, CORS_HEADERS);
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message, experiences: [] }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    if (error instanceof HttpError) {
+      if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('Unhandled error', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });

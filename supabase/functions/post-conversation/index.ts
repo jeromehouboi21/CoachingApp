@@ -4,9 +4,10 @@
 // + Coach-Selbstreflexion
 
 import Anthropic from 'npm:@anthropic-ai/sdk';
-import { createClient } from 'npm:@supabase/supabase-js';
-import { createLogger } from '../_shared/logger.ts';
-
+import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
+import {
+  HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
+} from '../_shared/auth.ts';
 
 const SESSION_NOTES_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Erstelle strukturierte Session-Notes für deine Coach-Akte.
@@ -232,7 +233,7 @@ async function generateEmbedding(text: string, openaiKey: string): Promise<numbe
   }
 }
 
-async function runPrompt(anthropic: Anthropic, prompt: string, conversationText: string, label: string, logger: ReturnType<typeof createLogger>): Promise<any> {
+async function runPrompt(anthropic: Anthropic, prompt: string, conversationText: string, label: string, logger: Logger): Promise<any> {
   let raw = '';
   try {
     const response = await anthropic.messages.create({
@@ -241,14 +242,23 @@ async function runPrompt(anthropic: Anthropic, prompt: string, conversationText:
       messages: [{ role: 'user', content: `${prompt}\n\nGespräch:\n${conversationText}` }],
     });
     raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
-    // Strip markdown code fences that models sometimes add despite "NUR JSON" instruction
-    const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  } catch (err) {
+    // API-Fehler: nur Typ/Code/Status, keine Meldungstexte
+    logger.error('runPrompt failed — returning empty result', { label, ...describeError(err) });
+    return {};
+  }
+  // Strip markdown code fences that models sometimes add despite "NUR JSON" instruction
+  const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+  try {
     return JSON.parse(text);
   } catch (err) {
+    // Log-Regel: Die JSON.parse-Meldung enthält Ausschnitte der Modellausgabe → nur Position + Länge.
+    const position = err instanceof Error ? Number(err.message.match(/position (\d+)/)?.[1]) : NaN;
     logger.error('runPrompt failed — returning empty result', {
       label,
-      error: err instanceof Error ? err.message : String(err),
-      rawResponsePreview: raw.slice(0, 300),
+      parseError: 'parse_failed',
+      outputLength: raw.length,
+      ...(Number.isFinite(position) ? { position } : {}),
     });
     return {};
   }
@@ -269,70 +279,81 @@ function clampScore(value: unknown, min = 1, max = 5): number | null {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Grenzen (Security-Paket A, S-03): Das Frontend schickt den kompletten Verlauf.
+// Verarbeitet werden höchstens die letzten MAX_PROCESSED_MESSAGES (Kostenbremse).
+const MAX_BODY_BYTES = 512 * 1024;
+const MAX_MESSAGE_ENTRIES = 1000;
+const MAX_CONTENT_CHARS = 8000;
+const MAX_PROCESSED_MESSAGES = 200;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  try {
-    const body = await req.json();
-    const { messages, conversationId, userId } = body;
-    const logger = createLogger('post-conversation', undefined, userId ?? undefined);
-    logger.info('Request body received', {
-      hasMessages: !!messages,
-      messageCount: messages?.length,
-      hasConversationId: !!conversationId,
-      hasUserId: !!userId,
-    });
+  let logger = createLogger('post-conversation');
 
-    if (!messages || messages.length < 3) {
-      logger.info('Skipped — too few messages', { messageCount: messages?.length ?? 0, conversationId });
-      return new Response(JSON.stringify({ ok: true, skipped: true }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
+  try {
+    // 1. Identität ausschließlich aus dem JWT — body.userId wird ignoriert
+    const { user, admin: supabase } = await requireUser(req);
+    const userId = user.id;
+    logger = createLogger('post-conversation', undefined, userId);
+
+    const body = await readJsonBody(req, MAX_BODY_BYTES);
+    if (body.userId !== undefined && body.userId !== userId) {
+      // Angriffssignal: jemand versucht, im Namen eines anderen Nutzers zu verarbeiten
+      logger.warn('userId mismatch');
     }
 
-    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+    // 2. Eigentum an der Konversation prüfen, bevor irgendetwas gelesen oder geschrieben wird
+    const conversationId = await assertConversationOwner(supabase, body.conversationId, userId);
+    const allMessages = validateMessages(body.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS });
+
+    logger.info('Request body received', { messageCount: allMessages.length, conversationId });
+
+    if (allMessages.length < 3) {
+      logger.info('Skipped — too few messages', { messageCount: allMessages.length, conversationId });
+      return jsonResponse({ ok: true, skipped: true }, CORS_HEADERS);
+    }
 
     // Idempotenz-Guard (v2.9, Abschnitt 6b.0): Client- und serverseitige Trigger
     // können sich überschneiden (mehrere Trigger-Pfade, Netzwerk-Retries, mehrere
     // Tabs). Ein Gespräch darf erneut verarbeitet werden, wenn es gewachsen ist —
     // aber nicht zweimal für denselben Nachrichtenstand.
-    if (conversationId) {
-      const { data: existing } = await supabase
-        .from('conversations')
-        .select('post_processed_message_count')
-        .eq('id', conversationId)
-        .maybeSingle();
-
-      if (existing && existing.post_processed_message_count >= messages.length) {
-        logger.info('Skipped — already processed for this message count', {
-          conversationId,
-          messageCount: messages.length,
-          alreadyProcessed: existing.post_processed_message_count,
-        });
-        return new Response(JSON.stringify({ ok: true, skipped: true, reason: 'idempotent' }), {
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-        });
-      }
+    const { data: existing, error: existingError } = await supabase
+      .from('conversations')
+      .select('post_processed_message_count')
+      .eq('id', conversationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (existingError) {
+      logger.error('idempotency check failed', { code: existingError.code, conversationId });
+      throw new HttpError(500, 'idempotency_check_failed');
     }
 
-    logger.info('Started', { conversationId, messageCount: messages.length });
+    if (existing && existing.post_processed_message_count >= allMessages.length) {
+      logger.info('Skipped — already processed for this message count', {
+        conversationId,
+        messageCount: allMessages.length,
+        alreadyProcessed: existing.post_processed_message_count,
+      });
+      return jsonResponse({ ok: true, skipped: true, reason: 'idempotent' }, CORS_HEADERS);
+    }
+
+    const messages = allMessages.slice(-MAX_PROCESSED_MESSAGES);
+    logger.info('Started', { conversationId, messageCount: allMessages.length, processedCount: messages.length });
+
+    const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
 
     const conversationText = messages
-      .map((m: any) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
+      .map((m) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
       .join('\n');
 
     // 1. Aktuelle Coach-Akte + Personenprofil + Resonanzkarte + Gesprächsanzahl laden
@@ -358,6 +379,10 @@ Deno.serve(async (req) => {
         .eq('user_id', userId),
     ]);
     const conversationCount = countResult.count ?? 0;
+
+    // IDs, die das Modell referenzieren darf: nur Einträge DIESES Nutzers (Schutz gegen
+    // Prompt-Injection, die fremde entry_ids/voice_ids in die Modellausgabe schmuggelt).
+    const ownEntryIds = new Set<string>((fileEntries ?? []).map((e: any) => e.id));
 
     const akteContext = fileEntries?.length
       ? fileEntries.map((e: any) => `[${e.id}] ${e.category}: ${e.label} (confidence: ${e.confidence}, status: ${e.status})`).join('\n')
@@ -391,10 +416,10 @@ Deno.serve(async (req) => {
     if (!sessionNotes.main_topic) {
       logger.warn('session_notes skipped — main_topic missing (runPrompt returned empty)', { conversationId });
     }
-    if (conversationId && sessionNotes.main_topic) {
+    if (sessionNotes.main_topic) {
       const { error: snError } = await supabase.from('session_notes').upsert({
         conversation_id: conversationId,
-        user_id: userId || null,
+        user_id: userId,
         main_topic: sessionNotes.main_topic,
         emotional_intensity: clampScore(sessionNotes.emotional_intensity),
         resistance_detected: sessionNotes.resistance_detected ?? false,
@@ -405,27 +430,29 @@ Deno.serve(async (req) => {
         next_session_rec: sessionNotes.next_session_rec ?? null,
         file_updates: fileUpdates.updates ?? [],
       });
-      if (snError) logger.error('session_notes write failed', { error: snError.message, conversationId });
+      if (snError) logger.error('session_notes write failed', { code: snError.code, conversationId });
 
-      await supabase
+      const { error: convUpdateError } = await supabase
         .from('conversations')
         .update({
           summary: sessionNotes.main_topic,
           open_thread: sessionNotes.where_we_left_off ?? null,
           open_thread_intensity: deriveIntensity(sessionNotes),
           post_processed_at: new Date().toISOString(),
-          post_processed_message_count: messages.length,
+          post_processed_message_count: allMessages.length,
         })
-        .eq('id', conversationId);
+        .eq('id', conversationId)
+        .eq('user_id', userId);
+      if (convUpdateError) logger.error('conversations post-processing update failed', { code: convUpdateError.code, conversationId });
     }
 
     // 4. Coach-Akte aktualisieren
-    if (userId && Array.isArray(fileUpdates.updates)) {
+    if (Array.isArray(fileUpdates.updates)) {
       for (const update of fileUpdates.updates) {
         if (update.action === 'add' && update.label && update.category) {
           const { error: addError } = await supabase.from('coach_file_entries').insert({
             user_id: userId,
-            source_conversation_id: conversationId || null,
+            source_conversation_id: conversationId,
             category: update.category,
             label: update.label,
             description: update.description ?? null,
@@ -434,58 +461,51 @@ Deno.serve(async (req) => {
             linked_value: update.linked_value ?? null,
           });
           if (addError) {
-            logger.error('coach_file_entries insert failed', { error: addError.message, conversationId, label: update.label });
+            logger.error('coach_file_entries insert failed', { code: addError.code, conversationId, category: update.category });
           } else {
-            logger.info('coach_file_entries entry added', { conversationId, label: update.label, category: update.category });
+            logger.info('coach_file_entries entry added', { conversationId, category: update.category });
           }
-        } else if (update.action === 'update' && update.entry_id) {
+        } else if ((update.action === 'update' || update.action === 'resolve') && update.entry_id) {
+          if (!ownEntryIds.has(update.entry_id)) {
+            logger.warn('coach_file_entries update skipped — entry_id not owned by user', { conversationId, action: update.action });
+            continue;
+          }
           const { data: entry, error: readError } = await supabase
             .from('coach_file_entries')
             .select('history')
             .eq('id', update.entry_id)
+            .eq('user_id', userId)
             .single();
           if (readError) {
-            logger.error('coach_file_entries read (for update) failed', { error: readError.message, conversationId, entryId: update.entry_id });
+            logger.error(`coach_file_entries read (for ${update.action}) failed`, { code: readError.code, conversationId, entryId: update.entry_id });
           }
 
-          const { error: updateError } = await supabase.from('coach_file_entries').update({
-            confidence: update.new_confidence ?? undefined,
-            status: update.new_status ?? undefined,
-            last_updated: new Date().toISOString(),
-            history: [...(entry?.history ?? []), {
-              date: new Date().toISOString().split('T')[0],
-              note: update.note,
-              conversation_id: conversationId,
-            }],
-          }).eq('id', update.entry_id);
-          if (updateError) {
-            logger.error('coach_file_entries update failed', { error: updateError.message, conversationId, entryId: update.entry_id });
-          } else {
-            logger.info('coach_file_entries entry updated', { conversationId, entryId: update.entry_id });
-          }
-        } else if (update.action === 'resolve' && update.entry_id) {
-          const { data: entry, error: readError } = await supabase
-            .from('coach_file_entries')
-            .select('history')
+          const historyEntry = {
+            date: new Date().toISOString().split('T')[0],
+            note: update.note,
+            conversation_id: conversationId,
+          };
+          const patch = update.action === 'update'
+            ? {
+                confidence: update.new_confidence ?? undefined,
+                status: update.new_status ?? undefined,
+                last_updated: new Date().toISOString(),
+                history: [...(entry?.history ?? []), historyEntry],
+              }
+            : {
+                status: 'resolved',
+                last_updated: new Date().toISOString(),
+                history: [...(entry?.history ?? []), historyEntry],
+              };
+
+          const { error: writeError } = await supabase.from('coach_file_entries')
+            .update(patch)
             .eq('id', update.entry_id)
-            .single();
-          if (readError) {
-            logger.error('coach_file_entries read (for resolve) failed', { error: readError.message, conversationId, entryId: update.entry_id });
-          }
-
-          const { error: resolveError } = await supabase.from('coach_file_entries').update({
-            status: 'resolved',
-            last_updated: new Date().toISOString(),
-            history: [...(entry?.history ?? []), {
-              date: new Date().toISOString().split('T')[0],
-              note: update.note,
-              conversation_id: conversationId,
-            }],
-          }).eq('id', update.entry_id);
-          if (resolveError) {
-            logger.error('coach_file_entries resolve failed', { error: resolveError.message, conversationId, entryId: update.entry_id });
+            .eq('user_id', userId);
+          if (writeError) {
+            logger.error(`coach_file_entries ${update.action} failed`, { code: writeError.code, conversationId, entryId: update.entry_id });
           } else {
-            logger.info('coach_file_entries entry resolved', { conversationId, entryId: update.entry_id });
+            logger.info(`coach_file_entries entry ${update.action === 'update' ? 'updated' : 'resolved'}`, { conversationId, entryId: update.entry_id });
           }
         }
       }
@@ -494,7 +514,7 @@ Deno.serve(async (req) => {
     // 4b. Stimmen-Kandidaten erkennen ("Innere Stimmen")
     // Nur prüfen, wenn mind. 3 unverknüpfte, aktive Coach-Akte-Einträge mit
     // confidence >= 3 vorliegen — sonst zu wenig Grundlage für ein Cluster.
-    if (userId) {
+    {
       const unlinkedEntries = (fileEntries ?? []).filter((e: any) => !e.voice_id && e.confidence >= 3);
 
       if (unlinkedEntries.length >= 3) {
@@ -503,6 +523,8 @@ Deno.serve(async (req) => {
           .select('id, name, status, description')
           .eq('user_id', userId)
           .in('status', ['named', 'candidate']);
+        const ownVoiceIds = new Set<string>((existingVoices ?? []).map((v: any) => v.id));
+        const unlinkedIds = new Set<string>(unlinkedEntries.map((e: any) => e.id));
 
         const existingVoicesContext = existingVoices?.length
           ? existingVoices.map((v: any) =>
@@ -518,19 +540,34 @@ Deno.serve(async (req) => {
 
         const voiceCandidate = await runPrompt(anthropic, voiceClusterPrompt, conversationText, 'voice_cluster', logger);
 
-        if (voiceCandidate.existing_voice_id && voiceCandidate.cluster_entry_ids?.length) {
+        // Nur eigene, unverknüpfte Einträge und eigene Stimmen übernehmen
+        const clusterIds: string[] = Array.isArray(voiceCandidate.cluster_entry_ids)
+          ? voiceCandidate.cluster_entry_ids.filter((id: unknown) => typeof id === 'string' && unlinkedIds.has(id))
+          : [];
+        const existingVoiceId: string | null =
+          typeof voiceCandidate.existing_voice_id === 'string' && ownVoiceIds.has(voiceCandidate.existing_voice_id)
+            ? voiceCandidate.existing_voice_id
+            : null;
+        if (voiceCandidate.existing_voice_id && !existingVoiceId) {
+          logger.warn('voice_cluster: existing_voice_id not owned by user — ignored', { conversationId });
+        }
+
+        if (existingVoiceId && clusterIds.length) {
           const { error: linkError } = await supabase.from('coach_file_entries')
-            .update({ voice_id: voiceCandidate.existing_voice_id })
-            .in('id', voiceCandidate.cluster_entry_ids);
+            .update({ voice_id: existingVoiceId })
+            .in('id', clusterIds)
+            .eq('user_id', userId);
           if (linkError) {
-            logger.error('inner_voices link to existing voice failed', { error: linkError.message, conversationId });
+            logger.error('inner_voices link to existing voice failed', { code: linkError.code, conversationId });
           } else {
-            await supabase.from('inner_voices')
+            const { error: touchError } = await supabase.from('inner_voices')
               .update({ last_active_at: new Date().toISOString() })
-              .eq('id', voiceCandidate.existing_voice_id);
-            logger.info('inner_voices entries linked to existing voice', { conversationId, voiceId: voiceCandidate.existing_voice_id, entryCount: voiceCandidate.cluster_entry_ids.length });
+              .eq('id', existingVoiceId)
+              .eq('user_id', userId);
+            if (touchError) logger.error('inner_voices last_active_at update failed', { code: touchError.code, voiceId: existingVoiceId });
+            logger.info('inner_voices entries linked to existing voice', { conversationId, voiceId: existingVoiceId, entryCount: clusterIds.length });
           }
-        } else if (voiceCandidate.cluster_entry_ids?.length >= 3) {
+        } else if (!existingVoiceId && clusterIds.length >= 3) {
           const { data: newVoice, error: voiceError } = await supabase
             .from('inner_voices')
             .insert({
@@ -543,25 +580,24 @@ Deno.serve(async (req) => {
             .single();
 
           if (voiceError) {
-            logger.error('inner_voices insert failed', {
-              error: voiceError.message, conversationId, userId,
-              clusterEntryIds: voiceCandidate.cluster_entry_ids,
-            });
+            logger.error('inner_voices insert failed', { code: voiceError.code, conversationId, clusterSize: clusterIds.length });
           } else {
-            const { error: linkError, count } = await supabase.from('coach_file_entries')
+            const { data: linkedRows, error: linkError } = await supabase.from('coach_file_entries')
               .update({ voice_id: newVoice.id })
-              .in('id', voiceCandidate.cluster_entry_ids)
-              .select('id', { count: 'exact' });
+              .in('id', clusterIds)
+              .eq('user_id', userId)
+              .select('id');
+            const count = linkedRows?.length ?? 0;
 
             if (linkError || !count) {
               logger.error('inner_voices link to new voice failed — rolling back orphaned voice row', {
-                error: linkError?.message ?? 'zero rows linked',
-                conversationId, voiceId: newVoice.id,
-                clusterEntryIds: voiceCandidate.cluster_entry_ids,
+                code: linkError?.code ?? 'zero_rows_linked',
+                conversationId, voiceId: newVoice.id, clusterSize: clusterIds.length,
               });
               // Keine verwaiste Stimmen-Zeile ohne verknüpfte Einträge stehen lassen —
               // sonst sammeln sich unsichtbare "Geister-Kandidaten" in der DB an.
-              await supabase.from('inner_voices').delete().eq('id', newVoice.id);
+              const { error: rollbackError } = await supabase.from('inner_voices').delete().eq('id', newVoice.id).eq('user_id', userId);
+              if (rollbackError) logger.error('inner_voices rollback failed', { code: rollbackError.code, voiceId: newVoice.id });
             } else {
               logger.info('inner_voices candidate created', { conversationId, voiceId: newVoice.id, entryCount: count });
             }
@@ -571,9 +607,8 @@ Deno.serve(async (req) => {
     }
 
     // 5. Personenprofil aktualisieren
-    if (userId && Object.keys(profileUpdates).length > 0) {
-      const patch: any = { user_id: userId, last_updated: new Date().toISOString() };
-      if (conversationId) patch.last_enriched_by = conversationId;
+    if (Object.keys(profileUpdates).length > 0) {
+      const patch: any = { user_id: userId, last_updated: new Date().toISOString(), last_enriched_by: conversationId };
       if (profileUpdates.occupation)          patch.occupation = profileUpdates.occupation;
       if (profileUpdates.relationship_status) patch.relationship_status = profileUpdates.relationship_status;
       if (profileUpdates.family_situation)    patch.family_situation = profileUpdates.family_situation;
@@ -581,23 +616,23 @@ Deno.serve(async (req) => {
       if (profileUpdates.current_focus)       patch.current_focus = profileUpdates.current_focus;
 
       if (profileUpdates.known_values_add?.length) {
-        const existing = currentProfile?.known_values ?? [];
-        patch.known_values = [...new Set([...existing, ...profileUpdates.known_values_add])];
+        const existingValues = currentProfile?.known_values ?? [];
+        patch.known_values = [...new Set([...existingValues, ...profileUpdates.known_values_add])];
       }
       if (profileUpdates.known_stressors_add?.length) {
-        const existing = currentProfile?.known_stressors ?? [];
-        patch.known_stressors = [...new Set([...existing, ...profileUpdates.known_stressors_add])];
+        const existingStressors = currentProfile?.known_stressors ?? [];
+        patch.known_stressors = [...new Set([...existingStressors, ...profileUpdates.known_stressors_add])];
       }
       if (profileUpdates.known_resources_add?.length) {
-        const existing = currentProfile?.known_resources ?? [];
-        patch.known_resources = [...new Set([...existing, ...profileUpdates.known_resources_add])];
+        const existingResources = currentProfile?.known_resources ?? [];
+        patch.known_resources = [...new Set([...existingResources, ...profileUpdates.known_resources_add])];
       }
 
       const { error: profileError } = await supabase.from('coachee_profile').upsert(patch, { onConflict: 'user_id' });
       if (profileError) {
-        logger.error('coachee_profile upsert failed', { error: profileError.message, conversationId, userId });
+        logger.error('coachee_profile upsert failed', { code: profileError.code, conversationId });
       } else {
-        logger.info('coachee_profile updated', { conversationId, userId, fields: Object.keys(patch) });
+        logger.info('coachee_profile updated', { conversationId, fields: Object.keys(patch) });
       }
     }
 
@@ -621,14 +656,14 @@ Deno.serve(async (req) => {
       if (embedding) patternRow.embedding = JSON.stringify(embedding);
       const { error: patternError } = await supabase.from('experience_patterns').insert(patternRow);
       if (patternError) {
-        logger.error('experience_patterns insert failed', { error: patternError.message, conversationId });
+        logger.error('experience_patterns insert failed', { code: patternError.code, conversationId });
       } else {
-        logger.info('experience_patterns entry saved', { conversationId, pattern: patternRow.pattern });
+        logger.info('experience_patterns entry saved', { conversationId, hasEmbedding: !!embedding });
       }
     }
 
     // 7. Muster-Referenzen speichern (für "Verstehen"-Modul)
-    if (userId && conversationId && Array.isArray(anonSummary.pattern_references)) {
+    if (Array.isArray(anonSummary.pattern_references)) {
       const refs = anonSummary.pattern_references
         .filter((r: any) => r.pattern_key && r.pattern_label)
         .map((r: any) => ({
@@ -641,7 +676,7 @@ Deno.serve(async (req) => {
       if (refs.length) {
         const { error: refsError } = await supabase.from('pattern_references').insert(refs);
         if (refsError) {
-          logger.error('pattern_references insert failed', { error: refsError.message, conversationId, count: refs.length });
+          logger.error('pattern_references insert failed', { code: refsError.code, conversationId, count: refs.length });
         } else {
           logger.info('pattern_references saved', { conversationId, count: refs.length });
         }
@@ -649,7 +684,7 @@ Deno.serve(async (req) => {
     }
 
     // 7b. Automatische Insights speichern
-    if (userId && conversationId && Array.isArray(anonSummary.insights)) {
+    if (Array.isArray(anonSummary.insights)) {
       const insightRows = anonSummary.insights
         .filter((i: any) => i.content && i.category)
         .map((i: any) => ({
@@ -662,7 +697,7 @@ Deno.serve(async (req) => {
       if (insightRows.length) {
         const { error: insightError } = await supabase.from('insights').insert(insightRows);
         if (insightError) {
-          logger.error('insights insert failed', { error: insightError.message, conversationId, count: insightRows.length });
+          logger.error('insights insert failed', { code: insightError.code, conversationId, count: insightRows.length });
         } else {
           logger.info('Insights saved', { conversationId, count: insightRows.length });
         }
@@ -672,7 +707,7 @@ Deno.serve(async (req) => {
     // 8. Coach-Selbstreflexion speichern
     if (reflection.what_worked || reflection.improvement_note) {
       const { error: reflectionError } = await supabase.from('coach_reflections').insert({
-        conversation_id: conversationId || null,
+        conversation_id: conversationId,
         was_helpful: reflection.was_helpful ?? null,
         what_worked: reflection.what_worked ?? null,
         what_missed: reflection.what_missed ?? null,
@@ -681,31 +716,31 @@ Deno.serve(async (req) => {
         improvement_note: reflection.improvement_note ?? null,
       });
       if (reflectionError) {
-        logger.error('coach_reflections insert failed', { error: reflectionError.message, conversationId });
+        logger.error('coach_reflections insert failed', { code: reflectionError.code, conversationId });
       } else {
         logger.info('coach_reflections saved', { conversationId });
       }
     }
 
     // 9. Resonanzkarte aktualisieren (Idee 05 — ab 3. Gespräch)
-    if (userId && resonanceUpdate && Object.keys(resonanceUpdate).length > 0) {
+    if (resonanceUpdate && Object.keys(resonanceUpdate).length > 0) {
       const patch: any = { user_id: userId, last_updated: new Date().toISOString() };
 
       if (resonanceUpdate.opening_patterns_add?.length) {
-        const existing = currentResonanceMap?.opening_patterns ?? [];
-        patch.opening_patterns = [...new Set([...existing, ...resonanceUpdate.opening_patterns_add])];
+        const existingOpening = currentResonanceMap?.opening_patterns ?? [];
+        patch.opening_patterns = [...new Set([...existingOpening, ...resonanceUpdate.opening_patterns_add])];
       }
       if (resonanceUpdate.closing_patterns_add?.length) {
-        const existing = currentResonanceMap?.closing_patterns ?? [];
-        patch.closing_patterns = [...new Set([...existing, ...resonanceUpdate.closing_patterns_add])];
+        const existingClosing = currentResonanceMap?.closing_patterns ?? [];
+        patch.closing_patterns = [...new Set([...existingClosing, ...resonanceUpdate.closing_patterns_add])];
       }
       if (resonanceUpdate.effective_styles_add?.length) {
-        const existing = currentResonanceMap?.effective_styles ?? [];
-        patch.effective_styles = [...new Set([...existing, ...resonanceUpdate.effective_styles_add])];
+        const existingStyles = currentResonanceMap?.effective_styles ?? [];
+        patch.effective_styles = [...new Set([...existingStyles, ...resonanceUpdate.effective_styles_add])];
       }
       if (resonanceUpdate.resonant_metaphors_add?.length) {
-        const existing = currentResonanceMap?.resonant_metaphors ?? [];
-        patch.resonant_metaphors = [...new Set([...existing, ...resonanceUpdate.resonant_metaphors_add])];
+        const existingMetaphors = currentResonanceMap?.resonant_metaphors ?? [];
+        patch.resonant_metaphors = [...new Set([...existingMetaphors, ...resonanceUpdate.resonant_metaphors_add])];
       }
       if (resonanceUpdate.preferred_pace && resonanceUpdate.preferred_pace !== 'null') {
         patch.preferred_pace = resonanceUpdate.preferred_pace;
@@ -713,25 +748,22 @@ Deno.serve(async (req) => {
 
       const { error: resonanceError } = await supabase.from('resonance_map').upsert(patch, { onConflict: 'user_id' });
       if (resonanceError) {
-        logger.error('resonance_map upsert failed', { error: resonanceError.message, conversationId, userId });
+        logger.error('resonance_map upsert failed', { code: resonanceError.code, conversationId });
       } else {
-        logger.info('resonance_map updated', { conversationId, userId, fields: Object.keys(patch) });
+        logger.info('resonance_map updated', { conversationId, fields: Object.keys(patch) });
       }
     }
 
     logger.info('Completed', { conversationId });
-
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
+    return jsonResponse({ ok: true }, CORS_HEADERS);
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    const errorLogger = createLogger('post-conversation');
-    errorLogger.error('Failed', { error: message });
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
+    if (error instanceof HttpError) {
+      if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      else logger.warn('Request rejected', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('Failed', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });

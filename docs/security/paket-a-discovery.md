@@ -286,6 +286,16 @@ Bekannte Schlüssel mit Inhalten in `app_logs.metadata`: `rawResponsePreview`, `
 
 Bestätigt dicht: RLS-Trennung aller übrigen Tabellen (Tests 1, 2, 5, 6), anon ohne Lesezugriff (13: überall 401), Admin-Functions (10), alle übrigen Functions ohne Token (15).
 
+## 7a. Entscheidungen (18.11.2026)
+
+| Frage | Entscheidung |
+|---|---|
+| Zählzeitpunkt | Erster `chat`-Aufruf im Gesprächsmodus pro Konversation (Standard-Start zählt bei der ersten Nachricht; „Neues Gespräch“ zählt mit; Fortsetzen nicht) |
+| `conversationId` im Gesprächsmodus | Pflicht (sonst 400) |
+| Bei erreichtem Limit weiter erlaubt | Howto-FAQ, Gedächtnis-Extraktion **und Krisenantwort** (Krisenerkennung läuft jetzt vor der Limit-Prüfung) |
+| Monats-Reset | Cron-Job ab 01.12.2026 (Migration 023), kein sofortiger Reset |
+| `.env.local` / ZIPs aus dem Repo | noch offen |
+
 ## 7. Offene Fragen an Jerome (vor Phase 2)
 
 1. **Zählzeitpunkt.** Serverseitig kann `chat` nur zählen, wenn es aufgerufen wird. Vorschlag: Eine Konversation zählt beim **ersten `chat`-Aufruf mit dieser `conversationId`**. Folgen:

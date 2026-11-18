@@ -1,12 +1,10 @@
 // supabase/functions/admin-feedback/index.ts
 // Admin-geschützte Feedback-Übersicht (inkl. Beta-Feedback aus dem Profil-Modal).
-// Zwei-Client-Muster wie in admin-users: ein Client nur für die Identitätsprüfung
-// mit dem Nutzer-Token, ein echter Service-Role-Client ohne Nutzer-Token für
-// alle eigentlichen Abfragen — sonst läuft die Anfrage versehentlich unter der
-// "authenticated"-Rolle statt service_role und RLS lässt nur eigene Zeilen durch.
+// Sicherheitsmuster v2: requireUser + requireAdmin; alle Abfragen über den echten
+// service_role-Client (ctx.admin, ohne Nutzer-Token).
 
-import { createClient } from 'npm:@supabase/supabase-js';
-import { createLogger } from '../_shared/logger.ts';
+import { createLogger, describeError } from '../_shared/logger.ts';
+import { HttpError, requireUser, requireAdmin, errorResponse, jsonResponse } from '../_shared/auth.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -19,71 +17,36 @@ Deno.serve(async (req) => {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  const logger = createLogger('admin-feedback');
-
-  const authHeader = req.headers.get('Authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
-  }
-
-  // Client 1: NUR zur Identitätsprüfung, mit dem Nutzer-Token.
-  const callerClient = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } }
-  );
-  const { data: { user: caller }, error: authError } = await callerClient.auth.getUser(token);
-  if (authError || !caller) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
-  }
-
-  // Client 2: echter Service-Role-Client, OHNE Nutzer-Token — umgeht RLS wirklich.
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    { auth: { persistSession: false } }
-  );
-
-  const { data: callerProfile } = await supabase
-    .from('profiles')
-    .select('is_admin')
-    .eq('id', caller.id)
-    .single();
-
-  if (!callerProfile?.is_admin) {
-    logger.warn('Forbidden — non-admin attempted admin-feedback access', { userId: caller.id });
-    return new Response(JSON.stringify({ error: 'Forbidden' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
-  }
+  let logger = createLogger('admin-feedback');
 
   try {
+    const ctx = await requireUser(req);
+    logger = createLogger('admin-feedback', undefined, ctx.user.id);
+    try {
+      await requireAdmin(ctx);
+    } catch (e) {
+      if (e instanceof HttpError && e.status === 403) logger.warn('Forbidden — non-admin attempted admin-feedback access');
+      throw e;
+    }
+    const supabase = ctx.admin;
+
     const { data: feedback, error: feedbackError } = await supabase
       .from('user_feedback')
       .select('id, user_id, feedback_type, content, context, created_at')
       .order('created_at', { ascending: false });
 
     if (feedbackError) {
-      logger.error('feedback list failed', { error: feedbackError.message });
-      return new Response(JSON.stringify({ error: feedbackError.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-      });
+      logger.error('feedback list failed', { code: feedbackError.code });
+      throw new HttpError(500, 'feedback_list_failed');
     }
 
     // Profile + E-Mail nachladen und zusammenführen (gleiches Muster wie admin-users)
-    const { data: profiles } = await supabase
+    const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
       .select('id, display_name');
-    const { data: authUsers } = await supabase.auth.admin.listUsers();
+    if (profilesError) logger.error('profiles fetch failed', { code: profilesError.code });
+    const { data: authUsers, error: authListError } = await supabase.auth.admin.listUsers();
+    if (authListError) logger.error('auth.admin.listUsers failed', describeError(authListError));
 
     const nameById = new Map((profiles ?? []).map((p: any) => [p.id, p.display_name]));
     const emailById = new Map((authUsers?.users ?? []).map((u: any) => [u.id, u.email]));
@@ -94,17 +57,15 @@ Deno.serve(async (req) => {
       email: f.user_id ? (emailById.get(f.user_id) ?? null) : null,
     }));
 
-    logger.info('Admin fetched feedback list', { adminId: caller.id, count: merged.length });
-    return new Response(JSON.stringify({ feedback: merged }), {
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+    logger.info('Admin fetched feedback list', { count: merged.length });
+    return jsonResponse({ feedback: merged }, CORS_HEADERS);
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('admin-feedback failed', { error: message });
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
-    });
+    if (error instanceof HttpError) {
+      if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('admin-feedback failed', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });

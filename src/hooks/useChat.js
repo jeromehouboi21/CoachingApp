@@ -32,7 +32,17 @@ async function fetchRagContext(firstMessage, accessToken) {
   }
 }
 
-export function useChat(userId, memory, session) {
+// options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 antwortet
+// (Monatslimit erreicht). Die Zählung selbst passiert serverseitig (consume_session).
+export function useChat(userId, memory, session, options = {}) {
+  const onSessionLimitRef = useRef(options.onSessionLimit)
+  onSessionLimitRef.current = options.onSessionLimit
+  // Konversationen, für die der Server bereits eine Sitzung gezählt hat (oder die
+  // aus dem Verlauf fortgesetzt werden). Für die clientseitige UX-Prüfung des Limits.
+  const countedConvIdsRef = useRef(new Set())
+  // Promise auf die ID der gerade angelegten Konversation (Standard-Start), damit
+  // eine schnell getippte erste Nachricht nicht ohne conversationId rausgeht.
+  const pendingConvRef = useRef(null)
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [conversationId, setConversationId] = useState(null)
@@ -48,6 +58,7 @@ export function useChat(userId, memory, session) {
   const startWellnessConversation = useCallback(async (wellnessCheck, coachFile = null) => {
     setMessages([])
     setConversationId(null)
+    pendingConvRef.current = null
     ragContextRef.current = null
     coachFileRef.current = coachFile
     isFirstUserMessageRef.current = false
@@ -120,13 +131,17 @@ export function useChat(userId, memory, session) {
         }
       )
 
-      if (!response.ok) {
-        let errorBody = response.statusText
-        try { errorBody = await response.text() } catch {}
-        console.error('[useChat] Wellness API request failed', { requestId, status: response.status, body: errorBody })
-        logger.error('API request failed', { requestId, status: response.status, error: errorBody })
-        throw new Error(`API error ${response.status}: ${errorBody}`)
+      if (response.status === 429) {
+        logger.warn('Session limit reached (server)', { requestId })
+        setMessages([])
+        onSessionLimitRef.current?.()
+        return
       }
+      if (!response.ok) {
+        logger.error('API request failed', { requestId, status: response.status })
+        throw new Error(`API error ${response.status}`)
+      }
+      if (convId) countedConvIdsRef.current.add(convId)
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -175,7 +190,6 @@ export function useChat(userId, memory, session) {
 
       logger.debug('WellnessCheck state cleared')
     } catch (err) {
-      console.error('[useChat] startWellnessConversation catch:', err)
       logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
       setMessages([{
         role: 'assistant',
@@ -193,6 +207,7 @@ export function useChat(userId, memory, session) {
   const startBriefingConversation = useCallback(async (briefing, coachFile = null) => {
     setMessages([])
     setConversationId(null)
+    pendingConvRef.current = null
     ragContextRef.current = null
     briefingRef.current = briefing
     coachFileRef.current = coachFile
@@ -244,7 +259,14 @@ export function useChat(userId, memory, session) {
         }
       )
 
+      if (response.status === 429) {
+        logger.warn('Session limit reached (server)', { requestId })
+        setMessages([])
+        onSessionLimitRef.current?.()
+        return
+      }
       if (!response.ok) throw new Error(`API error ${response.status}`)
+      if (convId) countedConvIdsRef.current.add(convId)
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -277,7 +299,7 @@ export function useChat(userId, memory, session) {
         })
       }
     } catch (err) {
-      console.error('[useChat] startBriefingConversation catch:', err)
+      logger.error('Briefing start failed', err instanceof Error ? err : new Error(String(err)))
       setMessages([{
         role: 'assistant',
         content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
@@ -294,6 +316,7 @@ export function useChat(userId, memory, session) {
   const startEntryContextConversation = useCallback(async (entryContext, coachFile = null) => {
     setMessages([])
     setConversationId(null)
+    pendingConvRef.current = null
     ragContextRef.current = null
     coachFileRef.current = coachFile
     isFirstUserMessageRef.current = false
@@ -341,7 +364,14 @@ export function useChat(userId, memory, session) {
         }
       )
 
+      if (response.status === 429) {
+        logger.warn('Session limit reached (server)', { requestId })
+        setMessages([])
+        onSessionLimitRef.current?.()
+        return
+      }
       if (!response.ok) throw new Error(`API error ${response.status}`)
+      if (convId) countedConvIdsRef.current.add(convId)
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -374,7 +404,7 @@ export function useChat(userId, memory, session) {
         })
       }
     } catch (err) {
-      console.error('[useChat] startEntryContextConversation catch:', err)
+      logger.error('Entry-context start failed', err instanceof Error ? err : new Error(String(err)))
       setMessages([{
         role: 'assistant',
         content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
@@ -408,6 +438,8 @@ export function useChat(userId, memory, session) {
 
     setMessages(data.map(m => ({ role: m.role, content: m.content, id: m.id, messageType: m.message_type })))
     setConversationId(convId)
+    pendingConvRef.current = null
+    countedConvIdsRef.current.add(convId) // bereits gezählt (serverseitig über session_counted_at)
     ragContextRef.current = null
     briefingRef.current = null
     coachFileRef.current = null
@@ -433,20 +465,29 @@ export function useChat(userId, memory, session) {
     isFirstUserMessageRef.current = true
 
     if (userId) {
-      const { data: conv } = await supabase
-        .from('conversations')
-        .insert({ user_id: userId, title: 'Neues Gespräch' })
-        .select()
-        .single()
-      if (conv) {
+      const createConversation = async () => {
+        const { data: conv, error } = await supabase
+          .from('conversations')
+          .insert({ user_id: userId, title: 'Neues Gespräch' })
+          .select()
+          .single()
+        if (error || !conv) {
+          logger.error('Conversation insert failed', { code: error?.code ?? null })
+          return null
+        }
         setConversationId(conv.id)
         logger.info('Conversation started', { conversationId: conv.id, hasWellnessCheck: false })
-        await supabase.from('messages').insert({
+        const { error: msgError } = await supabase.from('messages').insert({
           conversation_id: conv.id,
           role: 'assistant',
           content: opening,
         })
+        if (msgError) logger.error('Opening message insert failed', { code: msgError.code ?? null, conversationId: conv.id })
+        return conv.id
       }
+      const pending = createConversation()
+      pendingConvRef.current = pending
+      await pending
     }
 
     return firstMessage
@@ -461,20 +502,23 @@ export function useChat(userId, memory, session) {
     setIsLoading(true)
 
     const messageIndex = updatedMessages.filter(m => m.role === 'user').length
-    logger.info('Message sent', { conversationId, messageIndex })
+    // Falls die Konversation gerade noch angelegt wird: auf die ID warten
+    const activeConvId = conversationId ?? (pendingConvRef.current ? await pendingConvRef.current : null)
+    logger.info('Message sent', { conversationId: activeConvId, messageIndex })
 
-    if (userId && conversationId) {
-      await supabase.from('messages').insert({
-        conversation_id: conversationId,
+    if (userId && activeConvId) {
+      const { error: insertError } = await supabase.from('messages').insert({
+        conversation_id: activeConvId,
         role: 'user',
         content,
         input_mode: inputMode,
       })
+      if (insertError) logger.error('User message insert failed', { code: insertError.code ?? null, conversationId: activeConvId })
     }
 
     const accessToken = session?.access_token ?? null
     if (!accessToken) {
-      logger.error('No access token available — aborting sendMessage', { conversationId })
+      logger.error('No access token available — aborting sendMessage', { conversationId: activeConvId })
       setIsLoading(false)
       setMessages(prev => {
         const updated = [...prev]
@@ -520,7 +564,7 @@ export function useChat(userId, memory, session) {
           },
           body: JSON.stringify({
             messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
-            conversationId,
+            conversationId: activeConvId,
             memory: memory || null,
             ragContext: ragContextRef.current || null,
             briefing: briefingRef.current || null,
@@ -530,13 +574,18 @@ export function useChat(userId, memory, session) {
         }
       )
 
-      if (!response.ok) {
-        let errorBody = response.statusText
-        try { errorBody = await response.text() } catch {}
-        console.error('[useChat] API request failed', { requestId, status: response.status, body: errorBody })
-        logger.error('API request failed', { requestId, status: response.status, error: errorBody })
-        throw new Error(`API error ${response.status}: ${errorBody}`)
+      if (response.status === 429) {
+        logger.warn('Session limit reached (server)', { requestId, conversationId: activeConvId })
+        // Platzhalter-Bubble entfernen, Limit-Modal zeigen
+        setMessages(prev => prev.slice(0, -1))
+        onSessionLimitRef.current?.()
+        return
       }
+      if (!response.ok) {
+        logger.error('API request failed', { requestId, status: response.status })
+        throw new Error(`API error ${response.status}`)
+      }
+      if (activeConvId) countedConvIdsRef.current.add(activeConvId)
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
@@ -583,21 +632,21 @@ export function useChat(userId, memory, session) {
       }
 
       if (!fullContent) {
-        logger.warn('Stream completed but response was empty', { requestId, conversationId })
+        logger.warn('Stream completed but response was empty', { requestId, conversationId: activeConvId })
       } else {
         logger.info('Stream completed', { requestId, totalChunks, duration_ms: Date.now() - streamStart })
       }
 
-      if (userId && conversationId && fullContent) {
-        await supabase.from('messages').insert({
-          conversation_id: conversationId,
+      if (userId && activeConvId && fullContent) {
+        const { error: replyError } = await supabase.from('messages').insert({
+          conversation_id: activeConvId,
           role: 'assistant',
           content: fullContent,
           message_type: messageType,
         })
+        if (replyError) logger.error('Assistant message insert failed', { code: replyError.code ?? null, conversationId: activeConvId })
       }
     } catch (err) {
-      console.error('[useChat] sendMessage catch:', err)
       logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
       setMessages(prev => {
         const updated = [...prev]
@@ -655,5 +704,6 @@ export function useChat(userId, memory, session) {
     extractMemoryAndInsight,
     loadConversation,
     setMessages,
+    isConversationCounted: (id) => !!id && countedConvIdsRef.current.has(id),
   }
 }

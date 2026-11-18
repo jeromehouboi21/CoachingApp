@@ -1,5 +1,10 @@
 // src/lib/logger.ts
-// Frontend-Logger: console in dev, Supabase app_logs in prod
+// Frontend-Logger: console in dev, Supabase app_logs in prod (nur eingeloggt).
+//
+// LOG-REGEL (Security-Paket A, S-04): Erlaubt sind IDs, Zähler, Längen, Dauer,
+// HTTP-Status, Fehlercodes. Verboten sind Inhalte (Nachrichten, Akte, Profil,
+// Stimmen, Zusammenfassungen), E-Mail-Adressen, Namen und Einladungscodes.
+// sanitizeLogData() ist nur das Sicherheitsnetz — die Aufrufstellen bleiben verantwortlich.
 
 import { supabase } from './supabase'
 
@@ -13,6 +18,29 @@ export function setLoggerUserId(id: string | null) {
 
 const isDev = import.meta.env.DEV
 
+const SENSITIVE_KEY = /^(content|contents|messages|text|prompt|system_?prompt|output|raw|raw_?output|preview|email|display_?name|full_?name|name|excerpt|description|example|summary|open_?thread|main_?topic|notes?|linked_?value|coach_?file|memory|briefing|rag_?context|wellness_?context|details|hint|body|topic|code_?value|invite_?code|pending_?code)$/i
+const MAX_STRING = 200
+
+export function sanitizeLogData(value: unknown, depth = 0): unknown {
+  if (value == null || typeof value === 'number' || typeof value === 'boolean') return value
+  if (depth > 4) return '[depth-limit]'
+  if (typeof value === 'string') return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}…[+${value.length - MAX_STRING}]` : value
+  if (Array.isArray(value)) return { type: 'array', length: value.length }
+  if (value instanceof Error) return { name: value.name, code: (value as { code?: unknown }).code ?? null }
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = SENSITIVE_KEY.test(k)
+        ? { redacted: true, ...(typeof v === 'string' ? { length: v.length } : {}) }
+        : sanitizeLogData(v, depth + 1)
+    }
+    return out
+  }
+  return String(value)
+}
+
+let persistWarningShown = false
+
 async function persist(entry: {
   level: LogLevel
   source: string
@@ -23,6 +51,7 @@ async function persist(entry: {
   stack_trace?: string
 }): Promise<void> {
   if (entry.level === 'debug') return // debug nur Konsole, nicht DB
+  if (!currentUserId) return          // vor dem Login nur Konsole (app_logs nimmt nur eigene Zeilen an)
 
   const { error } = await supabase.from('app_logs').insert({
     level:        entry.level,
@@ -35,25 +64,31 @@ async function persist(entry: {
     stack_trace:  entry.stack_trace  ?? null,
   })
 
-  if (error && isDev) {
-    console.warn('[logger] Failed to persist to app_logs:', error.message)
+  // Einmalig warnen, ohne Endlosschleife (nicht über den Logger selbst)
+  if (error && !persistWarningShown) {
+    persistWarningShown = true
+    console.warn('[logger] Failed to persist to app_logs:', error.code ?? 'unknown')
   }
 }
 
 export function createLogger(source: string) {
   const log = (level: LogLevel, message: string, data?: unknown) => {
-    // Immer in Konsole
+    const safe = data instanceof Error
+      ? { name: data.name, code: (data as { code?: unknown }).code ?? null }
+      : data === undefined ? undefined : sanitizeLogData(data)
+
+    // Konsole: ebenfalls nur bereinigte Daten
     const prefix = `[${level.toUpperCase()}][${source}]`
-    if (level === 'error')     console.error(prefix, message, data ?? '')
-    else if (level === 'warn') console.warn(prefix,  message, data ?? '')
-    else if (isDev)            console.log(prefix,   message, data ?? '')
+    if (level === 'error')     console.error(prefix, message, safe ?? '')
+    else if (level === 'warn') console.warn(prefix,  message, safe ?? '')
+    else if (isDev)            console.log(prefix,   message, safe ?? '')
 
     // In DB schreiben (fire-and-forget)
     const entry = {
       level, source, message,
       ...(data instanceof Error
-        ? { error_detail: data.message, stack_trace: data.stack }
-        : data && typeof data === 'object' ? { metadata: data as Record<string, unknown> } : {}
+        ? { metadata: safe as Record<string, unknown>, error_detail: data.message.slice(0, MAX_STRING), stack_trace: data.stack?.slice(0, 2000) }
+        : safe && typeof safe === 'object' ? { metadata: safe as Record<string, unknown> } : {}
       ),
     }
     persist(entry).catch(() => {}) // Logging darf nie die App crashen

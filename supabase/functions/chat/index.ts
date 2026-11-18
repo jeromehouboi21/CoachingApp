@@ -1,36 +1,9 @@
 import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
-import { createClient } from 'npm:@supabase/supabase-js';
 import { detectCrisis } from './crisisDetection.ts';
-
-function createLogger(source: string, requestId?: string, userId?: string) {
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  );
-
-  const persist = async (level: string, message: string, data?: unknown) => {
-    const line = JSON.stringify({ ts: new Date().toISOString(), level, source, msg: message, request_id: requestId, ...(data ? { data } : {}) });
-    if (level === 'error') console.error(line);
-    else if (level === 'warn') console.warn(line);
-    else console.log(line);
-
-    if (level === 'debug') return;
-
-    const entry: Record<string, unknown> = { level, source, message, request_id: requestId ?? null, user_id: userId ?? null };
-    if (data instanceof Error) { entry.error_detail = data.message; entry.stack_trace = data.stack ?? null; }
-    else if (data && typeof data === 'object') { entry.metadata = data; }
-
-    const { error } = await supabase.from('app_logs').insert(entry);
-    if (error) console.error(JSON.stringify({ level: 'error', source: 'logger', msg: 'Failed to persist', error: error.message }));
-  };
-
-  return {
-    debug: (msg: string, data?: unknown) => persist('debug', msg, data),
-    info:  (msg: string, data?: unknown) => { persist('info',  msg, data); },
-    warn:  (msg: string, data?: unknown) => { persist('warn',  msg, data); },
-    error: (msg: string, data?: unknown) => { persist('error', msg, data); },
-  };
-}
+import { createLogger, describeError } from '../_shared/logger.ts';
+import {
+  HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
+} from '../_shared/auth.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -848,122 +821,85 @@ Maximal 1 Satz.`;
   return prompt;
 }
 
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Grenzen gegen Missbrauch und Kosten (Security-Paket A, S-03).
+// Der Gesprächsverlauf wird bei jeder Anfrage komplett mitgeschickt. Statt lange
+// Gespräche mit 413 abzubrechen, gehen nur die letzten MAX_MESSAGES an das Modell.
+// Harte Obergrenzen (413): Body-Größe, Länge einer einzelnen Nachricht, Anzahl Einträge.
+const MAX_BODY_BYTES = 200 * 1024;
+const MAX_MESSAGES = 60;
+const MAX_MESSAGE_ENTRIES = 400;
+const MAX_CONTENT_CHARS = 8000;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      }
-    });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  // Logger ohne requestId/userId für die Auth-Phase
   let logger = createLogger('chat');
 
-  // Manuelle JWT-Verifikation (kompatibel mit ES256 und HS256)
-  const authHeader = req.headers.get('Authorization');
-  const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) {
-    logger.warn('missing authorization header');
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
-  }
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  global: { headers: { Authorization: `Bearer ${token}` } },
-  auth: { persistSession: false },
-})
-  // Echter Service-Role-Client, OHNE Nutzer-Token — nur für crisis_events, dessen
-  // RLS-Policy bewusst jeden direkten Zugriff blockiert (auch den des eigenen
-  // Nutzers). Siehe fix-admin-users-service-role-v1.md für den Hintergrund:
-  // der Client oben läuft wegen des Authorization-Headers effektiv als
-  // "authenticated", nicht als service_role.
-  const serviceClient = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
-  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !user) {
-    logger.warn('invalid token', { error: authError?.message });
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
-  }
-
-  // Serverseitige Limit-Durchsetzung — Frontend-Check allein ist umgehbar
-  // (direkter Funktionsaufruf mit gültigem Token). Premium ist aktuell
-  // noch nicht im Einsatz; alle Nutzer werden begrenzt, sofern session_limit
-  // gesetzt ist (null = unbegrenzt).
-  const { data: limitProfile, error: limitProfileError } = await supabase
-    .from('profiles')
-    .select('plan, session_limit, sessions_used_this_month')
-    .eq('id', user.id)
-    .single();
-
-  if (limitProfileError) {
-    logger.error('limit check: profile fetch failed', { error: limitProfileError.message });
-    // Fail-open bewusst vermeiden wäre strenger, aber ein Logging-/Read-Fehler
-    // soll bestehende Nutzer nicht aussperren — wir loggen und lassen durch.
-  } else if (limitProfile.plan !== 'premium' && limitProfile.session_limit != null) {
-    const used = limitProfile.sessions_used_this_month ?? 0;
-    if (used >= limitProfile.session_limit) {
-      logger.warn('session limit reached, request blocked', {
-        userId: user.id, used, limit: limitProfile.session_limit,
-      });
-      return new Response(JSON.stringify({ error: 'Session limit reached' }), {
-        status: 429,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
-    }
-  }
-
   try {
-    let body: Record<string, unknown>;
-    try {
-      body = await req.json();
-    } catch (parseError: unknown) {
-      logger.error('Failed to parse request body', parseError instanceof Error ? parseError : undefined);
-      return new Response(JSON.stringify({ error: 'Invalid request body' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
+    // 1. Identität ausschließlich aus dem JWT
+    const { user, admin, userClient } = await requireUser(req);
+
+    // 2. Body mit Größenlimit lesen
+    const body = await readJsonBody(req, MAX_BODY_BYTES);
+    const {
+      memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck,
+      briefing, coachFile, entryContext, requestId, conversationId,
+    } = body as any;
+    const safeRequestId = typeof requestId === 'string' ? requestId.slice(0, 64) : undefined;
+    logger = createLogger('chat', safeRequestId, user.id);
+
+    const isExtract = !!extractMemory;
+    const isHowto = !isExtract && !!howtoMode;
+    const isCoaching = !isExtract && !isHowto;
+
+    const allMessages = validateMessages(body.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS });
+    logger.info('Request received', {
+      requestId: safeRequestId, messageCount: allMessages.length,
+      mode: isExtract ? 'extract' : isHowto ? 'howto' : 'coaching',
+    });
+
+    if (isCoaching && !Array.isArray(body.messages) && !wellnessCheck) {
+      throw new HttpError(400, 'invalid_messages');
+    }
+    if (isExtract && allMessages.length === 0) {
+      throw new HttpError(400, 'invalid_messages');
     }
 
-    const { messages, memory, extractMemory, howtoMode, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, requestId, conversationId } = body as any;
+    // 3. Eigentum an der Konversation prüfen, BEVOR irgendetwas gelesen oder geschrieben wird.
+    //    Im normalen Gesprächsmodus ist die conversationId Pflicht (serverseitige Zählung).
+    let convId: string | null = null;
+    if (isCoaching || (conversationId !== undefined && conversationId !== null && conversationId !== '')) {
+      convId = await assertConversationOwner(admin, conversationId, user.id);
+    }
 
-    // Jetzt logger mit requestId + userId neu erstellen — alle weiteren Logs sind korrelierbar
-    logger = createLogger('chat', requestId ?? undefined, user.id);
-
-    logger.info('Request received', { requestId, messageCount: messages?.length ?? 0 });
-
-    if (!Array.isArray(messages) && !extractMemory && !howtoMode && !wellnessCheck) {
-      logger.error('Missing or invalid messages array', { received: typeof messages });
-      return new Response(JSON.stringify({ error: 'Invalid messages' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
+    const messages = allMessages.length > MAX_MESSAGES ? allMessages.slice(-MAX_MESSAGES) : allMessages;
+    if (messages.length !== allMessages.length) {
+      logger.info('Message history trimmed', { requestId: safeRequestId, originalCount: allMessages.length, keptCount: messages.length });
     }
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      logger.error('ANTHROPIC_API_KEY not configured', { requestId });
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+      logger.error('ANTHROPIC_API_KEY not configured', { requestId: safeRequestId });
+      throw new HttpError(500, 'not_configured');
     }
 
     const anthropic = new Anthropic({ apiKey });
 
-    // Gedächtnis-Extraktion nach Gesprächsende (kein Streaming, schnell via Haiku)
-    if (extractMemory) {
-      logger.info('Anthropic API call started', { requestId, model: 'claude-haiku-4-5-20251001', messageCount: messages.length });
+    // Gedächtnis-Extraktion nach Gesprächsende (kein Streaming, schnell via Haiku).
+    // Zählt nicht als Sitzung und läuft auch bei erreichtem Limit.
+    if (isExtract) {
+      logger.info('Anthropic API call started', { requestId: safeRequestId, model: 'claude-haiku-4-5-20251001', messageCount: messages.length });
       const conversationText = messages
-        .map((m: any) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
+        .map((m) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
         .join('\n');
 
       const response = await anthropic.messages.create({
@@ -977,46 +913,86 @@ Deno.serve(async (req) => {
 
       const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
       try {
-        const extracted = JSON.parse(text);
-        return new Response(JSON.stringify(extracted), {
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-        });
+        return jsonResponse(JSON.parse(text), CORS_HEADERS);
       } catch {
-        logger.warn('memory extraction JSON parse failed', { raw: text.slice(0, 100) });
-        return new Response('{}', {
-          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-        });
+        logger.warn('memory extraction JSON parse failed', { requestId: safeRequestId, parseError: 'parse_failed', outputLength: text.length });
+        return jsonResponse({}, CORS_HEADERS);
       }
     }
 
-    // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat.
-    // messages enthält den kompletten bisherigen Verlauf inkl. der gerade
-    // abgeschlossenen Runde (wird bei jeder Anfrage komplett mitgeschickt).
-    const assistantTurnCount = Array.isArray(messages)
-      ? messages.filter((m: any) => m.role === 'assistant').length
-      : 0;
+    // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat
+    // (vor dem Kürzen, damit der Rhythmus bei langen Gesprächen stimmt).
+    const assistantTurnCount = allMessages.filter((m) => m.role === 'assistant').length;
+
+    // 4. Krisenerkennung — nur bei echter Nutzer-Nachricht im Gesprächsmodus (nicht bei
+    //    synthetischen Eröffnungen wie Wellness-Check/Briefing/Entry-Kontext, dort ist
+    //    messages leer) und nicht im Howto-Modus (dort greift die generischere
+    //    Krisen-Anweisung im Basis-Prompt). Läuft VOR der Limit-Prüfung, damit eine
+    //    Krisenantwort auch bei erreichtem Limit ausgeliefert wird (Entscheidung 18.11.2026).
+    let crisisDetected = false;
+    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+
+    if (isCoaching && lastUserMessage?.content) {
+      const classification = await detectCrisis(anthropic, lastUserMessage.content);
+      if (classification.acute_risk && classification.confidence !== 'low') {
+        crisisDetected = true;
+        logger.warn('Crisis detected in user message', { requestId: safeRequestId, confidence: classification.confidence, conversationId: convId });
+
+        const { error: crisisInsertError } = await admin.from('crisis_events').insert({
+          user_id: user.id,
+          conversation_id: convId,
+          confidence: classification.confidence,
+          excerpt: lastUserMessage.content.slice(0, 300),
+        });
+        if (crisisInsertError) {
+          logger.error('crisis_events insert failed', { code: crisisInsertError.code, requestId: safeRequestId });
+        }
+      }
+    }
+
+    // 5. Sitzung serverseitig zählen und Limit prüfen (atomar, idempotent pro Konversation).
+    //    userClient, damit auth.uid() in der Funktion gesetzt ist.
+    if (isCoaching) {
+      const { data: session, error: sessionError } = await userClient.rpc('consume_session', { p_conversation_id: convId });
+      if (sessionError) {
+        logger.error('consume_session failed', { code: sessionError.code, conversationId: convId });
+        throw new HttpError(500, 'session_check_failed');
+      }
+      if (!session?.allowed) {
+        if (!crisisDetected) {
+          logger.warn('session limit reached, request blocked', { conversationId: convId, used: session?.used, limit: session?.limit });
+          return new Response(JSON.stringify({ error: 'Session limit reached' }), {
+            status: 429,
+            headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          });
+        }
+        logger.warn('session limit reached — crisis response delivered anyway', { conversationId: convId, used: session?.used, limit: session?.limit });
+      } else if (session.counted) {
+        logger.info('Session counted', { conversationId: convId, used: session.used, limit: session.limit });
+      }
+    }
 
     // Alle 4 Antworten (Mittelwert aus dem gewünschten 3–5er Rhythmus) aktiv
     // ein Wirkmechanismus-Angebot einstreuen — aber erst ab der 3. Antwort,
     // damit der Einstieg ins Gespräch nicht sofort mit einer Erklärung startet.
     const OFFER_INTERVAL = 4;
     const offerMechanism =
-      assistantTurnCount >= 3 && assistantTurnCount % OFFER_INTERVAL === 0;
+      isCoaching && assistantTurnCount >= 3 && assistantTurnCount % OFFER_INTERVAL === 0;
 
     if (offerMechanism) {
-      logger.info('Mechanism-offer cadence triggered', { requestId, assistantTurnCount });
+      logger.info('Mechanism-offer cadence triggered', { requestId: safeRequestId, assistantTurnCount });
     }
 
     // "Innere Stimmen" — Zwei-Phasen-Chatflow (Teil 4). Serverseitig getaktet,
     // nie beide Phasen im selben Turn. Übersprungen im Howto-Modus (keine
-    // echte Coaching-Konversation) und bei akuter Belastung — das
+    // echte Coaching-Konversation), bei akuter Belastung und im Krisenfall — das
     // Sicherheitsnetz hat Vorrang vor der Taktung (Teil 4.4).
     const acuteDistress = !!wellnessCheck && wellnessCheck.score <= 3;
     let introduceVoice: InnerVoice | undefined;
     let namingVoice: InnerVoice | undefined;
 
-    if (!howtoMode && !acuteDistress) {
-      const { data: candidateVoice } = await supabase
+    if (isCoaching && !acuteDistress && !crisisDetected) {
+      const { data: candidateVoice } = await userClient
         .from('inner_voices')
         .select('*')
         .eq('user_id', user.id)
@@ -1028,17 +1004,18 @@ Deno.serve(async (req) => {
 
       if (candidateVoice && assistantTurnCount >= 2) {
         introduceVoice = candidateVoice;
-        const { error: introError } = await supabase
+        const { error: introError } = await userClient
           .from('inner_voices')
           .update({ introduced_at: new Date().toISOString() })
-          .eq('id', candidateVoice.id);
+          .eq('id', candidateVoice.id)
+          .eq('user_id', user.id);
         if (introError) {
-          logger.error('inner_voices introduced_at update failed', { error: introError.message, voiceId: candidateVoice.id });
+          logger.error('inner_voices introduced_at update failed', { code: introError.code, voiceId: candidateVoice.id });
         } else {
-          logger.info('Voice-introduce triggered', { requestId, voiceId: candidateVoice.id });
+          logger.info('Voice-introduce triggered', { requestId: safeRequestId, voiceId: candidateVoice.id });
         }
       } else {
-        const { data: readyVoice } = await supabase
+        const { data: readyVoice } = await userClient
           .from('inner_voices')
           .select('*')
           .eq('user_id', user.id)
@@ -1051,36 +1028,7 @@ Deno.serve(async (req) => {
 
         if (readyVoice) {
           namingVoice = readyVoice;
-          logger.info('Voice-naming triggered', { requestId, voiceId: readyVoice.id });
-        }
-      }
-    }
-
-    // Krisenerkennung (Konzept-Dokument, Teil 1) — läuft nur bei einer echten
-    // Nutzer-Nachricht (nicht bei synthetischen Eröffnungen wie Wellness-Check/
-    // Briefing/Entry-Kontext, dort ist messages leer) und nicht im Howto-Modus
-    // (dort greift die bestehende, generischere Krisen-Anweisung im Basis-Prompt).
-    let crisisDetected = false;
-    let crisisConfidence: 'low' | 'medium' | 'high' | null = null;
-    const lastUserMessage = Array.isArray(messages)
-      ? [...messages].reverse().find((m: any) => m.role === 'user')
-      : null;
-
-    if (!howtoMode && lastUserMessage?.content) {
-      const classification = await detectCrisis(anthropic, lastUserMessage.content);
-      if (classification.acute_risk && classification.confidence !== 'low') {
-        crisisDetected = true;
-        crisisConfidence = classification.confidence;
-        logger.warn('Crisis detected in user message', { requestId, confidence: classification.confidence });
-
-        const { error: crisisInsertError } = await serviceClient.from('crisis_events').insert({
-          user_id: user.id,
-          conversation_id: conversationId || null,
-          confidence: classification.confidence,
-          excerpt: lastUserMessage.content.slice(0, 300),
-        });
-        if (crisisInsertError) {
-          logger.error('crisis_events insert failed', { error: crisisInsertError.message, requestId });
+          logger.info('Voice-naming triggered', { requestId: safeRequestId, voiceId: readyVoice.id });
         }
       }
     }
@@ -1088,26 +1036,26 @@ Deno.serve(async (req) => {
     // Normaler Chat — Streaming
     const systemPrompt = crisisDetected
       ? CRISIS_RESPONSE_BLOCK
-      : howtoMode
+      : isHowto
         ? HOWTO_SYSTEM_PROMPT
         : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
 
-    if (wellnessCheck) {
+    if (wellnessCheck && isCoaching) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';
-      logger.info('WellnessCheck context injected into prompt', { requestId, score: wellnessCheck.score, tone });
+      logger.info('WellnessCheck context injected into prompt', { requestId: safeRequestId, score: wellnessCheck.score, tone });
     }
 
     // Anthropic erfordert: messages muss mit user-Role beginnen und nicht leer sein.
     // Bei Wellness-Start ist messages leer oder beginnt mit assistant → synthetischen Trigger einfügen.
-    let apiMessages: { role: string; content: string }[] = (messages ?? []).map((m: any) => ({
-      role: m.role,
+    let apiMessages: { role: 'user' | 'assistant'; content: string }[] = messages.map((m) => ({
+      role: m.role as 'user' | 'assistant',
       content: m.content,
     }));
     if (apiMessages.length === 0 || apiMessages[0].role !== 'user') {
       apiMessages = [{ role: 'user', content: '.' }, ...apiMessages];
     }
 
-    logger.info('Anthropic API call started', { requestId, model: 'claude-sonnet-4-5', messageCount: apiMessages.length });
+    logger.info('Anthropic API call started', { requestId: safeRequestId, model: 'claude-sonnet-4-5', messageCount: apiMessages.length });
 
     const streamStart = Date.now();
     const stream = await anthropic.messages.stream({
@@ -1139,9 +1087,9 @@ Deno.serve(async (req) => {
             }
           }
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          logger.info('Stream completed', { requestId, tokenCount, duration_ms: Date.now() - streamStart });
+          logger.info('Stream completed', { requestId: safeRequestId, tokenCount, duration_ms: Date.now() - streamStart });
         } catch (streamError: unknown) {
-          logger.error('Stream error', streamError instanceof Error ? streamError : new Error(String(streamError)));
+          logger.error('Stream error', { requestId: safeRequestId, ...describeError(streamError) });
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         } finally {
           controller.close();
@@ -1151,18 +1099,19 @@ Deno.serve(async (req) => {
 
     return new Response(readable, {
       headers: {
+        ...CORS_HEADERS,
         'Content-Type': 'text/event-stream',
-        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'no-cache',
       }
     });
 
   } catch (error: unknown) {
-    logger.error('Unhandled error in chat function', error instanceof Error ? error : new Error(String(error)));
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    if (error instanceof HttpError) {
+      if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      else logger.warn('Request rejected', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('Unhandled error in chat function', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });

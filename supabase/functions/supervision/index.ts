@@ -2,8 +2,11 @@
 // Läuft jeden Montag 06:00 via Supabase pg_cron
 // Erstellt das wöchentliche Supervision-Protokoll für Jerome
 
+// Sicherheitsmuster v2: nur intern aufrufbar (requireInternalCaller).
+
 import Anthropic from 'npm:@anthropic-ai/sdk';
-import { createClient } from 'npm:@supabase/supabase-js';
+import { createLogger, describeError } from '../_shared/logger.ts';
+import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
 
 const SUPERVISION_PROMPT = `Du bist Jerome Houboi, zertifizierter systemischer Coach.
 Hier sind die anonymisierten Selbstreflexionen deines KI-Coaches der letzten Woche:
@@ -21,47 +24,53 @@ Erstelle ein kurzes Supervision-Protokoll (max. 200 Wörter) mit:
 Schreibe direkt an den Coach — als würdest du ihn supervidieren.
 Die Empfehlung in Punkt 3 fließt direkt in die KI ein. Sei präzise.`;
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type, x-cron-secret',
+};
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, content-type',
-      }
-    });
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
+  const logger = createLogger('supervision');
+
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    // Nur intern aufrufbar: Cron (Header x-cron-secret) oder service_role-Key
+    requireInternalCaller(req);
+
+    const supabase = createAdminClient();
 
     const weekStart = new Date();
     weekStart.setDate(weekStart.getDate() - 7);
     const weekStartISO = weekStart.toISOString();
 
     // Selbstreflexionen der letzten Woche
-    const { data: reflections } = await supabase
+    const { data: reflections, error: reflectionsError } = await supabase
       .from('coach_reflections')
       .select('what_worked, what_missed, resistance_detected, resistance_handled, improvement_note')
       .gte('created_at', weekStartISO);
+    if (reflectionsError) {
+      logger.error('coach_reflections fetch failed', { code: reflectionsError.code });
+      throw new HttpError(500, 'reflections_fetch_failed');
+    }
 
     // Nutzerfeedback der letzten Woche
-    const { data: feedback } = await supabase
+    const { data: feedback, error: feedbackError } = await supabase
       .from('user_feedback')
       .select('feedback_type, content, context')
       .gte('created_at', weekStartISO)
       .eq('consent_given', true);
+    if (feedbackError) logger.error('user_feedback fetch failed', { code: feedbackError.code });
 
     const totalConversations = reflections?.length ?? 0;
     const resistanceCount = reflections?.filter((r: any) => r.resistance_detected).length ?? 0;
     const breakthroughRate = 0; // Erfordert outcome-Auswertung aus experience_patterns
 
     if (totalConversations === 0) {
-      return new Response(JSON.stringify({ ok: true, skipped: 'no data' }), {
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
+      logger.info('Skipped — no reflections this week');
+      return jsonResponse({ ok: true, skipped: 'no data' }, CORS_HEADERS);
     }
 
     const reflectionsText = (reflections ?? [])
@@ -89,7 +98,7 @@ Deno.serve(async (req) => {
     const improvementMatch = supervisionText.match(/3\.\s*(.+?)(?:\n|$)/s);
     const improvementRecs = improvementMatch?.[1]?.trim() || '';
 
-    await supabase.from('supervision_logs').insert({
+    const { error: insertError } = await supabase.from('supervision_logs').insert({
       week_start: weekStart.toISOString().split('T')[0],
       total_conversations: totalConversations,
       resistance_rate: totalConversations > 0 ? parseFloat((resistanceCount / totalConversations * 100).toFixed(2)) : 0,
@@ -97,16 +106,21 @@ Deno.serve(async (req) => {
       improvement_recs: improvementRecs,
       raw_reflections: reflections ?? [],
     });
+    if (insertError) {
+      logger.error('supervision_logs insert failed', { code: insertError.code });
+      throw new HttpError(500, 'supervision_insert_failed');
+    }
 
-    return new Response(JSON.stringify({ ok: true, totalConversations }), {
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    logger.info('Supervision completed', { totalConversations, feedbackCount: feedback?.length ?? 0 });
+    return jsonResponse({ ok: true, totalConversations }, CORS_HEADERS);
 
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
+    if (error instanceof HttpError) {
+      if (error.status === 401) logger.warn('Rejected non-internal caller');
+      else if (error.status >= 500) logger.error('Request failed', { code: error.code, status: error.status });
+      return errorResponse(error, CORS_HEADERS);
+    }
+    logger.error('Unhandled error', describeError(error));
+    return errorResponse(error, CORS_HEADERS);
   }
 });
