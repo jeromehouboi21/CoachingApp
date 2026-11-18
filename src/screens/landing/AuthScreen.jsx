@@ -1,16 +1,15 @@
 import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 
 export function AuthScreen() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const initialMode = searchParams.get('mode') === 'login' ? 'login' : 'register'
-
-  const { signUp, signIn, sendMagicLink } = useAuth()
-  const [mode, setMode] = useState(initialMode) // register | login | magic
+  // Registrierung läuft ausschließlich über /onboarding (Einwilligung + Vereinbarung).
+  // Dieser Screen ist nur noch für die Anmeldung bestehender Konten.
+  const { signIn, sendMagicLink } = useAuth()
+  const [mode, setMode] = useState('login') // login | magic
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -24,13 +23,8 @@ export function AuthScreen() {
     setError('')
     setLoading(true)
     try {
-      if (mode === 'register') {
-        await signUp(email, password)
-        navigate('/welcome')
-      } else {
-        await signIn(email, password)
-        navigate('/home')
-      }
+      await signIn(email, password)
+      navigate('/home')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -104,8 +98,8 @@ export function AuthScreen() {
             <Button type="submit" variant="primary" className="w-full py-4 mt-2" disabled={loading}>
               {loading ? 'Wird gesendet…' : 'Link per E-Mail — kein Passwort nötig'}
             </Button>
-            <button type="button" onClick={() => setMode('register')} className="text-[13px] text-ink-3 text-center hover:text-ink-2">
-              Zurück zur Registrierung
+            <button type="button" onClick={() => setMode('login')} className="text-[13px] text-ink-3 text-center hover:text-ink-2">
+              Zurück zur Anmeldung
             </button>
           </form>
         ) : (
@@ -143,7 +137,7 @@ export function AuthScreen() {
             </div>
             {error && <p className="text-[13px] text-coral">{error}</p>}
             <Button type="submit" variant="primary" className="w-full py-4 mt-2" disabled={loading}>
-              {loading ? 'Lädt…' : mode === 'register' ? 'Konto erstellen — kostenlos' : 'Anmelden'}
+              {loading ? 'Lädt…' : 'Anmelden'}
             </Button>
 
             <div className="flex items-center gap-3 my-1">
@@ -157,16 +151,15 @@ export function AuthScreen() {
             </Button>
 
             <p className="text-[12px] text-ink-3 text-center mt-1">
-              Mit der Registrierung stimmst du unserer{' '}
-              <span className="underline cursor-pointer" onClick={() => setShowPrivacyModal(true)}>Datenschutzerklärung</span> zu.
+              <span className="underline cursor-pointer" onClick={() => setShowPrivacyModal(true)}>Datenschutzerklärung</span>
             </p>
 
             <button
               type="button"
-              onClick={() => setMode(mode === 'register' ? 'login' : 'register')}
+              onClick={() => navigate('/onboarding')}
               className="text-[13px] text-ink-3 text-center hover:text-ink-2 transition-colors"
             >
-              {mode === 'register' ? 'Bereits ein Konto? Anmelden' : 'Noch kein Konto? Registrieren'}
+              Noch kein Konto? Registrieren
             </button>
           </form>
         )}

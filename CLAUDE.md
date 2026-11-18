@@ -23,7 +23,7 @@
 
 ```
 /landing              → LandingScreen (öffentlich)
-/auth                 → AuthScreen (öffentlich)
+/auth                 → AuthScreen (öffentlich, nur Anmeldung · Registrieren → /onboarding)
 /onboarding           → OnboardingFlow (öffentlich, 4 Schritte)
 /welcome              → WelcomeScreen (nach Registrierung)
 

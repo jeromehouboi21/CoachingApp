@@ -118,7 +118,13 @@ export function useAuth() {
   }
 
   async function sendMagicLink(email) {
-    const { error } = await supabase.auth.signInWithOtp({ email })
+    // Nur für bestehende Konten: Neue Konten entstehen ausschließlich über das
+    // Onboarding (mit Datenschutz-Einwilligung und Coaching-Vereinbarung).
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } })
+    if (error && (error.code === 'otp_disabled' || /signups not allowed/i.test(error.message || ''))) {
+      logger.info('Magic link for unknown account', { method: 'magic_link' })
+      throw new Error('Zu dieser E-Mail gibt es noch kein Konto. Registriere dich zuerst mit E-Mail und Passwort.')
+    }
     if (error) {
       logger.error('Sign in failed', error)
       throw error

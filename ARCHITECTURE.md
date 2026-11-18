@@ -187,7 +187,7 @@ CoachingApp/
 | Pfad | Screen | Auth | Zusatz-Guard | AppShell |
 |---|---|---|---|---|
 | `/landing` | LandingScreen | nein (auth → `/home`) | — | nein |
-| `/auth` | AuthScreen | nein (auth → `/home`) | — | nein |
+| `/auth` | AuthScreen (nur Anmeldung; Registrieren → `/onboarding`, Magic Link ohne Kontoanlage) | nein (auth → `/home`) | — | nein |
 | `/onboarding` | OnboardingFlow | nein (auth → `/home`) | — | nein |
 | `/welcome` | WelcomeScreen | **ja** | — | nein |
 | `/home` | HomeScreen | **ja** | — | **ja** |
