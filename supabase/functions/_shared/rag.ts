@@ -9,7 +9,7 @@ const MAX_QUERY_CHARS = 2000;
 const EMBEDDING_TIMEOUT_MS = 2500;
 
 // Fehlergrund nur als Code (HTTP-Status oder 'timeout'/'network'/'no_embedding'), nie Antworttext
-async function generateEmbedding(text: string, openaiKey: string): Promise<{ embedding: number[] | null; reason?: string }> {
+export async function generateEmbedding(text: string, openaiKey: string): Promise<{ embedding: number[] | null; reason?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), EMBEDDING_TIMEOUT_MS);
   try {

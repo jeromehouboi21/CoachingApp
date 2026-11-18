@@ -59,7 +59,7 @@ const ALL_TABLE_NAMES = [...OWNED_TABLES.map(t => t.name), MESSAGE_TABLE.name, .
 
 const EDGE_FUNCTIONS = [
   'chat', 'post-conversation', 'pre-session-briefing', 'validate-invite-code',
-  'delete-account', 'admin-users', 'admin-feedback', 'admin-invite-user', 'supervision',
+  'delete-account', 'admin-users', 'admin-feedback', 'admin-invite-user', 'supervision', 'backfill-embeddings',
 ];
 
 // ── Ergebnis-Sammlung ────────────────────────────────────────────────────────
