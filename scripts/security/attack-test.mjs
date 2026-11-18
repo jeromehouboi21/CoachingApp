@@ -427,7 +427,9 @@ function printResults() {
   await testsAsB(a, b);
   await testsAnonymous();
 
-  await Promise.allSettled([a.client.auth.signOut(), b.client.auth.signOut()]);
+  // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen
+  // der Testkonten auf anderen Geräten (Standard von signOut() ist 'global').
+  await Promise.allSettled([a.client.auth.signOut({ scope: 'local' }), b.client.auth.signOut({ scope: 'local' })]);
   const fails = printResults();
   process.exit(fails > 0 ? 1 : 0);
 })().catch(e => {
