@@ -268,6 +268,24 @@ Bekannte Schlüssel mit Inhalten in `app_logs.metadata`: `rawResponsePreview`, `
 | M app_logs | 5.081 Zeilen, **5.068 älter als 30 Tage**, 251 ohne User. Mit Inhalten: `label` 212, `pattern` 19, `email` 9, `code` (Einladungscodes) 9, `body`/`details` 9, `rawResponsePreview` 5, `topic` 3; `error_detail` 123 | Löschfrist entfernt fast alles. Die restlichen 13 Zeilen werden in 026 von Inhaltsschlüsseln befreit. Auffällig: Nur 13 Zeilen in 30 Tagen. Entweder gab es kaum Nutzung, oder das Logging fällt still aus (bei Phase 2 prüfen). |
 | N Profile | 10 Profile, alle `tester`, keins unbegrenzt, 1 Admin | ✅ unauffällig |
 
+### Baseline-Angriffstest (18.11.2026, 17:22, vor Paket A)
+
+**103 Prüfungen · 87 PASS · 14 FAIL · 2 SKIP.** Alle FAILs entsprechen bekannten Befunden:
+
+| Test | Ergebnis | Befund |
+|---|---|---|
+| 1 `feedback_survey_scores` | FAIL – B sieht **28 fremde Zeilen** | K-5 (real ausnutzbar) |
+| 3, 4 `profiles.is_admin/plan/session_limit/sessions_used_this_month` | 4× FAIL – geändert (vom Skript zurückgesetzt) | K-3 / S-01 |
+| 7 `post-conversation` mit A's Konversation | FAIL – HTTP 200 | K-1 |
+| 8 `chat` mit A's Konversation | FAIL – HTTP 200 (kein Datenabfluss, fehlende Eigentumsprüfung) | S-03 |
+| 12b, 14b `redeem_invite_code` als B / anonym | 2× FAIL – aufrufbar | K-2 |
+| 14 anon `insert app_logs` | FAIL – eingefügt | S-04 |
+| 15 `post-conversation`, `rag-search` ohne Auth / mit anon-Key | 4× FAIL – HTTP 200 | K-1, K-4 |
+| 11 `consume_session` | SKIP – existiert noch nicht | – |
+| 15 `supervision` | SKIP – bewusst nicht aufgerufen | K-4 |
+
+Bestätigt dicht: RLS-Trennung aller übrigen Tabellen (Tests 1, 2, 5, 6), anon ohne Lesezugriff (13: überall 401), Admin-Functions (10), alle übrigen Functions ohne Token (15).
+
 ## 7. Offene Fragen an Jerome (vor Phase 2)
 
 1. **Zählzeitpunkt.** Serverseitig kann `chat` nur zählen, wenn es aufgerufen wird. Vorschlag: Eine Konversation zählt beim **ersten `chat`-Aufruf mit dieser `conversationId`**. Folgen:
