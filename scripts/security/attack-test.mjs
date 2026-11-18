@@ -22,7 +22,8 @@ const SUPABASE_URL = (env.SUPABASE_URL ?? '').replace(/\/$/, '');
 const ANON_KEY = env.SUPABASE_ANON_KEY ?? '';
 const A = { email: env.TEST_A_EMAIL, password: env.TEST_A_PASSWORD };
 const B = { email: env.TEST_B_EMAIL, password: env.TEST_B_PASSWORD };
-const RUN_SUPERVISION = env.ATTACK_TEST_SUPERVISION === '1';
+// trim(): cmd.exe setzt bei 'set X=1 && …' den Wert inkl. Leerzeichen ('1 ')
+const RUN_SUPERVISION = ['1', 'true', 'yes'].includes((env.ATTACK_TEST_SUPERVISION ?? '').trim().toLowerCase());
 
 function abort(msg) {
   console.error(`\n✖ Abbruch: ${msg}\n`);
