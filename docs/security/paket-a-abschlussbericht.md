@@ -89,7 +89,7 @@ Verifikation: `npm run build` fehlerfrei; alle 10 Functions bestehen `deno check
 - [x] **J-4** `pg_cron` aktiv, Job `purge-app-logs` sichtbar
 - [x] **J-5** Angriffstest mit Supervision: 104 PASS · 0 FAIL · 0 SKIP
 - [ ] **J-5** Optional: Supervision-Cron einmal per SQL auslösen und `net._http_response` prüfen (erwartet `200`)
-- [ ] **J-5** Security Advisor erneut prüfen: erwartet nur noch `extension_in_public` (vector), `auth_leaked_password_protection` (S-07) und INFO „RLS enabled, no policy“ (gewollt)
+- [x] **J-5** Security Advisor erneut geprüft (18.11.2026, 18:24): `extension_in_public` (vector, offen), `auth_leaked_password_protection` (S-07), INFO „RLS enabled, no policy“ für 5 Tabellen (gewollt) und `authenticated_security_definer_function_executable` für `consume_session` (gewollt, siehe Abschn. 6)
 - [ ] **J-5** Doku-Commits nach `main` mergen und pushen (`18aa3bb`, `a8fef8f` und dieser Bericht)
 - [ ] Leere Datei `schema-vor-welle2.sql` im Projektordner löschen
 - [ ] Alte lokale Log-/CSV-Exporte mit Inhalten löschen (Laptop, Chat-Uploads). Die Audit-CSV enthält nur Metadaten und kann als Schema-Referenz bleiben.
@@ -106,6 +106,7 @@ Verifikation: `npm run build` fehlerfrei; alle 10 Functions bestehen `deno check
 - **Kosten bei erreichtem Limit:** Weil die Krisenerkennung jetzt vor der Limit-Prüfung läuft, kostet jede blockierte Nachricht einen Haiku-Aufruf. Bewusst in Kauf genommen (Krisenantwort hat Vorrang).
 - **`crisis_events.excerpt`** speichert 300 Zeichen Nutzertext (kein Log, sondern Krisenprotokoll). Aus Datenschutzsicht prüfen: Aufbewahrungsfrist und ob 300 Zeichen nötig sind.
 - **`vector` aus `public` verschieben** – eigenes Wartungsfenster.
+- **Advisor-WARN `consume_session` für `authenticated` ausführbar:** gewollt (Handoff 4.4) – `chat` ruft sie mit dem Nutzer-Token auf, damit `auth.uid()` gesetzt ist. Ein direkter Aufruf wirkt nur auf eigene Konversationen (fremde → `42501`, Angriffstest #11); schlimmstenfalls verbraucht ein Nutzer sein eigenes Kontingent. Optionale Verbesserung: Signatur `consume_session(p_user_id, p_conversation_id)`, nur `service_role` ausführbar, Aufruf aus `chat` über `admin` nach `assertConversationOwner` – dann entfällt die Warnung.
 - **`post-conversation`-Bug** (`voice_id` fehlt im Select, Einträge werden erneut geclustert) – fachlich prüfen und separat beheben.
 - **Doku-Aufräumen:** Pfad `f:/…` in CLAUDE.md, veraltete `docs/architecture.md`.
 - Krisensignal bei erreichtem Limit: **entschieden** (Krisenantwort wird trotz Limit ausgeliefert).
