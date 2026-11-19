@@ -600,6 +600,25 @@ async function testsRateLimits(a, b) {
   }
 }
 
+// ── S-08 (Paket B): Security-Header der App ─────────────────────────────────
+const APP_URL = (env.APP_URL ?? 'https://app.friedensstifter.coach').replace(/\/$/, '');
+async function testsHeaders() {
+  let res;
+  try { res = await fetch(APP_URL, { method: 'GET', redirect: 'manual' }); }
+  catch (e) { record('HDR', 'App erreichbar', 'HTTP 200', FAIL, `network:${e?.code ?? e?.name ?? 'error'}`); return; }
+  const h = (k) => res.headers.get(k) ?? '';
+  const checks = [
+    ['Strict-Transport-Security', /max-age=\d{8,}/i.test(h('strict-transport-security'))],
+    ['X-Content-Type-Options', h('x-content-type-options').toLowerCase() === 'nosniff'],
+    ['Referrer-Policy', h('referrer-policy') !== ''],
+    ['Permissions-Policy', /camera=\(\)/.test(h('permissions-policy'))],
+    ['Cross-Origin-Opener-Policy', h('cross-origin-opener-policy') === 'same-origin'],
+    ['X-Frame-Options', h('x-frame-options').toUpperCase() === 'DENY'],
+    ['Content-Security-Policy (erzwingend)', /script-src 'self'/.test(h('content-security-policy')) && /frame-ancestors 'none'/.test(h('content-security-policy'))],
+  ];
+  for (const [name, ok] of checks) record('HDR', `Header ${name}`, 'vorhanden', ok ? PASS : FAIL, ok ? 'ok' : 'fehlt/abweichend');
+}
+
 // ── Ausgabe ──────────────────────────────────────────────────────────────────
 function printResults() {
   const cols = [
@@ -630,6 +649,7 @@ function printResults() {
   await testsS12(a, b);
   await testsS13(b);
   await testsS15(b);
+  await testsHeaders();
   await testsRateLimits(a, b);
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen

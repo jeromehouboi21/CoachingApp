@@ -450,7 +450,7 @@ Beide Logger (`src/lib/logger.ts`, `supabase/functions/_shared/logger.ts`) schic
 - Migrations in Supabase ausführen (`supabase db push`)
 - Edge Functions deployen mit `supabase functions deploy <namen> --no-verify-jwt`
 - **Angriffstest:** `npm run security:test` → alle PASS (Testkonten in `.env.security.local`, Vorlage `.env.security.example`; `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein)
-- Header prüfen: `curl -sI https://app.friedensstifter.coach` (HSTS, CSP, Permissions-Policy …)
+- Header prüfen: `curl -sI https://app.friedensstifter.coach` (HSTS, CSP, Permissions-Policy …) — die CSP ist seit 19.11.2026 **erzwingend**; neue externe Quellen sonst blockiert
 - **Löschtest** bei Änderungen an Tabellen mit Personenbezug oder an der Löschlogik: `npm run security:deletion-test` (frisches Testkonto C) + `supabase/security/deletion-check.sql` → überall 0
 
 ---

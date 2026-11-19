@@ -1440,13 +1440,16 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 
 ### Browser-Schutz (S-08)
 
-`vercel.json` setzt für alle Pfade: `Strict-Transport-Security` (2 Jahre, inkl. Subdomains), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (Mikrofon nur `self`, Kamera/Standort/Zahlung/USB aus), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY` und die CSP — derzeit als **`Content-Security-Policy-Report-Only`** (Beobachtungswoche ab 19.11.2026, danach erzwingend):
+`vercel.json` setzt für alle Pfade: `Strict-Transport-Security` (2 Jahre, inkl. Subdomains), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (Mikrofon nur `self`, Kamera/Standort/Zahlung/USB aus), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY` und die **erzwingende** `Content-Security-Policy` (seit 19.11.2026; die Beobachtungswoche wurde übersprungen, weil die App noch keine aktiven Nutzer hat — Brüche fallen bei den nächsten Tests auf):
 
 ```
 default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';
 img-src 'self' data: blob:; connect-src 'self' https://<projekt>.supabase.co wss://<projekt>.supabase.co;
-worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none';
+upgrade-insecure-requests
 ```
+
+**Wenn etwas nicht lädt:** In der Browser-Konsole steht `Refused to load … because it violates the following Content Security Policy directive …` — die genannte Quelle bewusst prüfen und ggf. in `vercel.json` ergänzen. Der Angriffstest prüft die Header (`HDR`).
 
 `'unsafe-inline'` nur für Styles (React-`style`-Props, `offline.html`); Skripte strikt `'self'` (`registerSW.js` ist eine eigene Datei). **Jeder neue externe Dienst muss in die CSP.**
 
