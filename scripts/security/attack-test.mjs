@@ -118,7 +118,7 @@ function errCode(error) {
 
 /** Ruft eine Edge Function auf und liefert nur den HTTP-Status. Streams werden sofort abgebrochen. */
 async function callFunction(name, { token, apikey = true, method = 'POST', body } = {}) {
-  const headers = { 'Content-Type': 'application/json', 'x-region': 'eu-central-1' };   // S-09 wie im Frontend
+  const headers = { 'Content-Type': 'application/json', 'x-region': 'eu-west-1' };   // S-09 wie im Frontend (seit 20.11.2026 Irland, neben der Datenbank)
   if (apikey) headers.apikey = ANON_KEY;
   if (token) headers.Authorization = `Bearer ${token}`;
   const controller = new AbortController();
@@ -1052,13 +1052,13 @@ async function testsHeaders() {
   for (const [name, ok] of checks) record('HDR', `Header ${name}`, 'vorhanden', ok ? PASS : FAIL, ok ? 'ok' : 'fehlt/abweichend');
 }
 
-// ── S-09 (Paket C): Functions laufen in Frankfurt ───────────────────────────
+// ── S-09 (Paket C): Functions laufen in Irland (eu-west-1), neben der Datenbank ──
 // Ungültige Bodys reichen: Den Header x-sb-edge-region setzt die Edge-Runtime bei jeder Antwort.
 // export-my-data: Header aus dem Aufruf in testsS16 (kein zweiter Export, Rate-Limit 3/Tag).
 async function testsRegion(b, exportResult) {
   if (exportResult) {
-    const ok = exportResult.region === 'eu-central-1';
-    record(32, 'Region export-my-data', 'x-sb-edge-region: eu-central-1', ok ? PASS : FAIL,
+    const ok = exportResult.region === 'eu-west-1';
+    record(32, 'Region export-my-data', 'x-sb-edge-region: eu-west-1', ok ? PASS : FAIL,
       typeof exportResult.status === 'number' ? `HTTP ${exportResult.status} · ${exportResult.region ?? 'kein Header'}` : String(exportResult.status));
   }
   const calls = [
@@ -1067,8 +1067,8 @@ async function testsRegion(b, exportResult) {
   ];
   for (const [name, opts] of calls) {
     const r = await callFunction(name, opts);
-    const ok = r.region === 'eu-central-1';
-    record(32, `Region ${name}`, 'x-sb-edge-region: eu-central-1', ok ? PASS : FAIL,
+    const ok = r.region === 'eu-west-1';
+    record(32, `Region ${name}`, 'x-sb-edge-region: eu-west-1', ok ? PASS : FAIL,
       typeof r.status === 'number' ? `HTTP ${r.status} · ${r.region ?? 'kein Header'}` : String(r.status));
   }
 }

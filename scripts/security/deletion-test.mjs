@@ -67,7 +67,7 @@ async function callFunction(name, token, body, timeoutMs = 90000) {
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'x-region': 'eu-central-1' },
+      headers: { 'Content-Type': 'application/json', apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'x-region': 'eu-west-1' },
       body: JSON.stringify(body ?? {}),
       signal: controller.signal,
     });

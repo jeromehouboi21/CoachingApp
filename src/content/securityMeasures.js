@@ -42,7 +42,7 @@ export const SECURITY_MEASURES = [
     evidence: 'Supabase-Projekt-Region eu-west-1 (West EU, Ireland), von Jerome im Dashboard bestätigt (Project Settings → General, 20.11.2026)' },
   { id: 'S-09', group: 'ort', status: 'live',
     text: 'Auch die Programmteile, die deine Anfragen verarbeiten, laufen in der EU.',
-    evidence: 'x-region: eu-central-1 in src/lib/functions.js; Angriffstest #32 prüft x-sb-edge-region = eu-central-1 (Paket C-1)' },
+    evidence: 'x-region: eu-west-1 in src/lib/functions.js (seit 20.11.2026, neben der Datenbank; vorher Frankfurt, Paket C-1); Angriffstest #32 prüft x-sb-edge-region = eu-west-1' },
   { id: 'R-3 Anthropic', group: 'ort', status: 'text_offen',
     text: 'Für die Antworten des Begleiters geht der Gesprächsverlauf an Anthropic. [Speicherfrist laut aktuellem Vertrag eintragen]',
     evidence: 'chat ruft die Anthropic-API auf (supabase/functions/chat/index.ts); Speicherfrist kommt mit R-3' },

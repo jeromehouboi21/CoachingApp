@@ -457,7 +457,7 @@ perfektionismus_blockade → Perfektionismus-Blockade
 - **Nur der Server schreibt `messages`** — kein `supabase.from('messages').insert` im Frontend (S-12)
 - **Neue Tabellen mit Personenbezug** brauchen eine `ON DELETE CASCADE`-Kette zu `auth.users`/`profiles`/`conversations`, gehören ggf. in `apply_retention()` (Migration 033), in den Datenexport (`EXPORT_TABLES` in `export-my-data`, sonst mit Begründung in `EXCLUDED_TABLES`) und werden mit dem Löschtest geprüft (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0).
 - **Lernbasis (S-13):** Inhalte gelangen nur mit `RAG_LEARNING_ENABLED=1`, Opt-in (`profiles.learning_opt_in`, nur über RPC `set_learning_opt_in`) und über `reviewLearningEntry` (`_shared/learning.ts`) in `experience_patterns`. Das gilt für jeden neuen nutzerübergreifenden Kanal. RAG-Treffer stehen im Prompt nur als gekennzeichneter Datenblock.
-- **Function-Aufrufe im Frontend** nur über `src/lib/functions.js` (`functionUrl`, `functionHeaders` mit `x-region: eu-central-1`, S-09); CORS-Header der Functions nur aus `_shared/cors.ts`.
+- **Function-Aufrufe im Frontend** nur über `src/lib/functions.js` (`functionUrl`, `functionHeaders` mit `x-region: eu-west-1` – dieselbe Region wie die Datenbank, S-09, seit 20.11.2026); CORS-Header der Functions nur aus `_shared/cors.ts`.
 - **ZIPs für Chats nur über `npm run share:zip`** (nur eingecheckte Dateien, nie `.env*`). Der Build prüft `dist/` automatisch auf Schlüssel (`postbuild`), `npm run security:secrets` scannt die Historie.
 - Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 

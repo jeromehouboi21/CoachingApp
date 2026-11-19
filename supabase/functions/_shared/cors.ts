@@ -1,6 +1,6 @@
 // supabase/functions/_shared/cors.ts — gemeinsame CORS-Header aller Edge Functions (S-09, Paket C)
 //
-// x-region erlaubt dem Frontend, die Ausführung fest auf eu-central-1 zu legen (src/lib/functions.js).
+// x-region erlaubt dem Frontend, die Ausführung fest auf eu-west-1 zu legen (Region der Datenbank) (src/lib/functions.js).
 // Ohne diesen Header in Allow-Headers scheitert der Preflight.
 
 const BASE_ALLOWED_HEADERS = ['authorization', 'x-client-info', 'apikey', 'content-type', 'x-region'];
