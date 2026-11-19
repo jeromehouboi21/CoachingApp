@@ -39,6 +39,10 @@ export const RULES: Rule[] = [
   { id: 'learning_rejected',       codes: ['learning_rejected'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Abgelehnte Lernbasis-Einträge' },
   { id: 'supervision_protocol_rejected', codes: ['supervision_protocol_rejected'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Supervision-Protokoll verworfen' },
   { id: 'export_created',          codes: ['export_created'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Datenexporte' },
+  // Modellwechsel T0 (Qualität, keine Sicherheit):
+  { id: 'coach_response_truncated', codes: ['coach_response_truncated'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Coach-Antwort abgeschnitten (max_tokens)' },
+  { id: 'coach_response_unexpected_stop', codes: ['coach_response_unexpected_stop'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Coach-Antwort mit unerwartetem Ende (z. B. refusal)' },
+  { id: 'empty_text_response',     codes: ['empty_text_response'],     windowMin: 10080, threshold: 0, infoOnly: true, label: 'Modellantwort ohne Text' },
 ];
 
 // Lebenszeichen: Alarm, wenn ein erwarteter Eintrag AUSBLEIBT (stilles Scheitern von Cron-Jobs).

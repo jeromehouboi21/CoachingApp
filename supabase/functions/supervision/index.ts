@@ -5,6 +5,7 @@
 // Sicherheitsmuster v2: nur intern aufrufbar (requireInternalCaller).
 
 import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
+import { HAIKU_MODEL, extractText } from '../_shared/models.ts';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { reviewLearningEntry, makeHaikuCaller, isReviewTechnicalFailure } from '../_shared/learning.ts';
 import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
@@ -90,12 +91,12 @@ Deno.serve(async (req) => {
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: HAIKU_MODEL,
       max_tokens: 500,
       messages: [{ role: 'user', content: prompt }],
     });
 
-    const supervisionText = response.content[0].type === 'text' ? response.content[0].text : '';
+    const supervisionText = extractText(response, 'supervision', logger);
 
     // Extrahiere die Empfehlung (Punkt 3) als improvement_recs
     const improvementMatch = supervisionText.match(/3\.\s*(.+?)(?:\n|$)/s);

@@ -5,6 +5,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
+import { HAIKU_MODEL, extractText } from '../_shared/models.ts';
 import { reviewLearningEntry, makeHaikuCaller, isReviewTechnicalFailure } from '../_shared/learning.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, errorResponse, jsonResponse,
@@ -240,11 +241,11 @@ async function runPrompt(anthropic: Anthropic, prompt: string, conversationText:
   let raw = '';
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: HAIKU_MODEL,
       max_tokens: 2000,
       messages: [{ role: 'user', content: `${prompt}\n\nGespräch:\n${conversationText}` }],
     });
-    raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
+    raw = extractText(response, label, logger) || '{}';
   } catch (err) {
     // API-Fehler: nur Typ/Code/Status, keine Meldungstexte
     logger.error('runPrompt failed — returning empty result', { label, ...describeError(err) });

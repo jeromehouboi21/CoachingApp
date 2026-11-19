@@ -3,6 +3,7 @@
 // einzelnen Nutzernachricht. Siehe konzept-krisenprotokoll-suizidalitaet-v1_1.md, Teil 1.
 
 import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
+import { HAIKU_MODEL, extractText } from '../_shared/models.ts';
 
 const CRISIS_CLASSIFIER_PROMPT = `Prüfe NUR auf konkrete, akute Hinweise auf
 Suizidgedanken oder Selbstverletzungsabsicht im folgenden Text — nicht auf
@@ -38,14 +39,14 @@ export interface CrisisClassification {
 export async function detectCrisis(anthropic: Anthropic, userMessage: string): Promise<CrisisClassification> {
   try {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: HAIKU_MODEL,
       max_tokens: 200,
       messages: [{
         role: 'user',
         content: CRISIS_CLASSIFIER_PROMPT.replace('{userMessage}', userMessage),
       }],
     });
-    const raw = response.content[0].type === 'text' ? response.content[0].text : '{}';
+    const raw = extractText(response, 'crisis_classifier') || '{}';
     const text = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
     const parsed = JSON.parse(text);
     const confidence: CrisisClassification['confidence'] =

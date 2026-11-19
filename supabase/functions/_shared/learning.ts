@@ -4,6 +4,8 @@
 // Zweistufig: Regex-Vorfilter, dann Haiku-Prüfung. Fail-closed: im Zweifel ablehnen.
 // Log-Regel: Aufrufer loggen nur die Ablehnungsgründe als Codes, nie den Text.
 
+import { HAIKU_MODEL, extractText } from './models.ts';
+
 const PREFILTER: Array<[string, RegExp]> = [
   ['contact', /[\w.+-]+@[\w-]+\.[\w.]+/],                                  // E-Mail
   ['contact', /(\+|00)?\d[\d\s()/.-]{7,}\d/],                               // Telefonnummer
@@ -83,11 +85,11 @@ export async function reviewLearningEntry(
 export function makeHaikuCaller(anthropic: any): (system: string, user: string) => Promise<string> {
   return async (system: string, user: string) => {
     const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
+      model: HAIKU_MODEL,
       max_tokens: 200,
       system,
       messages: [{ role: 'user', content: user }],
     });
-    return response.content?.[0]?.type === 'text' ? response.content[0].text : '';
+    return extractText(response, 'learning_review');
   };
 }

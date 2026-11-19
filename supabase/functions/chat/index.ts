@@ -1,4 +1,4 @@
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@1.10.0';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { detectCrisis } from './crisisDetection.ts';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import {
@@ -7,6 +7,10 @@ import {
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 import { findSimilarExperiences } from '../_shared/rag.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import {
+  COACH_MODEL, COACH_REQUEST_DEFAULTS, COACH_MAX_TOKENS, COACH_CRISIS_MAX_TOKENS, HAIKU_MODEL,
+  extractText, ensureEndsWithUser,
+} from '../_shared/models.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -1041,7 +1045,6 @@ const MAX_MESSAGES = 60;
 const MAX_HISTORY_ROWS = 400;      // aus der DB geladen (für Takt-Zählung und RAG)
 const MAX_MESSAGE_ENTRIES = 400;   // nur Howto/Legacy-Body
 const MAX_CONTENT_CHARS = 8000;
-const CHAT_MODEL = 'claude-sonnet-4-5';
 
 // Altes Format (Client schickt messages[] und speichert selbst). Seit Welle 2b (Mig. 031,
 // Client hat kein Insert-Recht mehr): 409 client_outdated. Howto ist nicht betroffen.
@@ -1226,16 +1229,16 @@ Deno.serve(async (req) => {
       }
       if (extractMessages.length === 0) throw new HttpError(400, 'invalid_messages');
 
-      logger.info('Anthropic API call started', { requestId: safeRequestId, model: 'claude-haiku-4-5-20251001', messageCount: extractMessages.length });
+      logger.info('Anthropic API call started', { requestId: safeRequestId, model: HAIKU_MODEL, messageCount: extractMessages.length });
       const conversationText = extractMessages
         .map((m) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
         .join('\n');
       const response = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+        model: HAIKU_MODEL,
         max_tokens: 600,
         messages: [{ role: 'user', content: `${MEMORY_EXTRACT_PROMPT}\n\nGespräch:\n${conversationText}` }],
       });
-      const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
+      const text = extractText(response, 'extract', logger) || '{}';
       try {
         return jsonResponse(JSON.parse(text), CORS_HEADERS);
       } catch {
@@ -1461,14 +1464,16 @@ Deno.serve(async (req) => {
     const assistantId = crypto.randomUUID();
     const messageType = crisisDetected ? 'crisis_response' : 'standard';
 
-    logger.info('Anthropic API call started', { requestId: safeRequestId, model: CHAT_MODEL, messageCount: apiMessages.length });
+    logger.info('Anthropic API call started', { requestId: safeRequestId, model: COACH_MODEL, messageCount: apiMessages.length });
     const streamStart = Date.now();
     const stream = await anthropic.messages.stream({
-      model: CHAT_MODEL,
+      model: COACH_MODEL,
       // Der Pflichttext im Krisenfall braucht mehr Raum und darf nicht abgeschnitten werden.
-      max_tokens: crisisDetected ? 700 : 400,
+      max_tokens: crisisDetected ? COACH_CRISIS_MAX_TOKENS : COACH_MAX_TOKENS,
+      ...COACH_REQUEST_DEFAULTS,
       system: systemPrompt,
-      messages: apiMessages,
+      // Sonnet 5.5: letzte Nachricht muss vom Nutzer sein (Coach spricht zuerst / Fortsetzen)
+      messages: ensureEndsWithUser(apiMessages, isHowto ? 'howto' : 'chat', logger),
     });
 
     const encoder = new TextEncoder();
@@ -1508,6 +1513,27 @@ Deno.serve(async (req) => {
               }
             }
             logger.info('Stream completed', { requestId: safeRequestId, tokenCount, duration_ms: Date.now() - streamStart, clientAborted: clientGone });
+
+            // Kostenbasis + kein stilles Abschneiden (T0, Schritte 3 und 8). Nur Zahlen und Codes.
+            try {
+              const final = await stream.finalMessage();
+              stopReason = final.stop_reason ?? stopReason;
+              // deno-lint-ignore no-explicit-any
+              const usage = final.usage as any;
+              logger.info('coach_usage', {
+                conversationId: convId, model: COACH_MODEL, mode: isHowto ? 'howto' : 'coaching',
+                inputTokens: usage?.input_tokens ?? 0, outputTokens: usage?.output_tokens ?? 0,
+                cacheReadTokens: usage?.cache_read_input_tokens ?? 0, stopReason,
+              });
+            } catch (usageError: unknown) {
+              logger.warn('coach_usage_unavailable', describeError(usageError));
+            }
+            if (stopReason === 'max_tokens') {
+              logger.warn('coach_response_truncated', { conversationId: convId, deltaCount: tokenCount, crisis: crisisDetected });
+            } else if (stopReason && stopReason !== 'end_turn') {
+              // 'refusal' u. a. – Kategorie ist ein fester Code, kein Inhalt
+              logger.warn('coach_response_unexpected_stop', { conversationId: convId, stopReason });
+            }
           } catch (streamError: unknown) {
             streamFailed = true;
             logger.error('Stream error', { requestId: safeRequestId, ...describeError(streamError) });
@@ -1521,7 +1547,7 @@ Deno.serve(async (req) => {
                 role: 'assistant',
                 content: full,
                 message_type: messageType,
-                metadata: { model: CHAT_MODEL, client_aborted: clientGone, stop_reason: stopReason, stream_failed: streamFailed },
+                metadata: { model: COACH_MODEL, client_aborted: clientGone, stop_reason: stopReason, stream_failed: streamFailed },
               });
               if (assistantError) {
                 logger.error('assistant_insert_failed', { conversationId: convId, code: assistantError.code });
