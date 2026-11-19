@@ -661,7 +661,9 @@ Deno.serve(async (req) => {
     const learningEnabled = (Deno.env.get('RAG_LEARNING_ENABLED') ?? '').trim() === '1';
     if (!learningEnabled) {
       logger.info('learning_disabled', { conversationId });
-    } else if (anonSummary.context && anonSummary.pattern) {
+    } else if (!anonSummary.context || !anonSummary.pattern) {
+      logger.info('learning_no_summary', { conversationId });
+    } else {
       const { data: optInRow, error: optInError } = await supabase
         .from('profiles').select('learning_opt_in').eq('id', userId).maybeSingle();
       if (optInError) {
