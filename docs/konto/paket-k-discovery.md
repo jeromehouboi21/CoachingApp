@@ -36,3 +36,9 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - `mapAuthError`: `invalid_credentials`, `reauthentication_needed`, `reauthentication_not_valid` und Codes mit „current_password“ → „Das aktuelle Passwort stimmt nicht.“ Den tatsächlichen Code beim Test mit Testkonto A notieren.
 - Log-Codes (Frontend, `monitorRules.ts` infoOnly, origin client): `password_changed`, `password_reset_done`, `password_change_failed`, `password_reset_failed`, `invite_password_failed`, `password_reset_request_failed`, `signout_others_failed`.
 - Angriffstest K1–K3 (`testsK`): B bekommt sein Passwort sofort zurück, falls K1/K2 wider Erwarten durchgehen. K3 schickt pro Lauf eine echte Reset-Mail an Testkonto B.
+
+## W1 – Abnahme (20.11.2026)
+
+- Dashboard (J-K1) gesetzt: Mindestlänge 12, „Require current password when updating“ an, Redirect-URL `/passwort-neu`, Vorlagen „Reset password“ (`supabase/templates/recovery.html`) und „Password changed“ (`password_changed.html`).
+- J-K2 von Jerome bestätigt: (a) Passwort ändern inkl. Fehler bei falschem aktuellem Passwort, Abmelden anderer Geräte, Mail · (b) Passwort vergessen → Link → neues Passwort · (c) zweiter Klick auf denselben Link → „abgelaufen“ · (d) Fantasie-Adresse → gleicher Text · (f) Angriffstest K1–K3 PASS.
+- **D-3 geklärt:** Die Einladung (erstes Passwort ohne aktuelles Passwort) funktioniert auch mit „Require current password“ (e).
