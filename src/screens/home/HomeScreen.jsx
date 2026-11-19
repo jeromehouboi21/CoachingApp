@@ -11,6 +11,8 @@ import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { dismissInsight, markSurfaced } from '../../lib/insightActions'
 import { chooseTodayState } from '../../lib/todayState'
+import { TrialEndCard } from '../../components/today/TrialEndCard'
+import { useAccessState, seenOnce, markSeen, TRIAL_END_CARD_KEY } from '../../lib/accessState'
 
 const logger = createLogger('HomeScreen')
 
@@ -57,6 +59,13 @@ export function HomeScreen() {
   const talkAboutImpulse = () => navigate('/coach', { state: { entryContext: { source: 'tagesimpuls', impulse } } })
   const state = hidden && (today?.state === 'B' || today?.state === 'C2') ? 'C' : today?.state
 
+  // U4, Übergangstext 2: Ende des Kennenlernens (Standardgrenze 3), einmal pro Gerät, nicht in A/D
+  const { access } = useAccessState()
+  const [endCardClosed, setEndCardClosed] = useState(false)
+  const showEndCard = !!user && !endCardClosed && access?.phase === 'ruhemodus' && access.starts_limit === 3
+    && state && state !== 'A' && state !== 'D' && !seenOnce(TRIAL_END_CARD_KEY, user.id)
+  const closeEndCard = () => { markSeen(TRIAL_END_CARD_KEY, user.id); setEndCardClosed(true) }
+
   return (
     <div className="px-5 pt-12 pb-6">
       <div className="flex items-start justify-between mb-8">
@@ -78,6 +87,9 @@ export function HomeScreen() {
           </div>
         </div>
       )}
+
+      {/* E – Ende des Kennenlernens (U4) */}
+      {showEndCard && <TrialEndCard onClose={closeEndCard} />}
 
       {/* A – Neu */}
       {state === 'A' && (

@@ -11,7 +11,7 @@ import { MirrorScreen } from './screens/mirror/MirrorScreen'
 import { ProfileScreen } from './screens/profile/ProfileScreen'
 import { HowItWorksScreen } from './screens/howto/HowItWorksScreen'
 import { WellnessCheckScreen } from './screens/wellness/WellnessCheckScreen'
-import { PremiumScreen } from './screens/premium/PremiumScreen'
+import { BegleitungScreen } from './screens/begleitung/BegleitungScreen'
 import { AdminUsersScreen } from './screens/admin/AdminUsersScreen'
 import { AdminMfaScreen } from './screens/admin/AdminMfaScreen'
 import { useAdminMfa, AdminMfaContext } from './hooks/useAdminMfa'
@@ -96,7 +96,9 @@ export default function App() {
       {/* "Wie es funktioniert" — kein AppShell, eigenes Layout */}
       <Route path="/howto" element={<ProtectedRoute><HowItWorksScreen /></ProtectedRoute>} />
       <Route path="/wellness" element={<ProtectedRoute><WellnessCheckScreen /></ProtectedRoute>} />
-      <Route path="/premium" element={<ProtectedRoute><PremiumScreen /></ProtectedRoute>} />
+      {/* U4: Info-Seite Begleitung; /premium bleibt als Weiterleitung für alte Links */}
+      <Route path="/begleitung" element={<ProtectedRoute><BegleitungScreen /></ProtectedRoute>} />
+      <Route path="/premium" element={<Navigate to="/begleitung" replace />} />
 
       {/* Muster-Detail (U2): Vollbild ohne BottomNav, eigener Zurück-Button → /mirror/muster */}
       <Route path="/mirror/muster/:key" element={<ProtectedRoute><PatternDetailScreen /></ProtectedRoute>} />

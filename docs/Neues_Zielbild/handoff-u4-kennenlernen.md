@@ -1,10 +1,12 @@
-# Handoff U4 – Kennenlernen, Ruhemodus, Kappung (v0.1, Entwurf zur Freigabe)
+# Handoff U4 – Kennenlernen, Ruhemodus, Kappung (v1.0, freigegeben)
 
 **Für:** Claude Code · **Stand:** 19.11.2026 · **Basis:** `main` nach Paket C (`security/paket-c-abschluss` gemergt)
 **Konzept:** UX „Kreislauf“ v1.2, Abschnitte 5.3, 5.4, 5.5, 8.3 · Umsetzungsplan v1.0, Tranche U4 (E-12, E-13, O-2)
 **Branch:** `u4/kennenlernen` · ein Deploy: **Migration 038** + Edge Functions `chat`, `pre-session-briefing` (nur falls E-U4-6 b), `admin-users` + Frontend
 
-> Aus der Code-Inventur. Punkte mit **[E-U4-x]** weichen vom Konzept ab, füllen eine Lücke oder brauchen Jeromes Entscheidung. **Gebaut wird erst nach Freigabe.**
+> Aus der Code-Inventur. Punkte mit **[E-U4-x]** weichen vom Konzept ab, füllen eine Lücke oder brauchen Jeromes Entscheidung. **Alle am 19.11.2026 von Jerome nach Empfehlung freigegeben** (E-U4-1 = b).
+>
+> **Audit 19.11.2026:** free 20 ×1, free 30 ×2, tester 20 ×5 / 200 ×6 / 3 ×1 / 300 ×1 / 500 ×1. 60 Gespräche mit eigener Nachricht: Median 7, p90 27, max 93 Nachrichten, keines ≥ 100 → Kappung 100 trifft heute niemanden (O-2: Startwert bestätigt).
 
 ---
 
@@ -112,6 +114,17 @@
 
 ## 5. Designdokument nach Verifikation
 `ARCHITECTURE.md` (Freemium-Abschnitt 9, `consume_session`, neue RPCs, Routen, Profil, Heute E), `CLAUDE.md` Abschnitt 8 (Freemium-Logik) und Begriffe-Tabelle – erst nach Jeromes Validierung.
+
+## 5a. Bauhinweise (19.11.2026)
+
+- **Abweichung E-U4-10:** Testkonto **B** wird `plan = 'tester'`, `session_limit = 0` (Ruhemodus **ohne** Kappung) statt `free` 3/3. Grund: Die S-12-Tests schreiben bei jedem Lauf 4–6 Nachrichten in B's zwei dauerhafte Testgespräche; mit Kappung wären sie nach rund 20 Läufen gesperrt, und im Ruhemodus könnte B kein neues anlegen. Die Kappung prüft stattdessen ein synthetisches Gespräch „SECTEST Kappung“ von Testkonto **A** (`plan = 'free'`). SQL: `supabase/diagnostics/u4-test-setup.sql` (Platzhalter für die Adressen, nicht mit echten Adressen einchecken).
+- **Regeln an einer Stelle:** `access_state_for(uid)` liefert `{ phase, starts_used, starts_limit, can_start, cap }`; `consume_session`, `chat` (Kappung) und `get_access_state()` (Frontend) nutzen sie. Kappung = Konstante `c_cap` dort.
+- **Tester im Ruhemodus:** Tester mit erschöpftem Limit sind im Ruhemodus (ohne Kappung). Karte „Ende des Kennenlernens“ erscheint nur bei der Standardgrenze 3 (der Text sagt „Drei Gespräche“).
+- **429** liefert jetzt `{ error: 'session_limit', phase }` statt „Session limit reached“; `readRateLimit` unterscheidet weiter über `rate_limited`.
+- **Kappung im Chat:** Die abgelehnte Nachricht wird nicht gespeichert und aus dem Verlauf entfernt; Hinweis unter dem Verlauf, Eingabe gesperrt. Beim Weitermachen eines gekappten Gesprächs erscheint derselbe Hinweis.
+- **Ruhemodus vorab:** Einstieg „Etwas Neues mitbringen“, „Wie geht's dir?“, Neues Gespräch im Chat, Wellness und Entry-Kontext zeigen den Hinweis, ohne vorher eine leere Konversation anzulegen.
+- **Entfernt:** `PremiumScreen` (→ `/begleitung`, `/premium` leitet weiter), `LimitModal`, Zähler-Badge im Chat, Badge „Kostenlos/Premium“ im Profil.
+- **Neue Log-Codes:** `conversation_cap_reached` (Info), `access_state_failed` (Alarm, Kappungsprüfung fail-open).
 
 ## 6. Beobachtungen
 - O-2 (Kappungsgrenze nachjustieren): `supabase/diagnostics/coach-usage.sql` (T0) und `u4-audit.sql` liefern die Daten; die Konstante sitzt danach an einer Stelle.

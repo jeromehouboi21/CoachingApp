@@ -25,6 +25,7 @@ export const RULES: Rule[] = [
   { id: 'assistant_insert_failed', codes: ['assistant_insert_failed'], windowMin: 60,    threshold: 1,  label: 'Antwort konnte nicht gespeichert werden' },
   { id: 'message_insert_failed',   codes: ['user_message_insert_failed', 'opening_insert_failed'], windowMin: 60, threshold: 3, label: 'Nachricht konnte nicht gespeichert werden' },
   { id: 'rate_limit_db_error',     codes: ['rate_limit_db_error'],     windowMin: 60,    threshold: 1,  label: 'Rate-Limits ausgefallen' },
+  { id: 'access_state_failed',     codes: ['access_state_failed'],     windowMin: 60,    threshold: 1,  label: 'Kappungsprüfung ausgefallen (U4)' },
   { id: 'delete_incomplete',       codes: ['delete_incomplete', 'auth_delete_failed'], windowMin: 60, threshold: 1, label: 'Kontolöschung unvollständig' },
   { id: 'learning_review_failed',  codes: ['learning_review_failed'],  windowMin: 1440,  threshold: 5,  label: 'Prüfschritt technisch ausgefallen' },
   { id: 'supervision_rejected',    codes: ['supervision_rejected'],    windowMin: 10080, threshold: 2,  label: 'Supervision-Empfehlung verworfen' },
@@ -52,7 +53,9 @@ export const RULES: Rule[] = [
   // Gesprächseinstieg U3:
   { id: 'resume_started',          codes: ['resume_started'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Gespräch weitergeführt (Einstieg)' },
   { id: 'resume_rejected',         codes: ['resume_rejected'],         windowMin: 10080, threshold: 0, infoOnly: true, label: 'Weiterführen abgelehnt (kein eigener Beitrag)' },
-  { id: 'display_title_invalid',   codes: ['display_title_invalid'],   windowMin: 10080, threshold: 0, infoOnly: true, label: 'Kurztitel unbrauchbar' },
+  // Kennenlernen/Kappung U4:
+  { id: 'conversation_cap_reached', codes: ['conversation_cap_reached'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Gespräch an der Kappungsgrenze' },
+  { id: 'display_title_invalid',  codes: ['display_title_invalid'],   windowMin: 10080, threshold: 0, infoOnly: true, label: 'Kurztitel unbrauchbar' },
 ];
 
 // Lebenszeichen: Alarm, wenn ein erwarteter Eintrag AUSBLEIBT (stilles Scheitern von Cron-Jobs).

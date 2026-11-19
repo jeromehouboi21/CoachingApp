@@ -317,7 +317,7 @@ export function AdminUsersScreen() {
                   </label>
 
                   <span className="text-[13px] text-ink-3 ml-auto">
-                    Genutzt: {u.sessions_used_this_month ?? 0}
+                    Starts genutzt: {u.trial_sessions_used ?? 0}
                   </span>
                 </div>
               </div>

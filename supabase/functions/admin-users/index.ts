@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
       // Alle Profile laden ...
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, display_name, plan, is_beta_tester, session_limit, sessions_used_this_month, created_at, invited_at')
+        .select('id, display_name, plan, is_beta_tester, session_limit, trial_sessions_used, created_at, invited_at')
         .order('created_at', { ascending: false });
 
       if (profilesError) {

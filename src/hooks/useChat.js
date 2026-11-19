@@ -37,6 +37,17 @@ async function isClientOutdated(response) {
   }
 }
 
+// U4: Gespräch an der Kappungsgrenze (409 conversation_cap) – nichts wurde gespeichert
+async function isConversationCap(response) {
+  if (response.status !== 409) return false
+  try {
+    const body = await response.clone().json()
+    return body?.error === 'conversation_cap'
+  } catch {
+    return false
+  }
+}
+
 function outdatedBubble() {
   return { role: 'assistant', content: OUTDATED_MESSAGE, isError: true, action: 'reload', id: `outdated-${Date.now()}` }
 }
@@ -72,10 +83,14 @@ async function readStream(response, { onMeta, onText }) {
 // Eröffnungen { conversationId, start }. Akte, Briefing, Resonanzkarte, Gedächtnis und RAG
 // lädt die chat-Function selbst.
 //
-// options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 (Monatslimit) antwortet.
+// options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 session_limit antwortet (U4: keine
+//   Kennenlern-Starts mehr → Ruhemodus).
+// options.onConversationCap: 409 conversation_cap (U4) – das Gespräch hat die Kappungsgrenze erreicht.
 export function useChat(userId, session, options = {}) {
   const onSessionLimitRef = useRef(options.onSessionLimit)
   onSessionLimitRef.current = options.onSessionLimit
+  const onConversationCapRef = useRef(options.onConversationCap)
+  onConversationCapRef.current = options.onConversationCap
   // Konversationen, für die der Server bereits eine Sitzung gezählt hat (oder die
   // aus dem Verlauf fortgesetzt werden). Für die clientseitige UX-Prüfung des Limits.
   const countedConvIdsRef = useRef(new Set())
@@ -138,6 +153,12 @@ export function useChat(userId, session, options = {}) {
         logger.warn('Session limit reached (server)', { requestId })
         setMessages(base)
         onSessionLimitRef.current?.()
+        return
+      }
+      if (await isConversationCap(response)) {
+        logger.info('conversation_cap', { requestId, conversationId: convId })
+        setMessages(base)
+        onConversationCapRef.current?.()
         return
       }
       if (await isClientOutdated(response)) {
@@ -369,6 +390,13 @@ export function useChat(userId, session, options = {}) {
         logger.warn('Session limit reached (server)', { requestId, conversationId: activeConvId })
         markFailed()
         onSessionLimitRef.current?.()
+        return
+      }
+      if (await isConversationCap(response)) {
+        // Nicht gespeichert: Nutzer-Blase und Platzhalter entfernen, Text geht an den Screen zurück
+        logger.info('conversation_cap', { requestId, conversationId: activeConvId })
+        setMessages(prev => prev.filter(m => m.id !== placeholderId && m.id !== userLocalId))
+        onConversationCapRef.current?.(content)
         return
       }
       if (await isClientOutdated(response)) {

@@ -26,7 +26,9 @@ function conversationLabel(c) {
     : `Gespräch vom ${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}`
 }
 
-export function ConversationEntry({ recent = [], busy = false, onResume, onNew, onWellness, onAll }) {
+// trialHint: Übergangstext 1 (U4) – vor dem letzten Kennenlern-Gespräch, einmalig, ohne Button.
+// lastStartLabel: 'dritte' bei der Standardgrenze 3, sonst 'letzte'.
+export function ConversationEntry({ recent = [], busy = false, onResume, onNew, onWellness, onAll, trialHint = false, lastStartLabel = 'letzte' }) {
   return (
     <div className="px-5 pt-12 pb-24">
       <div className="flex items-start justify-between gap-3 mb-8">
@@ -65,6 +67,12 @@ export function ConversationEntry({ recent = [], busy = false, onResume, onNew, 
       <button onClick={onAll} className="text-[13px] text-accent font-medium hover:underline mb-8 block">
         Alle Gespräche →
       </button>
+
+      {trialHint && (
+        <p className="text-[13px] text-ink-2 leading-relaxed bg-surface-2 rounded-xl px-4 py-3 mb-4">
+          Das ist dein {lastStartLabel}s Gespräch zum Kennenlernen. Danach bleibt alles, was du hier erkannt hast, für dich sichtbar. Für neue Gespräche gibt es die Begleitung.
+        </p>
+      )}
 
       <button
         disabled={busy}

@@ -1,5 +1,5 @@
 // Rate-Limit-Antworten der Edge Functions (HTTP 429 mit { error: 'rate_limited', retryAfter }).
-// Abzugrenzen vom Monatslimit der Gespräche (429 mit 'Session limit reached').
+// Abzugrenzen von der Gesprächsgrenze im Kennenlernen (429 mit error 'session_limit', U4).
 
 const CRISIS_HINT =
   'Wenn es dir gerade sehr schlecht geht: Die Telefonseelsorge ist rund um die Uhr kostenlos erreichbar — 0800 111 0 111 oder 0800 111 0 222.'

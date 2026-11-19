@@ -430,7 +430,7 @@ FAKTEN:
   · Spiegel: Erkenntnisse (eigene Sätze), Muster (was sich wiederholt, eigene innere Stimmen, „Kennst du das?“ mit fünf häufigen Mustern) und Entwicklung (Zeitachse, Stärken, Alltag)
 - Profil über den Kreis mit dem Anfangsbuchstaben oben rechts; dort u. a. Reflexionstage (an wie vielen Tagen insgesamt ein Gespräch begonnen wurde)
 - Alles, was über den Menschen entsteht, ist im Spiegel vollständig sichtbar – ohne Grenze
-- Kosten: Free (20 Gespräche/Monat, Skala unbegrenzt, Spiegel vollständig), Premium (unbegrenzt, Preis noch offen)
+- Kosten: Kennenlernen (kostenlos, einmalig 3 Gespräche ohne Zeitlimit, jedes bis 100 Nachrichten fortsetzbar) → Ruhemodus (kostenlos, unbegrenzt: Heute, Spiegel, Verlauf und Profil bleiben vollständig nutzbar, nur keine neuen Gespräche) → Begleitung (neue Gespräche ohne Grenze, Preis noch offen; bis dahin Kontakt zu Jerome). Was über den Menschen entstanden ist, bleibt in jeder Phase sichtbar.
 - Systemisches Coaching: Ansatz, der durch Fragen Muster sichtbar macht — nicht durch Ratschläge
 
 MODUS 1 — INFORMATIV (Standard):
@@ -1394,6 +1394,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 9b. U4 Kappung: ohne Begleitung höchstens `cap` Nachrichten je Gespräch (Nutzer + Coach).
+    //     Regeln aus access_state_for (Migration 038). Nichts wird gespeichert, kein Modellaufruf.
+    //     Krisenantwort geht trotzdem durch (wie beim Gesprächslimit, E-U4-8).
+    if (isCoaching && convId) {
+      const { data: access, error: accessError } = await admin.rpc('access_state_for', { p_user_id: user.id });
+      if (accessError) {
+        // fail-open wie die Rate-Limits im Gespräch; consume_session prüft die Starts unabhängig davon
+        logger.error('access_state_failed', { code: accessError.code });   // überwacht S-22
+      } else {
+        const cap = typeof access?.cap === 'number' ? access.cap : null;
+        if (cap !== null && history.length >= cap) {
+          if (!crisisDetected) {
+            logger.info('conversation_cap_reached', { conversationId: convId, messageCount: history.length, cap });
+            return jsonResponse({ error: 'conversation_cap', cap }, CORS_HEADERS, 409);
+          }
+          logger.warn('conversation_cap_reached', { conversationId: convId, messageCount: history.length, cap, crisis: true });
+        }
+      }
+    }
+
     // 10. Sitzung serverseitig zählen und Limit prüfen (atomar, idempotent pro Konversation).
     //     Vor dem Speichern der Nutzer-Nachricht, damit bei erreichtem Limit nichts liegen bleibt.
     if (isCoaching) {
@@ -1405,7 +1425,7 @@ Deno.serve(async (req) => {
       if (!session?.allowed) {
         if (!crisisDetected) {
           logger.warn('session limit reached, request blocked', { conversationId: convId, used: session?.used, limit: session?.limit });
-          return new Response(JSON.stringify({ error: 'Session limit reached' }), {
+          return new Response(JSON.stringify({ error: 'session_limit', phase: session?.phase ?? null }), {
             status: 429,
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
           });

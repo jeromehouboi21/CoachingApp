@@ -707,6 +707,69 @@ async function testsS16(a, b) {
   return r;
 }
 
+// ── U4: Kennenlernen, Ruhemodus, Kappung ────────────────────────────────────
+// Vorbereitung einmalig per supabase/diagnostics/u4-test-setup.sql: B = Tester ohne freie Starts
+// (Ruhemodus), A hat ein synthetisches Gespräch „SECTEST Kappung“ mit 100 Nachrichten.
+// Beide Ablehnungen passieren vor jedem Modellaufruf (keine Kosten).
+async function testsU4(a, b) {
+  {
+    const { error } = await newClient().rpc('get_access_state');
+    record('U4-a', 'anon rpc get_access_state', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+  {
+    const { error } = await b.client.rpc('access_state_for', { p_user_id: b.userId });
+    record('U4-b', 'rpc access_state_for (als B, nur service_role)', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+  {
+    const { data, error } = await b.client.from('profiles')
+      .update({ trial_sessions_used: 0 }).eq('id', b.userId).select('id');
+    record('U4-c', 'update profiles.trial_sessions_used direkt', '42501',
+      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+  }
+  let bState = null;
+  {
+    const { data, error } = await b.client.rpc('get_access_state');
+    bState = data;
+    const ok = !error && ['kennenlernen', 'ruhemodus', 'begleitung'].includes(data?.phase);
+    record('U4-d', 'rpc get_access_state (als B)', 'Phase', ok ? PASS : FAIL, error ? errCode(error) : `phase=${data?.phase}`);
+  }
+  // „4. Gespräch ohne Begleitung“: neues Gespräch im Ruhemodus → 429 session_limit
+  if (bState?.phase === 'ruhemodus') {
+    // Dasselbe (nie gezählte) Testgespräch bei jedem Lauf – Clients dürfen Gespräche nicht löschen
+    const conv = { id: await ensureBConversation(b, 'SECTEST U4 Ruhemodus') };
+    {
+      const r = await callFunction('chat', {
+        token: b.token,
+        body: { conversationId: conv.id, message: { clientMessageId: crypto.randomUUID(), content: 'Hallo' }, requestId: 'sectest-u4e' },
+      });
+      const { count } = await b.client.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', conv.id);
+      record('U4-e', 'neues Gespräch im Ruhemodus', '429 session_limit, 0 gespeichert',
+        r.status === 429 && r.json?.error === 'session_limit' && (count ?? 0) === 0 ? PASS : FAIL,
+        `HTTP ${r.status}, ${r.json?.error ?? ''}, gespeichert=${count ?? '?'}`);
+    }
+  } else {
+    record('U4-e', 'neues Gespräch im Ruhemodus', '429 session_limit', SKIP, `B ist nicht im Ruhemodus (phase=${bState?.phase ?? '?'}) – u4-test-setup.sql`);
+  }
+  // „101. Nachricht“: synthetisches Gespräch von A mit 100 Nachrichten → 409 conversation_cap
+  {
+    const { data: capConv } = await a.client.from('conversations').select('id')
+      .eq('user_id', a.userId).eq('title', 'SECTEST Kappung').limit(1).maybeSingle();
+    if (!capConv) {
+      record('U4-f', '101. Nachricht ohne Begleitung', '409 conversation_cap', SKIP, 'kein Gespräch „SECTEST Kappung“ bei A – u4-test-setup.sql');
+    } else {
+      const { count: before } = await a.client.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', capConv.id);
+      const r = await callFunction('chat', {
+        token: a.token,
+        body: { conversationId: capConv.id, message: { clientMessageId: crypto.randomUUID(), content: 'Hallo' }, requestId: 'sectest-u4f' },
+      });
+      const { count: after } = await a.client.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', capConv.id);
+      record('U4-f', '101. Nachricht ohne Begleitung', '409 conversation_cap, nichts gespeichert',
+        r.status === 409 && r.json?.error === 'conversation_cap' && before === after ? PASS : FAIL,
+        `HTTP ${r.status}, ${r.json?.error ?? ''}, nachrichten=${before}→${after}`);
+    }
+  }
+}
+
 // ── S-06b (Paket C, C-5): Zweiter Faktor für alle ───────────────────────────
 // Immer: #33 Codes-Tabelle gesperrt, codes:generate ohne aal2 abgelehnt.
 // Mit ATTACK_TEST_MFA=1: #34–#38. TOTP-Schlüssel, Codes und Wiederherstellungscodes bleiben im
@@ -943,6 +1006,7 @@ function printResults() {
   await testsS22(b);
   const exportResult = await testsS16(a, b);
   await testsS06b(b);
+  await testsU4(a, b);   // vor den Rate-Limit-Tests (chat-Zählung)
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)

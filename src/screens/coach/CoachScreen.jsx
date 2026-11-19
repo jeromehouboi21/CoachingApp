@@ -13,7 +13,9 @@ import { QuickReplies } from '../../components/coach/QuickReplies'
 import { ConversationEndModal } from '../../components/coach/ConversationEndModal'
 import { ConversationEntry } from '../../components/coach/ConversationEntry'
 import { createConfirmedInsight } from '../../lib/insightActions'
-import { Badge } from '../../components/ui/Badge'
+import { RestModeSheet } from '../../components/access/RestModeSheet'
+import { ConversationCapNotice } from '../../components/access/ConversationCapNotice'
+import { useAccessState, isLastTrialStart, seenOnce, markSeen, TRIAL_LAST_HINT_KEY } from '../../lib/accessState'
 import { ProfileButton } from '../../components/layout/ProfileButton'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
@@ -92,10 +94,16 @@ export function CoachScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const { memory, updateMemory } = useMemory(user?.id)
-  // Sitzungen zählt der Server (consume_session in der chat-Function). Bei 429
-  // zeigt der Screen das Limit-Modal und lädt das Profil neu.
+  // U4: Phase (Kennenlernen · Ruhemodus · Begleitung) nur zur Anzeige. Starts und Kappung
+  // setzt der Server durch (consume_session, chat): 429 session_limit → Ruhemodus-Hinweis,
+  // 409 conversation_cap → Kappungshinweis.
+  const { access, loading: accessLoading, refresh: refreshAccess } = useAccessState()
+  const canStart = access ? access.can_start !== false : true
+  const [showRestSheet, setShowRestSheet] = useState(false)
+  const [capReached, setCapReached] = useState(false)
   const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startEntryContextConversation, sendMessage, retryMessage, extractMemoryAndInsight, loadConversation, resumeWithOpening, isConversationCounted } = useChat(user?.id, session, {
-    onSessionLimit: () => { setShowLimitModal(true); refreshProfile() },
+    onSessionLimit: () => { setShowRestSheet(true); refreshAccess(); refreshProfile() },
+    onConversationCap: () => { setCapReached(true); refreshAccess() },
   })
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
@@ -104,7 +112,6 @@ export function CoachScreen() {
   const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
   const resumeConversationIdRef = useRef(location.state?.resumeConversationId ?? null)
   const [showQuickReplies, setShowQuickReplies] = useState(true)
-  const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
   // U3: Einstieg vor dem Chat. mode: 'loading' | 'entry' | 'chat'
   const [mode, setMode] = useState('loading')
@@ -113,16 +120,25 @@ export function CoachScreen() {
   // "Innere Stimmen" Phase 2: bereits beantwortete Namensgebungs-Angebote
   // ausblenden, auch wenn dieselbe Nachricht erneut gerendert wird.
   const [handledVoiceIds, setHandledVoiceIds] = useState(new Set())
-  // Nur ein echter Paid-Plan schaltet die Limit-Zählung ab. 'tester' zählt
-  // und wird begrenzt wie jeder andere unbezahlte Account — das Admin-Panel
-  // setzt für Tester bewusst individuelle session_limit-Werte (z.B. 3, 300,
-  // 500), die vorher wirkungslos waren, weil 'tester' hier fälschlich wie
-  // 'premium' behandelt wurde. Es gibt aktuell keine Paid-User-Phase (steht
-  // noch aus); dieser Wert ist ein Platzhalter für später.
-  const isPaidUser = profile?.plan === 'premium'
-  const sessionsLeft = profile?.session_limit == null
-    ? Infinity
-    : profile.session_limit - (profile?.sessions_used_this_month || 0)
+  // Kappungshinweis gilt nur für das Gespräch, in dem er ausgelöst wurde
+  useEffect(() => { setCapReached(false) }, [conversationId])
+
+  // Übergangstext 1: vor dem letzten Kennenlern-Gespräch, einmal pro Gerät (E-U4-9)
+  const showTrialHint = !!user && isLastTrialStart(access) && !seenOnce(TRIAL_LAST_HINT_KEY, user.id)
+  useEffect(() => {
+    if (showTrialHint && mode === 'entry') markSeen(TRIAL_LAST_HINT_KEY, user.id)
+  }, [showTrialHint, mode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Neues Gespräch nur, wenn ein Start möglich ist – sonst Ruhemodus-Hinweis (Übergangstext 3)
+  const startNewOrRest = (isFirst = false) => {
+    if (!canStart) {
+      setMode('entry')
+      setShowRestSheet(true)
+      return false
+    }
+    startNewConversation(isFirst)
+    return true
+  }
 
   // Eckdaten für den Einstieg. Ergebnis: { briefing, recent, latestActiveConversation } oder null.
   const fetchEntryData = useCallback(async () => {
@@ -144,7 +160,7 @@ export function CoachScreen() {
   }, [session])
 
   useEffect(() => {
-    if (!user || !profile) return
+    if (!user || !profile || accessLoading) return
     if (hasStartedRef.current) return
     hasStartedRef.current = true
 
@@ -176,6 +192,13 @@ export function CoachScreen() {
     }
 
     // VARIANTE 3: Wellness-Check (höchste Priorität unter den automatischen Eröffnungen)
+    // Im Ruhemodus kein neues Gespräch anlegen (U4) → Einstieg mit Hinweis
+    if (wc && !canStart) {
+      fetchEntryData().catch(() => {})
+      setMode('entry')
+      setShowRestSheet(true)
+      return
+    }
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
       setMode('chat')
@@ -190,6 +213,11 @@ export function CoachScreen() {
         const data = await fetchEntryData()
         const latest = data?.latestActiveConversation ?? null
 
+        if (entryCtx && entryCtx.source !== 'direct' && !canStart) {
+          setMode('entry')
+          setShowRestSheet(true)
+          return
+        }
         if (entryCtx && entryCtx.source !== 'direct') {
           logger.info('Entry context start', { source: entryCtx.source })
           setMode('chat')
@@ -200,7 +228,7 @@ export function CoachScreen() {
         if (!data || !latest) {
           // Noch kein Gespräch mit eigener Nachricht → Erstgespräch, kein Einstieg
           setMode('chat')
-          startNewConversation(!!data && !latest)
+          startNewOrRest(!!data && !latest)
           return
         }
         if (Date.now() - new Date(latest.lastMessageAt).getTime() < RUNNING_WINDOW_MS) {
@@ -214,12 +242,12 @@ export function CoachScreen() {
         setMode('entry')
       } catch {
         setMode('chat')
-        startNewConversation()
+        startNewOrRest()
       }
     }
 
     loadAndStart()
-  }, [user, profile]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, profile, accessLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -229,13 +257,13 @@ export function CoachScreen() {
     // UX-Vorprüfung: Ein bereits gezähltes (laufendes oder fortgesetztes) Gespräch
     // darf weitergehen. Maßgeblich ist der Server (429 → onSessionLimit).
     const alreadyCounted = isConversationCounted(conversationId)
-    if (!isPaidUser && sessionsLeft <= 0 && !alreadyCounted) {
-      setShowLimitModal(true)
+    if (!canStart && !alreadyCounted && !conversationHasOwnMessage(messages)) {
+      setShowRestSheet(true)
       return
     }
     setShowQuickReplies(false)
     await sendMessage(content, inputMode)
-    if (!alreadyCounted) refreshProfile() // Zähler nach der ersten Nachricht aktualisieren
+    if (!alreadyCounted) { refreshProfile(); refreshAccess() } // Phase nach dem ersten Senden aktualisieren
     updateStreak(profile, updateProfile)
   }
 
@@ -332,6 +360,7 @@ export function CoachScreen() {
   }
 
   const handleEntryNew = () => {
+    if (!canStart) { setShowRestSheet(true); return }
     setMode('chat')
     setShowQuickReplies(true)
     startNewConversation(false)
@@ -375,8 +404,7 @@ export function CoachScreen() {
         }
       }
     }
-    startNewConversation()
-    setShowQuickReplies(true)
+    if (startNewOrRest()) setShowQuickReplies(true)
   }
 
   // Abschluss (U3, 4.2c): bestätigte Erkenntnis gehört dem Nutzer (source 'user'); danach optional ein Vorhaben.
@@ -388,8 +416,7 @@ export function CoachScreen() {
 
   const handleEndModalClose = () => {
     setEndModal(null)
-    startNewConversation()
-    setShowQuickReplies(true)
+    if (startNewOrRest()) setShowQuickReplies(true)
   }
 
   // "Innere Stimmen" Phase 2: Chip-Auswahl direkt in inner_voices schreiben
@@ -419,10 +446,12 @@ export function CoachScreen() {
           busy={entryBusy}
           onResume={handleEntryResume}
           onNew={handleEntryNew}
-          onWellness={() => navigate('/wellness')}
+          onWellness={() => (canStart ? navigate('/wellness') : setShowRestSheet(true))}
           onAll={() => navigate('/coach/verlauf')}
+          trialHint={showTrialHint}
+          lastStartLabel={access?.starts_limit === 3 ? 'dritte' : 'letzte'}
         />
-        {showLimitModal && <LimitModal profile={profile} navigate={navigate} onClose={() => setShowLimitModal(false)} />}
+        {showRestSheet && <RestModeSheet onClose={() => setShowRestSheet(false)} />}
       </div>
     )
   }
@@ -463,15 +492,6 @@ export function CoachScreen() {
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
             <span className="text-[12px] text-ink-3">Bereit für dich</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {profile?.plan === 'premium' ? (
-              <Badge variant="premium">Premium</Badge>
-            ) : (
-              <Badge variant="free">
-                {profile?.session_limit == null ? 'Unbegrenzt' : `${sessionsLeft} von ${profile.session_limit} frei`}
-              </Badge>
-            )}
           </div>
         </div>
       </div>
@@ -525,9 +545,17 @@ export function CoachScreen() {
         </div>
       )}
 
+      {/* Kappungshinweis (U4, Übergangstext 4) */}
+      {capReached && (
+        <ConversationCapNotice
+          canStart={canStart}
+          onNewConversation={() => { if (startNewOrRest()) setShowQuickReplies(true) }}
+        />
+      )}
+
       {/* Chat Input */}
       <div className="sticky bottom-0">
-        <ChatInput onSend={handleSend} disabled={isLoading} />
+        <ChatInput onSend={handleSend} disabled={isLoading || capReached} />
       </div>
 
       {/* Gesprächs-Abschluss Modal */}
@@ -540,24 +568,13 @@ export function CoachScreen() {
         />
       )}
 
-      {/* Limit Modal */}
-      {showLimitModal && <LimitModal profile={profile} navigate={navigate} onClose={() => setShowLimitModal(false)} />}
+      {/* Ruhemodus-Hinweis (U4, Übergangstext 3) */}
+      {showRestSheet && <RestModeSheet onClose={() => setShowRestSheet(false)} />}
     </div>
   )
 }
 
-function LimitModal({ profile, navigate, onClose }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
-      <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
-        <h3 className="font-display text-[22px] text-ink mb-2">Alle {profile?.session_limit ?? 20} Gespräche für diesen Monat genutzt</h3>
-        <p className="text-[14px] text-ink-2 mb-5">Upgrade auf Premium für unbegrenzte Gespräche — oder buche ein persönliches Gespräch mit Jerome.</p>
-        <div className="flex flex-col gap-3">
-          <button onClick={() => navigate('/premium')} className="w-full bg-accent text-white py-3 rounded-full font-medium">Premium entdecken</button>
-          <a href="https://www.friedensstifter.coach/contact/" className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium text-center">Mit Jerome sprechen</a>
-          <button onClick={onClose} className="text-[13px] text-ink-3 text-center">Schließen</button>
-        </div>
-      </div>
-    </div>
-  )
+// Hat das Gespräch schon eine eigene Nachricht? Dann ist es gezählt und darf weitergehen (bis zur Kappung).
+function conversationHasOwnMessage(msgs) {
+  return msgs.some(m => m.role === 'user' && m.status !== 'failed')
 }

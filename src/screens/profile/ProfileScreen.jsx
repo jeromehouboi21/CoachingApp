@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
-import { Badge } from '../../components/ui/Badge'
+import { useAccessState } from '../../lib/accessState'
 import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
@@ -20,8 +20,19 @@ function localDayKey(iso) {
 }
 
 
+// U4: Phase in einer ruhigen Zeile (E-U4-5). Begleitung ohne Zahl; Kennenlernen mit „Gespräch n von m“.
+function phaseLine(access) {
+  if (!access?.phase) return null
+  if (access.phase === 'begleitung') return 'Begleitung'
+  if (access.phase === 'ruhemodus') return 'Ruhemodus – alles, was du erkannt hast, bleibt sichtbar'
+  if (typeof access.starts_limit !== 'number') return 'Kennenlernen'
+  const current = Math.min(access.starts_used + 1, access.starts_limit)
+  return `Kennenlernen · Gespräch ${current} von ${access.starts_limit}`
+}
+
 export function ProfileScreen() {
   const { profile, user, signOut, updateProfile, refreshProfile } = useAuth()
+  const { access } = useAccessState()
   const navigate = useNavigate()
   const [insightCount, setInsightCount] = useState(0)
   // U1, E-U1-5: Gespräche gesamt + Reflexionstage (Tage mit begonnenem Gespräch, gesamt). null = nicht ladbar
@@ -101,13 +112,11 @@ export function ProfileScreen() {
       <div className="flex flex-col items-center text-center mb-8">
         <Avatar name={name} size="lg" className="mb-4" />
         <h1 className="font-display text-[22px] text-ink mb-2">{name}</h1>
-        {profile?.plan === 'tester' ? (
-          <span className="text-[12px] font-medium px-3 py-1 rounded-full bg-accent-light text-accent">Beta</span>
-        ) : (
-          <Badge variant={profile?.plan === 'premium' ? 'premium' : 'free'}>
-            {profile?.plan === 'premium' ? 'Premium' : 'Kostenlos'}
-          </Badge>
+        {profile?.plan === 'tester' && (
+          <span className="text-[12px] font-medium px-3 py-1 rounded-full bg-accent-light text-accent mb-2">Beta</span>
         )}
+        {/* U4 (E-U4-5): ruhige Zeile zur Phase, kein Countdown */}
+        {phaseLine(access) && <p className="text-[13px] text-ink-3">{phaseLine(access)}</p>}
       </div>
 
       {/* Stats */}
@@ -161,7 +170,7 @@ export function ProfileScreen() {
         {[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
-          ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
+          ...(profile?.plan !== 'premium' ? [{ icon: CreditCard, label: 'Begleitung', action: () => navigate('/begleitung') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setBetaConsent(false); setBetaError(false); setShowBetaModal(true) } }] : []),
           ...(profile?.plan === 'tester' || profile?.plan === 'premium' ? [{ icon: ClipboardList, label: 'Beta-Fragebogen ausfüllen', action: () => navigate('/feedback') }] : []),
           { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },

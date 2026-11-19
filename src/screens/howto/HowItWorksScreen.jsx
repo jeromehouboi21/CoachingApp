@@ -203,12 +203,15 @@ export function HowItWorksScreen() {
             </button>
           </div>
 
-          {/* Block 3b — Kostenlos vs. Premium */}
+          {/* Block 3b — Kennenlernen, Ruhemodus, Begleitung (U4) */}
           <div>
-            <h2 className="text-[16px] font-medium text-ink mb-2">Kostenlos vs. Premium</h2>
+            <h2 className="text-[16px] font-medium text-ink mb-2">Kennenlernen, Ruhemodus, Begleitung</h2>
             <p className="text-[14px] text-ink-2 leading-[1.7]">
-              Kostenlos kannst du 20 Coach-Gespräche im Monat führen, die Skalenfrage unbegrenzt nutzen und bis zu 10 Erkenntnisse in deinem Spiegel sammeln. Premium hebt diese Grenzen auf und schaltet die Inneren Stimmen frei. Was Premium kostet, geben wir bekannt, sobald es verfügbar ist.
+              Zum Kennenlernen hast du drei Gespräche, ohne Zeitlimit. Jedes davon kannst du später fortsetzen, bis es sehr lang geworden ist (100 Nachrichten). Danach beginnt der Ruhemodus: Heute, dein ganzer Spiegel, deine bisherigen Gespräche und dein Profil bleiben vollständig nutzbar, nur neue Gespräche gibt es dann mit der Begleitung. Was die Begleitung kostet, steht noch nicht fest.
             </p>
+            <button onClick={() => navigate('/begleitung')} className="text-[13px] text-ink-3 hover:text-ink-2 mt-2 hover:underline">
+              Mehr zur Begleitung →
+            </button>
           </div>
 
           {/* Block 4 — Systemisches Coaching */}
