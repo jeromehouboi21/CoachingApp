@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
     if (supervisionText.trim()) {
       const review = await reviewLearningEntry(supervisionText.slice(0, 4000), haiku, ['low_quality']);
       if (review.approved) protocolText = supervisionText.slice(0, 4000);
-      else logger.warn('supervision_protocol_rejected', { reasons: review.reasons });
+      else logger.warn('supervision_protocol_rejected', { reasons: review.reasons.join(',') });
     }
     let improvementRecs: string | null = null;
     if (extractedRecs) {
