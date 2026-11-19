@@ -15,6 +15,7 @@ const CORS_HEADERS = corsHeaders('POST, OPTIONS');
 // Vom Client gesetzte Platzhalter (useChat) – kein echter Titel, Anzeige dann „Gespräch vom …“
 const PLACEHOLDER_TITLES = new Set(['Neues Gespräch', 'Gespräch', 'Wellness-Check']);
 const RECENT_LIMIT = 3;
+const CANDIDATE_SCAN = 20;   // so viele jüngste Gespräche werden höchstens durchsucht
 
 Deno.serve(async (req) => {
   // CORS preflight — MUSS als erstes stehen
@@ -49,12 +50,15 @@ Deno.serve(async (req) => {
       .select('id, title, updated_at, summary, open_thread, open_thread_intensity')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
-      .limit(12);
+      .limit(CANDIDATE_SCAN);
     if (candError) {
       logger.error('recent conversations fetch failed', { code: candError.code });
       throw new HttpError(500, 'briefing_failed');
     }
+    // Weitersuchen, bis RECENT_LIMIT nachbearbeitete Gespräche gefunden sind – frische, noch nicht
+    // nachbearbeitete Gespräche oben in der Liste dürfen die Weitermachen-Liste nicht verkürzen.
     const withUserMessage: typeof candidates = [];
+    let processedFound = 0;
     for (const c of candidates ?? []) {
       const { count: userCount, error: countError } = await supabase
         .from('messages').select('id', { count: 'exact', head: true })
@@ -63,8 +67,11 @@ Deno.serve(async (req) => {
         logger.error('recent conversation count failed', { code: countError.code });
         throw new HttpError(500, 'briefing_failed');
       }
-      if ((userCount ?? 0) > 0) withUserMessage.push(c);
-      if (withUserMessage.length >= RECENT_LIMIT + 1) break;
+      if ((userCount ?? 0) > 0) {
+        withUserMessage.push(c);
+        if (c.summary) processedFound++;
+      }
+      if (processedFound >= RECENT_LIMIT) break;
     }
     const latest = withUserMessage[0] ?? null;
     const latestActiveConversation = latest ? { id: latest.id, lastMessageAt: latest.updated_at } : null;

@@ -17,7 +17,13 @@ export function relativeLabel(iso) {
 function conversationLabel(c) {
   if (c.moving) return 'Ein Gespräch, das dich bewegt hat'   // bei hoher Intensität kein Thema
   if (c.title) return c.title
-  return `Gespräch vom ${new Date(c.lastActivityAt).toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}`
+  // Ohne Kurztitel (ältere Gespräche): heute mit Uhrzeit, sonst mit Datum – damit sich Einträge unterscheiden
+  const d = new Date(c.lastActivityAt)
+  const today = new Date()
+  const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+  return sameDay
+    ? `Gespräch um ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+    : `Gespräch vom ${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'long' })}`
 }
 
 export function ConversationEntry({ recent = [], busy = false, onResume, onNew, onWellness, onAll }) {
