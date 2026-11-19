@@ -129,6 +129,7 @@ Reihenfolge: **erst `main` mergen**, dann `supabase db push`, `supabase function
 - **Wiederentdecken:** gewählt wird die jüngste passende Erkenntnis (älter als 14 Tage); ✦-Vorrang folgt mit U5a.
 - **„Wie es funktioniert“:** Neben dem Howto-Prompt (E-U3-8) war auch die statische Liste „Dein Werkzeugkasten“ veraltet (Mein Spiegel mit Akte, Verstehen, Stimmen Premium). Ersetzt durch „So ist die App aufgebaut“ (Heute · Gespräch · Spiegel) mit einem Satz zum Kreislauf (Konzept 4.1: der Kreislauf wird dort erklärt).
 - **Auswahllogik** für Heute liegt als reine Funktion in `src/lib/todayState.js` (10 Fälle lokal geprüft: A, A nur Pool, D, B, B Vorhaben vor Vorschlag, B bestätigt, B weggeschoben, C2, C2 schon diese Woche, 13 Tage alt).
+- **Kurztitel nachgeschärft (nach erster Prüfung):** Ein erster Titel lautete „Authentizität statt Druck“ – eine Deutung mit Gegenüberstellung statt eines Themas. Die Anweisung verlangt jetzt Thema/Situation in Alltagssprache, verbietet Gegenüberstellungen sowie abstrakte Wert- und Fachwörter und nennt Gut-/Schlecht-Beispiele (`u3/titel-fix`).
 - Im Chat bleibt „Neues Gespräch“ (führt zum Abschluss-Modal); „←“ erscheint nur, wenn es einen Einstieg gibt (nicht beim Erstgespräch).
 
 ## 7. Beobachtungen (nicht Teil von U3)

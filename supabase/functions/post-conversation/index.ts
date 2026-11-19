@@ -26,13 +26,21 @@ Antworte NUR mit validem JSON:
   "where_we_left_off": "Wo endete das Gespräch inhaltlich? 1-2 Sätze. Null wenn klar abgeschlossen.",
   "coach_effectiveness": 3,
   "next_session_rec": "Konkreter Hinweis für das nächste Gespräch. Max. 2-3 Sätze.",
-  "display_title": "3–5 Wörter, neutral, ohne Namen, ohne Diagnose, z. B. 'Spannung im Team' oder 'Eine Entscheidung'"
+  "display_title": "2–5 Wörter: das Thema oder die Situation in Alltagssprache"
 }
 
 WICHTIG für display_title:
-- Der Mensch sieht diesen Titel in seiner Gesprächsliste. Er soll ihn wiedererkennen, ohne dass jemand,
-  der mitliest, etwas Persönliches erfährt.
-- Keine Namen, keine Orte, keine Diagnosen, keine Bewertung, kein Satzzeichen am Ende.
+- Der Mensch sieht diesen Titel in seiner Gesprächsliste. Er soll das Gespräch daran wiedererkennen,
+  ohne dass jemand, der mitliest, etwas Persönliches erfährt.
+- Benenne das THEMA oder die SITUATION, über die gesprochen wurde – nicht das Ergebnis, nicht deine Deutung,
+  nicht, worum es „eigentlich“ ging. So, wie der Mensch selbst einer Freundin sagen würde, worüber er geredet hat.
+- Keine Gegenüberstellungen („statt“, „vs.“, „mehr … weniger“, „von … zu“) und keine Ziele oder Botschaften.
+- Keine abstrakten Wert-, Psychologie- oder Fachwörter (z. B. Authentizität, Selbstwert, Resilienz,
+  Abgrenzung, Selbstfürsorge, Muster, Glaubenssatz).
+- Keine Bewertung, keine Namen, keine Orte, keine Diagnosen, kein Satzzeichen am Ende.
+- Gut: „Spannung im Team“, „Ein Gespräch mit der Mutter“, „Wie es beruflich weitergeht“, „Eine Entscheidung“,
+  „Der Umzug“, „Zu wenig Zeit für mich“
+- Nicht so: „Authentizität statt Druck“, „Mut zur Abgrenzung“, „Der Weg zu mehr Selbstwert“, „Loslassen lernen“
 
 WICHTIG für next_session_rec:
 - Konkret und handlungsleitend, nicht allgemein
