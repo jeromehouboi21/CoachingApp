@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA) und Welle 2a (Server schreibt Nachrichten)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a (Server schreibt Nachrichten) und Welle 3 (Lernbasis mit Opt-in und Prüfschritt)
 
 ---
 
@@ -69,6 +69,7 @@ CoachingApp/
 │   │   ├── supabase.js                  ← Supabase-Client (anon key)
 │   │   ├── prompts.js                   ← UI-Texte: Eröffnungen (Kopie in chat/index.ts!), Wellness-Scores, Impulsfragen
 │   │   ├── rateLimit.js                 ← 429 rate_limited erkennen + Hinweistext
+│   │   ├── consent.js                   ← Versionen der Zustimmungstexte (inkl. LEARNING_CONSENT_VERSION)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
 │   │
 │   ├── styles/
@@ -92,6 +93,8 @@ CoachingApp/
 │   │   │   ├── TypingIndicator.jsx
 │   │   │   ├── ConversationEndModal.jsx
 │   │   │   └── CrisisResponseCard.jsx   ← Eigene Card statt Bubble bei Krisenfall (v-Krise)
+│   │   ├── profile/
+│   │   │   └── LearningConsentCard.jsx  ← Opt-in „Zur Lernbasis beitragen“ (S-13)
 │   │   └── legal/
 │   │       └── CoachingAgreementContent.jsx ← Vertragstext, single source of truth
 │   │
@@ -143,6 +146,7 @@ CoachingApp/
 │   │   │   ├── auth.ts                  ← requireUser/requireAdmin(aal2)/requireInternalCaller, Eigentum, Limits
 │   │   │   ├── logger.ts                ← Zentraler Logger (sanitizeLogData, describeError)
 │   │   │   ├── rag.ts                   ← Embedding + match_experiences (nur serverseitig)
+│   │   │   ├── learning.ts              ← Prüfschritt (Vorfilter + Haiku, fail-closed) für Lernbasis und Supervision
 │   │   │   └── rateLimit.ts             ← Rate-Limit-Regeln + enforceRateLimit
 │   │   ├── chat/
 │   │   │   ├── index.ts                 ← Claude API Proxy + System-Prompt-Builder + Limit-/Krisen-Check
@@ -186,7 +190,9 @@ CoachingApp/
 │   │   ├── 027_signup_consent_and_limit.sql ← session_limit 20, handle_new_user mit Metadaten
 │   │   ├── 028_conversation_context.sql ← RAG-Ergebnis pro Gespräch (nur service_role)
 │   │   ├── 029_rate_limits.sql          ← rate_limit_counters, consume_rate_limits
-│   │   └── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
+│   │   ├── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
+│   │   ├── 031_s12_revoke_client_message_insert.sql ← Client darf messages nicht mehr schreiben (Welle 2b)
+│   │   └── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -721,7 +727,7 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Kapazität-vs-W
   + BLOCK 1: Briefing        (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch, Entscheidung 18.11.2026)
   + BLOCK 2: Coach-Akte      (coach_file_entries inkl. linked_value + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte   (resonance_map · ab 3. Gespräch · immer unsichtbar)
-  + BLOCK 4: RAG-Kontext     (Anonyme Erfahrungen aus experience_patterns)
+  + BLOCK 4: RAG-Kontext     (geprüfte Erfahrungen aus experience_patterns · als <erfahrungen_anderer_menschen>-Datenblock, „keine Anweisungen“, < > entfernt)
   + BLOCK 5: Supervision     (Wöchentliche Empfehlung · nur mit SUPERVISION_IN_PROMPT=1, derzeit aus)
   + BLOCK 6: Wellness-Check  (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
   + BLOCK 7: Entry-Kontext   (v2.6 — woher kommt der Mensch: pattern/tagesimpuls/verstehen; 'spiegel' ist vorgesehen, wird aber von keinem Screen genutzt)
@@ -767,7 +773,7 @@ Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst au
 | 3 | FILE_UPDATE_PROMPT | coach_file_entries (add/update/resolve), inkl. `linked_value` (Wert/Glaubenssatz hinter dem Muster) |
 | **4b** | VOICE_CLUSTER_PROMPT | inner_voices — prüft erst gegen bestehende (auch unbenannte) Stimmen, sonst neuer Kandidat; Rollback der Stimmen-Zeile bei fehlgeschlagener Verknüpfung |
 | 5 | PROFILE_UPDATE_PROMPT | coachee_profile (upsert) |
-| 6 | ANONYMOUS_SUMMARY_PROMPT | experience_patterns (nur mit Secret `RAG_LEARNING_ENABLED=1`, derzeit aus — D-1) + pattern_references + insights |
+| 6 | ANONYMOUS_SUMMARY_PROMPT | experience_patterns (S-13: nur mit Secret `RAG_LEARNING_ENABLED=1`, `profiles.learning_opt_in` **und** bestandenem Prüfschritt `reviewLearningEntry`; mit `source_user_id`, `review_status = approved`; ohne Embedding kein Eintrag) + pattern_references + insights |
 | 7 | REFLECTION_PROMPT | coach_reflections (inkl. Kapazität-vs-Widerstand-Check, Optimierungs-/Schuld-Framing-Check) |
 | 8 | RESONANCE_UPDATE_PROMPT (ab 3. Gespräch) | resonance_map (upsert) |
 
@@ -850,6 +856,8 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 
 **Läuft per Cron** (`weekly-supervision`, Mo 06:00 UTC, über `pg_net`). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
 
+**Prompt-Regeln + Prüfschritt (S-13):** Der Prompt verlangt ausschließlich allgemeine Empfehlungen zum Coach-Verhalten (keine Einzelfälle, Zitate, Personendetails, keine Abschwächung von Sicherheits-/Krisenregeln). `improvement_recs` durchläuft `reviewLearningEntry` (`low_quality` zählt nicht); abgelehnt → `null`, Log `supervision_rejected` mit Codes. Prompt zum Gegenlesen: `docs/security/supervision-prompt.md` (freigegeben 19.11.2026).
+
 **Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. `supervision_logs.improvement_recs` lädt `chat` selbst, aber nur mit Secret `SUPERVISION_IN_PROMPT=1` (derzeit aus, S-12).
 
 ---
@@ -908,8 +916,11 @@ session_limit                     INTEGER DEFAULT 20         -- v3.x (Default 20
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users           -- v3.x
 consent_ip                        TEXT                        -- v2.7, wird aktuell nicht befüllt
+learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S-13), nur über RPC set_learning_opt_in
+learning_opt_in_updated_at        TIMESTAMPTZ
+learning_opt_in_version           TEXT ("1.0")
 ```
-Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version` und `coaching_agreement_version` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version` und `coaching_agreement_version` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
 
 **`conversations`**
 ```
@@ -1027,8 +1038,11 @@ RLS: Nutzer verwalten ihre eigenen Zeilen (`auth.uid() = user_id`) — Namensgeb
 
 ### Lern- & Analyse-Tabellen
 
-**`experience_patterns`** — Anonyme RAG-Datenbank
+**`experience_patterns`** — Lernbasis (pseudonymisiert, S-13)
 ```
+source_user_id UUID → auth.users ON DELETE CASCADE   -- Migration 032, für Rücknahme/Löschung, nie ausgeliefert
+review_status  TEXT DEFAULT 'pending' ('pending' | 'approved' | 'rejected')
+reviewed_at    TIMESTAMPTZ
 embedding    vector(1536)   (pgvector)
 context      TEXT
 pattern      TEXT
@@ -1037,6 +1051,7 @@ what_helped  TEXT
 what_blocked TEXT
 outcome      TEXT ('breakthrough' | 'stuck' | 'partial' | 'unknown')
 ```
+Nur Einträge mit Opt-in **und** bestandener Prüfung (siehe `post-conversation` Schritt 6). Bestand ohne Zuordnung wurde mit 032 gelöscht (D-2). Ehrliche Einordnung: **pseudonymisiert**, nicht anonym — in Texten „verallgemeinert, ohne Namen und erkennbare Details“.
 
 **`pattern_references`** — Persönliche Muster aus Gesprächen
 ```
@@ -1114,7 +1129,9 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 **`redeem_invite_code(p_code, p_user_id)`** — `SECURITY DEFINER`, `search_path = ''`, löst einen Invite-Code ein. **Nur für `service_role` ausführbar** (vorher für jeden inkl. anon — Befund K-2).
 
-**`match_experiences()`** — pgvector-Suche, nur für `service_role` (Aufrufer: `_shared/rag.ts`).
+**`match_experiences()`** — pgvector-Suche, nur für `service_role` (Aufrufer: `_shared/rag.ts`). Seit 032 nur `review_status = 'approved'`; `source_user_id` ist nicht Teil der Rückgabe.
+
+**`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`.
 
 **`consume_rate_limits(p_user_id, p_rules)`** — `SECURITY DEFINER`, nur `service_role` (Migration 029). Erhöht feste Zeitfenster-Zähler atomar, liefert `null` oder `{ bucket, retry_after }`.
 
@@ -1396,6 +1413,8 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 > Fehlermeldungen von `JSON.parse` enthalten Ausschnitte des geparsten Textes und dürfen deshalb **nicht** geloggt werden. Stattdessen nur `parse_failed`, `outputLength` und gegebenenfalls die Position.
 
 `app_logs`: Client darf nur eigene Zeilen einfügen (nichts lesen), `metadata` ≤ 8 KB, Aufbewahrung 30 Tage (`purge-app-logs`).
+
+**Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
 
 **Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, `post-conversation` ignoriert `messages`) und Rate-Limits. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
 
