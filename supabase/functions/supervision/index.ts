@@ -105,9 +105,20 @@ Deno.serve(async (req) => {
     // S-13: Die Empfehlung kann in jeden Coach-Prompt einfließen (SUPERVISION_IN_PROMPT) und
     // durchläuft deshalb denselben Prüfschritt wie die Lernbasis. 'low_quality' zählt hier nicht,
     // weil eine Empfehlung keine "Erfahrung" beschreibt. Abgelehnt → nicht speichern (null).
+    // Vollständiges Protokoll (S-15, Entscheidung 19.11.2026) wird ebenfalls geprüft. Besteht es,
+    // ist die darin enthaltene Empfehlung mit geprüft; sonst wird die Empfehlung einzeln geprüft.
+    const haiku = makeHaikuCaller(anthropic);
+    let protocolText: string | null = null;
+    if (supervisionText.trim()) {
+      const review = await reviewLearningEntry(supervisionText.slice(0, 4000), haiku, ['low_quality']);
+      if (review.approved) protocolText = supervisionText.slice(0, 4000);
+      else logger.warn('supervision_protocol_rejected', { reasons: review.reasons });
+    }
     let improvementRecs: string | null = null;
     if (extractedRecs) {
-      const review = await reviewLearningEntry(extractedRecs.slice(0, 2000), makeHaikuCaller(anthropic), ['low_quality']);
+      const review = protocolText
+        ? { approved: true, reasons: [] as string[] }
+        : await reviewLearningEntry(extractedRecs.slice(0, 2000), haiku, ['low_quality']);
       if (review.approved) improvementRecs = extractedRecs.slice(0, 2000);
       else logger.warn('supervision_rejected', { reasons: review.reasons });
     }
@@ -118,6 +129,7 @@ Deno.serve(async (req) => {
       resistance_rate: totalConversations > 0 ? parseFloat((resistanceCount / totalConversations * 100).toFixed(2)) : 0,
       breakthrough_rate: breakthroughRate,
       improvement_recs: improvementRecs,
+      protocol_text: protocolText,
       // Keine Volltext-Kopie der Reflexionen mehr (S-15, Datenminimierung; wird nirgends gelesen)
       raw_reflections: null,
     });

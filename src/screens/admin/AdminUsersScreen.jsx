@@ -15,6 +15,8 @@ export function AdminUsersScreen() {
   const [savingId, setSavingId] = useState(null)
   const [tab, setTab] = useState('users') // 'users' | 'feedback'
   const [feedback, setFeedback] = useState([])
+  const [supervision, setSupervision] = useState([])
+  const [openProtocolId, setOpenProtocolId] = useState(null)
   const [feedbackLoading, setFeedbackLoading] = useState(true)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -63,7 +65,7 @@ export function AdminUsersScreen() {
     setFeedbackLoading(true)
     try {
       const data = await adminGet('admin-feedback')
-      if (data) { setFeedback(data.feedback ?? []); setLoadError(null) }
+      if (data) { setFeedback(data.feedback ?? []); setSupervision(data.supervision ?? []); setLoadError(null) }
     } catch {
       setLoadError('Das Feedback konnte gerade nicht geladen werden.')
     } finally {
@@ -317,6 +319,45 @@ export function AdminUsersScreen() {
                     Genutzt: {u.sessions_used_this_month ?? 0}
                   </span>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {tab === 'feedback' && !feedbackLoading && supervision.length > 0 && (
+          <div className="flex flex-col gap-2 mb-6">
+            <h2 className="font-display text-[18px] text-ink">Supervision</h2>
+            {supervision.map(s => (
+              <div key={s.id} className="bg-surface border border-[var(--color-border)] rounded-xl p-4">
+                <button
+                  type="button"
+                  onClick={() => setOpenProtocolId(openProtocolId === s.id ? null : s.id)}
+                  className="w-full flex items-center justify-between text-left"
+                >
+                  <div>
+                    <p className="text-[14px] font-medium text-ink">Woche ab {new Date(s.week_start).toLocaleDateString('de-DE')}</p>
+                    <p className="text-[12px] text-ink-3">
+                      {s.total_conversations} Gespräche · Widerstand {s.resistance_rate ?? 0} %
+                    </p>
+                  </div>
+                  <span className="text-[12px] text-accent">{openProtocolId === s.id ? 'Schließen' : 'Öffnen'}</span>
+                </button>
+                {openProtocolId === s.id && (
+                  <div className="mt-3 flex flex-col gap-3">
+                    <div>
+                      <p className="text-[12px] text-ink-3 uppercase tracking-wide mb-1">Empfehlung</p>
+                      <p className="text-[14px] text-ink-2 leading-relaxed">
+                        {s.improvement_recs || 'Keine Empfehlung gespeichert (leer oder von der Prüfung verworfen).'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[12px] text-ink-3 uppercase tracking-wide mb-1">Protokoll</p>
+                      <p className="text-[14px] text-ink-2 leading-relaxed whitespace-pre-line">
+                        {s.protocol_text || 'Kein Protokoll gespeichert (vor dieser Funktion entstanden oder von der Prüfung verworfen).'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

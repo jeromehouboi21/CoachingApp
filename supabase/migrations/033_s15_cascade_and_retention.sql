@@ -37,6 +37,10 @@ alter table public.coach_reflections
 -- Bestand leeren. Die Zähler und improvement_recs bleiben.
 update public.supervision_logs set raw_reflections = null where raw_reflections is not null;
 
+-- Stattdessen das vollständige Protokoll (Punkte 1–3), verallgemeinert nach den S-13-Regeln und
+-- geprüft (reviewLearningEntry). Sichtbar nur für Admins (admin-feedback). Frist: 24 Monate.
+alter table public.supervision_logs add column if not exists protocol_text text;
+
 -- ── Teil B: Fristen (D-4) ───────────────────────────────────────────────────
 create or replace function public.apply_retention()
 returns jsonb

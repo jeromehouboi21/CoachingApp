@@ -58,8 +58,16 @@ Deno.serve(async (req) => {
       email: f.user_id ? (emailById.get(f.user_id) ?? null) : null,
     }));
 
-    logger.info('Admin fetched feedback list', { count: merged.length });
-    return jsonResponse({ feedback: merged }, CORS_HEADERS);
+    // Supervision-Protokolle der letzten Wochen (nur Admin, S-15)
+    const { data: supervision, error: supervisionError } = await supabase
+      .from('supervision_logs')
+      .select('id, week_start, total_conversations, resistance_rate, improvement_recs, protocol_text, created_at')
+      .order('week_start', { ascending: false })
+      .limit(26);
+    if (supervisionError) logger.error('supervision list failed', { code: supervisionError.code });
+
+    logger.info('Admin fetched feedback list', { count: merged.length, supervisionCount: supervision?.length ?? 0 });
+    return jsonResponse({ feedback: merged, supervision: supervision ?? [] }, CORS_HEADERS);
 
   } catch (error: unknown) {
     if (error instanceof HttpError) {
