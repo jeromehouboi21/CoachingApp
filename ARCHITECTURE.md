@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar)
 
 ---
 
@@ -62,7 +62,7 @@ CoachingApp/
 │   │   ├── useChat.js                   ← Gesprächs-State, Streaming, Start-/Resume-Varianten, Senden mit clientMessageId
 │   │   ├── useAdminMfa.js               ← Zweiter Faktor (TOTP) für den Admin-Bereich + AdminMfaContext
 │   │   ├── useMemory.js                 ← Legacy Coach-Gedächtnis (user_memory)
-│   │   ├── useStreak.js                 ← Tagesstreak-Berechnung
+│   │   ├── useStreak.js                 ← Tage-in-Folge (streak_count), seit U1 nirgends angezeigt
 │   │   └── useVoiceInput.js             ← Web Speech API (de-DE)
 │   │
 │   ├── lib/
@@ -86,7 +86,8 @@ CoachingApp/
 │   │   │   └── ScaleSlider.jsx
 │   │   ├── layout/                      ← Seitenrahmen
 │   │   │   ├── AppShell.jsx             ← <Outlet> + BottomNav
-│   │   │   └── BottomNav.jsx            ← 4 Tabs mit Insight-Badge
+│   │   │   ├── BottomNav.jsx            ← 3 Tabs: Heute · Gespräch · Spiegel (ohne Zähler)
+│   │   │   └── ProfileButton.jsx        ← Avatar oben rechts → /profile (Heute, Gespräch, Spiegel)
 │   │   ├── coach/                       ← Chat-spezifische Komponenten
 │   │   │   ├── ChatBubble.jsx
 │   │   │   ├── ChatInput.jsx            ← Textarea + Mikrofon-Button
@@ -116,7 +117,7 @@ CoachingApp/
 │       ├── coach/
 │       │   └── CoachScreen.jsx          ← Haupt-Chat-Interface
 │       ├── mirror/
-│       │   └── MirrorScreen.jsx         ← "Mein Spiegel" — Erkenntnisse + Deine Akte
+│       │   └── MirrorScreen.jsx         ← "Spiegel" — Erkenntnisse + Deine Akte
 │       ├── stimmen/
 │       │   └── StimmenScreen.jsx        ← "Innere Stimmen" (Premium) — benannte + Kandidaten-Stimmen
 │       ├── history/
@@ -244,7 +245,9 @@ CoachingApp/
 | `/premium` | PremiumScreen | **ja** | — | nein |
 | `/verstehen/aus-gespraechen` | AusGespraechen | **ja** | — | nein |
 | `/verstehen/:key` | MusterDetail | **ja** | — | nein |
-| `/verlauf` | HistoryScreen | **ja** | — | nein |
+| `/coach/verlauf` | HistoryScreen | **ja** | — | nein |
+| `/verlauf` | Weiterleitung → `/coach/verlauf` (alte Lesezeichen, U1) | — | — | — |
+| `/` | Weiterleitung → `/home` (angemeldet) bzw. `/landing` | — | — | — |
 | `/vereinbarung` | CoachingAgreementScreen | **ja** | — | nein |
 | `/admin/users` | AdminUsersScreen | **ja** | `AdminRoute` (`profile.is_admin`) | nein |
 | `/impressum` | ImpressumScreen | nein | — | nein |
@@ -285,7 +288,7 @@ function AdminRoute({ children }) {
 
 ### AppShell
 
-`AppShell` rendert einen `<Outlet>` mit darunter liegendem `<BottomNav>`. Nur `/home`, `/coach`, `/mirror`, `/profile`, `/verstehen`, `/stimmen` sind davon umschlossen — die BottomNav selbst zeigt weiterhin nur 4 Tabs (Home/Coach/Spiegel/Profil), Verstehen und Stimmen werden über Home-Kacheln bzw. das Profil erreicht.
+`AppShell` rendert einen `<Outlet>` mit darunter liegendem `<BottomNav>`. Nur `/home`, `/coach`, `/mirror`, `/profile`, `/verstehen`, `/stimmen`, `/feedback` sind davon umschlossen. Die BottomNav zeigt seit U1 drei Tabs (Heute `/home` · Gespräch `/coach` · Spiegel `/mirror`). Das Profil ist kein Tab mehr, sondern über den `ProfileButton` oben rechts in den drei Tab-Screens erreichbar; auf `/profile` ist kein Tab aktiv. Verstehen und Stimmen werden bis U2 über die Home-Kacheln erreicht.
 
 ---
 
@@ -298,8 +301,7 @@ function AdminRoute({ children }) {
 **Rolle:** Zentrales Dashboard. Startpunkt der meisten Nutzer-Sessions.
 
 **Inhalt:**
-- Persönliche Begrüßung mit Avatar (aus `profile.display_name`)
-- Tagesstreak-Anzeige
+- Begrüßung + `ProfileButton` oben rechts (seit U1; Strähnen-Leiste entfernt)
 - Tägliche Impulsfrage (rotierend, Index = Tagesindex % 14, aus `prompts.js`)
 - 4 Tool-Kacheln (`TOOL_CARDS`): KI-Coach · Wie geht's dir? · Innere Stimmen (PRO-Badge, dauerhaft sichtbar, verlinkt nach `/stimmen`) · Verstehen
 
@@ -330,7 +332,7 @@ function AdminRoute({ children }) {
       → startNewConversation(isFirstEver)
 ```
 
-**Header:** Icon-Button "Gesprächsverlauf" (→ `/verlauf`) links neben "Neues Gespräch".
+**Header:** Zeile 1 „Neues Gespräch“ + `ProfileButton`; Zeile 2 Status, Knopf „Verlauf“ (→ `/coach/verlauf`) und Plan-Anzeige (seit U1, damit bei 390 px nichts umbricht).
 
 **„Neues Gespräch"-Button:**
 1. `runPostConversation()` → fire-and-forget zur `post-conversation` Edge Function
@@ -380,7 +382,7 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 
 ---
 
-#### HistoryScreen (`/verlauf`)
+#### HistoryScreen (`/coach/verlauf`)
 
 **Rolle:** Gesprächsverlauf mit Fortsetzen-Funktion.
 
@@ -388,6 +390,7 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 - Vorschau: `session_notes.main_topic` falls vorhanden, sonst erste Nutzer-Nachricht (gekürzt)
 - Free-Nutzer: nur das neueste Gespräch entsperrt, Rest mit Lock-Overlay + Premium-CTA (analog `AusGespraechen.jsx`)
 - „Gespräch fortsetzen" → `navigate('/coach', { state: { resumeConversationId } })`
+- „Zurück“ → `/coach` (seit U1; vorher Profil)
 
 ---
 
@@ -407,10 +410,12 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 
 #### ProfileScreen (`/profile`)
 
-**Rolle:** Konto, Einstellungen, Rechtliches.
+**Rolle:** Konto, Einstellungen, Rechtliches. Erreichbar über den Avatar (`ProfileButton`), kein Tab.
+
+- **Statistik (seit U1):** Gespräche · Erkenntnisse · Reflexionstage. Gespräche und Reflexionstage kommen aus `get_conversation_history()` (nur Gespräche mit eigener Nachricht): Gespräche = Anzahl gesamt, Reflexionstage = Anzahl verschiedener lokaler Kalendertage mit begonnenem Gespräch. Ladefehler → „–“ und `conversation_stats_failed`.
 
 - **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
-- Einstellungsliste: Profil bearbeiten, Gesprächsverlauf, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
+- Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
 
 ---
 
@@ -482,13 +487,16 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 #### Layout-Komponenten (`src/components/layout/`)
 
 **AppShell:**
-- Wrapper für Home/Coach/Spiegel/Profil/Verstehen/Stimmen
+- Wrapper für Home/Coach/Spiegel/Profil/Verstehen/Stimmen/Feedback
 - Rendert `<main className="pb-20">` + `<Outlet />` + `<BottomNav />`
 
 **BottomNav:**
-- 4 Tabs: Home · Coach · Spiegel · Profil
-- Aktiver Tab: accent-Farbe + Icon gefüllt
-- Spiegel-Tab trägt Badge mit ungelesener Insight-Anzahl (letzte 7 Tage)
+- 3 Tabs: Heute (`Sun`) · Gespräch (`MessageCircle`) · Spiegel (`Sparkles`)
+- Aktiver Tab: accent-Farbe + stärkere Strichstärke
+- Kein Zähler für Ungelesenes (CLAUDE.md „Einladen statt drängen“, seit U1)
+
+**ProfileButton:**
+- Avatar (`sm`) mit `aria-label="Profil öffnen"` → `/profile`, in den Headern von Heute, Gespräch und Spiegel
 - `safe-area-inset-bottom` für iPhone-Notch
 
 #### Coach-Komponenten (`src/components/coach/`)
@@ -607,7 +615,7 @@ Exports:
 
 #### `useStreak`
 
-**Zuständigkeit:** Tagesstreak-Pflege.
+**Zuständigkeit:** Tagesstreak-Pflege (`streak_count`, Tage in Folge). Seit U1 wird der Wert nirgends angezeigt; die Profil-Statistik zeigt Reflexionstage (siehe ProfileScreen).
 
 ```
 Exports:
@@ -1236,7 +1244,7 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 ### RPCs
 
-**`get_conversation_history()`** — `SECURITY INVOKER`, `search_path = ''`, liefert die Gesprächsliste des eingeloggten Nutzers (Datum, Nachrichtenanzahl, `main_topic`/erste Nutzer-Nachricht) für `/verlauf`, ohne N+1-Queries. Ausführbar nur für `authenticated`.
+**`get_conversation_history()`** — `SECURITY INVOKER`, `search_path = ''`, liefert die Gesprächsliste des eingeloggten Nutzers (Datum, Nachrichtenanzahl, `main_topic`/erste Nutzer-Nachricht) für `/coach/verlauf` und die Profil-Statistik, ohne N+1-Queries. Ausführbar nur für `authenticated`.
 
 **`consume_session(p_conversation_id)`** — `SECURITY DEFINER`, `search_path = ''` (Migration 023). Zählt atomar und idempotent: Ist `conversations.session_counted_at` gesetzt → `{ allowed: true, counted: false }`. Sonst Limit-Prüfung (`plan <> 'premium'` und `session_limit` nicht null) → bei Überschreitung `{ allowed: false, used, limit }`, sonst `session_counted_at` setzen und `sessions_used_this_month + 1`. Fremde Konversation → `42501`. Ausführbar für `authenticated` (aufgerufen von `chat` mit dem Nutzer-Token).
 

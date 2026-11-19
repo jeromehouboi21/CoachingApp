@@ -36,11 +36,17 @@
 /verstehen/aus-gespraechen → AusGespraechen (kein AppShell)
 /verstehen/:key       → MusterDetail (kein AppShell) — key = pattern_key
 
-/home                 → HomeScreen (AppShell + BottomNav)
-/coach                → CoachScreen (AppShell + BottomNav)
-/mirror               → MirrorScreen (AppShell + BottomNav)
-/profile              → ProfileScreen (AppShell + BottomNav)
+/home                 → HomeScreen „Heute“ (AppShell + BottomNav)
+/coach                → CoachScreen „Gespräch“ (AppShell + BottomNav)
+/coach/verlauf        → HistoryScreen (kein AppShell, Zurück → /coach)
+/mirror               → MirrorScreen „Spiegel“ (AppShell + BottomNav)
+/profile              → ProfileScreen (AppShell, kein Tab – über den Avatar oben rechts)
+
+/verlauf              → Weiterleitung /coach/verlauf (alte Lesezeichen)
+/                     → Weiterleitung /home bzw. /landing
 ```
+
+**BottomNav (seit U1):** drei Tabs Heute · Gespräch · Spiegel, ohne Zähler. Profil über `ProfileButton` in den Tab-Headern.
 
 **Routing-Logik:** Nicht-authentifizierte User → `/landing`. Authentifizierte User auf `/landing` → `/home`.
 
