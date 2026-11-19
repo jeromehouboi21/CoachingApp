@@ -254,6 +254,8 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | `post-conversation` | Nach Gespräch (fire-and-forget) | RAG-Eintrag, Selbstreflexion, open_thread, pattern_references |
 | `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
+| `security-monitor` | Cron stündlich :07 (`x-cron-secret`) | Monitoring S-22: Log-Codes zählen (`_shared/monitorRules.ts`), Lebenszeichen der Cron-Jobs, Alarm-Mail über One.com-SMTP 465, montags Wochenübersicht (nur intern) |
+| `admin-security` | Admin-Tab „Sicherheit“ | Alarme + Wochenübersicht (`requireAdmin`, aal2) |
 | `backfill-embeddings` | Manuell (SQL-Editor, `net.http_post` + Vault-Secret) | Wartung: fehlende Vektoren in experience_patterns nachtragen (nur intern) |
 | `admin-users` / `admin-feedback` / `admin-invite-user` | Admin-Bereich | nur mit `is_admin` **und** zweitem Faktor (`aal2`, S-06) |
 
@@ -440,6 +442,12 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 - **RLS:** Jede neue Tabelle bekommt RLS, Policies **nur `to authenticated`** (nie `public`/`anon`) und gezielte GRANTs nach tatsächlicher Frontend-Nutzung. `anon` hat keine Tabellenrechte. Neue SECURITY-DEFINER-Funktionen: `set search_path = ''`, schema-qualifizierte Namen, `revoke … from public, anon`, `grant` nur an die Rolle, die sie braucht.
 - Privilegierte Profilfelder (`is_admin`, `plan`, `session_limit`, `sessions_used_this_month`, `is_beta_tester`, `invited_*`, `consent_ip`) sind per Trigger server-only. Der Client legt keine Profile an (Name über `signUp({ options: { data: { display_name } } })`).
 
+### Log-Codes = Schnittstelle zum Monitoring (S-22)
+- Überwachte Codes stehen in `supabase/functions/_shared/monitorRules.ts` (Regel mit Schwelle oder `infoOnly`). **Codes dort nicht umbenennen, ohne die Regel mitzuziehen.** Neue sicherheitsrelevante Ereignisse bekommen einen festen snake_case-Code (`logger.warn('mein_code', { … })`) und einen Eintrag in `monitorRules.ts`.
+- Gezählt wird standardmäßig nur `app_logs.origin = 'server'` (Trigger, Migration 034); Client-Logs kann jeder angemeldete Nutzer schreiben.
+- Lebenszeichen: `retention_applied`, `supervision_run` – fehlen sie, gibt es Alarm. Cron-Jobs, die neu dazukommen, loggen bei jedem Lauf einen solchen Code.
+- Mails aus Functions (`_shared/mailer.ts`) enthalten nie Konto-Inhalte, Nutzer-IDs oder SMTP-Fehlertexte. Notfallplan: `docs/security/notfallplan.md`.
+
 ### Log-Regel (absolut)
 > Erlaubt in Logs: IDs (`userId`, `conversationId`, `requestId`), Zähler, Längen, Dauer, HTTP-Status, Fehlercodes, Fehlertyp, Prompt-**Label**.
 > Verboten in Logs: Nachrichteninhalte, Prompts, Modellausgaben (auch nicht als Preview), Akte-, Profil- und Stimmen-Felder, Zusammenfassungen, E-Mail-Adressen, Namen.
@@ -499,5 +507,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `031_s12_revoke_client_message_insert.sql` | Insert-Recht des Clients auf messages entzogen · S-12 Welle 2b |
 | `032_s13_learning_base.sql` | profiles.learning_opt_in(+_updated_at/_version) · experience_patterns.source_user_id/review_status · RPC set_learning_opt_in · match_experiences nur approved · Bestand gelöscht (D-2) |
 | `033_s15_cascade_and_retention.sql` | invited_by SET NULL · user_feedback/coach_reflections CASCADE · raw_reflections geleert, protocol_text · apply_retention + Cron apply-retention · inactive_accounts_report |
+| `034_s22_security_monitoring.sql` | app_logs.origin (Trigger, server/client) · security_alerts · RPC security_log_counts (nur service_role) · Cron security-monitor + purge-security-alerts |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

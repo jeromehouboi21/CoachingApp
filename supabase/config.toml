@@ -37,3 +37,9 @@ verify_jwt = false
 
 [functions.supervision]
 verify_jwt = false
+
+[functions.security-monitor]
+verify_jwt = false
+
+[functions.admin-security]
+verify_jwt = false

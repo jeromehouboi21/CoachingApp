@@ -6,7 +6,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { createLogger, describeError } from '../_shared/logger.ts';
-import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
+import { reviewLearningEntry, makeHaikuCaller, isReviewTechnicalFailure } from '../_shared/learning.ts';
 import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -72,6 +72,7 @@ Deno.serve(async (req) => {
 
     if (totalConversations === 0) {
       logger.info('Skipped — no reflections this week');
+      logger.info('supervision_run', { skipped: true });   // Lebenszeichen für security-monitor (S-22)
       return jsonResponse({ ok: true, skipped: 'no data' }, CORS_HEADERS);
     }
 
@@ -110,7 +111,10 @@ Deno.serve(async (req) => {
     if (supervisionText.trim()) {
       const review = await reviewLearningEntry(supervisionText.slice(0, 4000), haiku, ['low_quality']);
       if (review.approved) protocolText = supervisionText.slice(0, 4000);
-      else logger.warn('supervision_protocol_rejected', { reasons: review.reasons.join(',') });
+      else {
+        logger.warn('supervision_protocol_rejected', { reasons: review.reasons.join(',') });
+        if (isReviewTechnicalFailure(review)) logger.warn('learning_review_failed', { source: 'supervision_protocol' });
+      }
     }
     let improvementRecs: string | null = null;
     if (extractedRecs) {
@@ -118,7 +122,10 @@ Deno.serve(async (req) => {
         ? { approved: true, reasons: [] as string[] }
         : await reviewLearningEntry(extractedRecs.slice(0, 2000), haiku, ['low_quality']);
       if (review.approved) improvementRecs = extractedRecs.slice(0, 2000);
-      else logger.warn('supervision_rejected', { reasons: review.reasons.join(',') });
+      else {
+        logger.warn('supervision_rejected', { reasons: review.reasons.join(',') });
+        if (isReviewTechnicalFailure(review)) logger.warn('learning_review_failed', { source: 'supervision' });
+      }
     }
 
     const { error: insertError } = await supabase.from('supervision_logs').insert({
@@ -137,6 +144,7 @@ Deno.serve(async (req) => {
     }
 
     logger.info('Supervision completed', { totalConversations, feedbackCount: feedback?.length ?? 0 });
+    logger.info('supervision_run', { skipped: false });   // Lebenszeichen für security-monitor (S-22)
     return jsonResponse({ ok: true, totalConversations }, CORS_HEADERS);
 
   } catch (error: unknown) {

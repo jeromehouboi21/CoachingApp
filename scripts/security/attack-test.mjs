@@ -570,6 +570,39 @@ async function testsS15(b) {
   }
 }
 
+// ── S-22 (Paket C): Monitoring nur intern bzw. für Admins ───────────────────
+async function testsS22(b) {
+  {
+    const r = await callFunction('security-monitor', { body: {} });            // ohne Secret/Token
+    record(31, 'security-monitor ohne Secret', '401', r.status === 401 ? PASS : FAIL, String(r.status));
+  }
+  {
+    const r = await callFunction('security-monitor', { token: b.token, body: { probe: true } });
+    record(31, 'security-monitor als B', '401', r.status === 401 ? PASS : FAIL, String(r.status));
+  }
+  {
+    const r = await callFunction('admin-security', { token: b.token, method: 'GET' });
+    record(31, 'admin-security als B', '403', r.status === 403 ? PASS : FAIL, String(r.status));
+  }
+  {
+    const r = await countRows(b.client, 'security_alerts');
+    record(31, 'select security_alerts (als B)', '0 Zeilen/Fehler', noAccessOrZero(r), r.error ? errCode(r.error) : `${r.count} Zeilen`);
+  }
+  {
+    const { error } = await b.client.rpc('security_log_counts', { p_since: new Date(0).toISOString(), p_codes: ['auth_rejected'] });
+    record(31, 'rpc security_log_counts (als B)', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+  {
+    // Gefälschte Herkunft: Der Trigger setzt origin unabhängig vom Body auf 'client'.
+    // Kontrolle per SQL (J-C3): select origin, count(*) from app_logs where message = 'sectest_origin_probe' group by 1;
+    const { error } = await b.client.from('app_logs').insert({
+      level: 'info', source: 'attack-test', message: 'sectest_origin_probe', user_id: b.userId, origin: 'server',
+    });
+    record(31, 'app_logs-Insert mit origin=server (als B)', 'gespeichert, origin per SQL = client',
+      error ? FAIL : PASS, error ? errCode(error) : 'eingefügt – Herkunft per SQL prüfen');
+  }
+}
+
 async function testsRateLimits(a, b) {
   // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
   // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
@@ -666,6 +699,7 @@ function printResults() {
   await testsS13(b);
   await testsS15(b);
   await testsHeaders();
+  await testsS22(b);
   await testsRateLimits(a, b);
   await testsRegion(b);   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
 

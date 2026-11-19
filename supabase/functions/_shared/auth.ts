@@ -4,6 +4,7 @@
 // Body-Felder wie userId werden nie als Identität verwendet.
 
 import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js@2.119.0';
+import { createLogger } from './logger.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -152,6 +153,8 @@ export function validateMessages(
 export function errorResponse(e: unknown, corsHeaders: Record<string, string>): Response {
   const status = e instanceof HttpError ? e.status : 500;
   const code = e instanceof HttpError ? e.code : 'internal_error';
+  // S-22: abgelehnte Anfragen zählen (Alarm auth_rejected). Nur Status und Code – kein Body, keine Header.
+  if (status === 401 || status === 403) createLogger('auth').warn('auth_rejected', { status, code });
   return new Response(JSON.stringify({ error: code }), {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });

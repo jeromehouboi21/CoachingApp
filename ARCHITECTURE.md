@@ -124,7 +124,7 @@ CoachingApp/
 │       ├── profile/
 │       │   └── ProfileScreen.jsx
 │       ├── admin/
-│       │   ├── AdminUsersScreen.jsx     ← Admin-only: Nutzerverwaltung + Feedback + Einladen
+│       │   ├── AdminUsersScreen.jsx     ← Admin-only: Nutzerverwaltung + Feedback + Einladen + Sicherheit
 │       │   └── AdminMfaScreen.jsx       ← Zweiten Faktor einrichten / Code eingeben (S-06)
 │       ├── wellness/
 │       │   └── WellnessCheckScreen.jsx  ← 1–10 Skala + Context-Chips
@@ -144,6 +144,8 @@ CoachingApp/
 ├── supabase/
 │   ├── functions/
 │   │   ├── _shared/
+│   │   │   ├── monitorRules.ts          ← Regeln, Schwellen, Lebenszeichen für security-monitor (Log-Codes = Schnittstelle)
+│   │   │   ├── mailer.ts                ← SMTP über One.com Port 465 (denomailer@1.6.0), nur Fehlercodes
 │   │   │   ├── cors.ts                  ← corsHeaders(methods) für alle Functions (inkl. x-region, S-09)
 │   │   │   ├── auth.ts                  ← requireUser/requireAdmin(aal2)/requireInternalCaller, Eigentum, Limits
 │   │   │   ├── logger.ts                ← Zentraler Logger (sanitizeLogData, describeError)
@@ -158,6 +160,8 @@ CoachingApp/
 │   │   ├── validate-invite-code/index.ts← Invite-Code-Einlösung (Selbstregistrierung)
 │   │   ├── admin-users/index.ts         ← Admin: Nutzerliste + Beta-/Limit-Verwaltung
 │   │   ├── admin-feedback/index.ts      ← Admin: Feedback-Liste inkl. Name/E-Mail
+│   │   ├── admin-security/index.ts      ← Admin: Alarme + Wochenübersicht (S-22)
+│   │   ├── security-monitor/index.ts    ← Stündliches Monitoring, Alarm-Mails (Cron, nur intern, S-22)
 │   │   ├── admin-invite-user/index.ts   ← Admin: Nutzer per E-Mail einladen (Beta-Zugang)
 │   │   ├── delete-account/index.ts      ← Account-Löschung (hard delete)
 │   │   ├── supervision/index.ts         ← Wöchentliche KI-Supervision (Cron)
@@ -195,7 +199,8 @@ CoachingApp/
 │   │   ├── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
 │   │   ├── 031_s12_revoke_client_message_insert.sql ← Client darf messages nicht mehr schreiben (Welle 2b)
 │   │   ├── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
-│   │   └── 033_s15_cascade_and_retention.sql ← Löschregeln, apply_retention, inactive_accounts_report
+│   │   ├── 033_s15_cascade_and_retention.sql ← Löschregeln, apply_retention, inactive_accounts_report
+│   │   └── 034_s22_security_monitoring.sql ← app_logs.origin, security_alerts, security_log_counts, Cron security-monitor
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -390,6 +395,8 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 **Rolle:** Admin-only Nutzerverwaltung. Kein Bestandteil der regulären Navigation (nur direkt per URL).
 
 **Tab "Nutzer":** Liste aller Profile inkl. E-Mail (aus `auth.admin.listUsers()`), Beta-Tester-Toggle, individuelles Gesprächslimit, Einladungs-Historie ("Eingeladen am ... — noch nicht angenommen" falls `last_sign_in_at IS NULL`). Formular "+ Per E-Mail einladen" ruft `admin-invite-user` auf.
+
+**Tab "Sicherheit" (S-22, `src/components/admin/SecurityTab.jsx`):** letzter Monitor-Lauf (rot, wenn älter als 2 Std.), die letzten 50 Alarme und Testmails (Regel, Anzahl, „Mail gesendet“ bzw. Fehlercode) und die neueste Wochenübersicht, aus `admin-security`. Leerer Zustand: „Keine Auffälligkeiten.“
 
 **Tab "Feedback":** oben Abschnitt **„Supervision“** (letzte 26 Wochen, aufklappbar: Empfehlung + geprüftes Protokoll, aus `admin-feedback`), darunter alle `user_feedback`-Einträge inkl. Name/E-Mail, sortiert nach Datum.
 
@@ -911,6 +918,25 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 
 ---
 
+### `security-monitor` — Monitoring (S-22, Paket C)
+
+**Läuft per Cron** (`security-monitor`, stündlich um :07, `x-cron-secret` aus Vault; nur intern über `requireInternalCaller`). Ablauf:
+1. **Schwellen:** Für jede Regel aus `_shared/monitorRules.ts` zählt `security_log_counts()` die Log-Codes im Fenster, nur mit passender Herkunft (`app_logs.origin`, Standard `server`). Schwelle erreicht und kein Alarm derselben Regel im Cooldown (6 Std., bei langen Fenstern die Fensterlänge) → Zeile in `security_alerts` + Mail an `ALERT_EMAIL_TO`.
+2. **Lebenszeichen:** `retention_applied` in den letzten 26 Std.? Montags ab 08:00 UTC: `supervision_run` seit Montag 00:00 UTC? Fehlt eins → Alarm (`retention_missing` / `supervision_missing`, Cooldown 24 Std.).
+3. **Wochenübersicht:** montags im Lauf um 06:07 UTC: alle Regeln über 7 Tage, Alarme der Woche, Krisenereignisse (neu / ungesichtet, nur Anzahl, C-3), Konten ohne Anmeldung seit 24 Monaten (Anzahl) → `security_alerts` (`kind = 'weekly_digest'`) + Mail.
+
+Body `{ "probe": true }` schickt eine Testmail („Test: Alarmkanal Friedensstifter“) und legt eine `probe`-Zeile an. Mails enthalten nur Regel, Anzahl und Zeitfenster (keine IDs, keine Inhalte); ein Mailfehler steht als Code in `security_alerts.mail_error`, der Alarm bleibt im Admin-Tab sichtbar. Jeder Lauf loggt `security_monitor_run`. Secrets: `SMTP_HOST`, `SMTP_PORT` (465), `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`.
+
+**Überwachte Codes** (Schnittstelle, Änderungen nur zusammen mit `monitorRules.ts`): `auth_rejected` (aus `errorResponse` bei 401/403), `userId mismatch`, `mfa_required` (Admin), `mfa_verify_failed` (nur Client-Herkunft), `assistant_insert_failed`, `user_message_insert_failed`/`opening_insert_failed`, `rate_limit_db_error`, `delete_incomplete`/`auth_delete_failed`, `learning_review_failed` (technischer Ausfall des Prüfschritts in post-conversation und supervision), `supervision_rejected`; ab C-4/C-5 `export_created`, `mfa_recovery_used`, `mfa_recovery_failed`; Info: `user_mfa_required`, `legacy_format`, `learning_entry_saved`, `learning_rejected`, `supervision_protocol_rejected`. Lebenszeichen: `retention_applied`, `supervision_run`.
+
+**Hinweis:** Der Angriffstest löst absichtlich `auth_rejected`, `userid_mismatch` und ggf. `admin_mfa_required` aus — danach sind Alarm-Mails zu erwarten.
+
+### `admin-security` — Admin-Tab „Sicherheit“
+
+`GET`, `requireUser` + `requireAdmin` (aal2). Liefert die letzten 50 Alarme/Testmails (ohne Details außer Fehlercode), die neueste Wochenübersicht, den Zeitpunkt des letzten `security_monitor_run` und die Regel-Beschriftungen.
+
+---
+
 ### `_shared/logger.ts`
 
 Zentraler Logger für alle Edge Functions. Schreibt parallel auf `console.log` (Supabase Edge Function Logs-Tab) und in die `app_logs`-Tabelle via Service Role Key. `persist()` läuft über `EdgeRuntime.waitUntil()`, damit Log-Inserts nicht abgeschnitten werden, nachdem die Response bereits an den Client zurückgegangen ist.
@@ -1167,6 +1193,18 @@ protocol_text        TEXT      -- geprüftes Gesamtprotokoll (Migration 033)
 raw_reflections      JSONB     -- seit 033 leer (nicht mehr gespeichert)
 ```
 
+**`security_alerts`** — Alarme und Wochenübersicht des Monitorings (Migration 034, S-22, Frist 12 Monate, nur service_role)
+```
+kind          TEXT CHECK ('alert' | 'weekly_digest' | 'probe')
+rule          TEXT        -- Regel-ID aus _shared/monitorRules.ts
+window_start / window_end TIMESTAMPTZ
+count         INTEGER
+details       JSONB       -- nur Zähler und Codes (Wochenübersicht: counts je Regel, Krisen-/Inaktiv-Anzahl)
+mailed_at     TIMESTAMPTZ
+mail_error    TEXT        -- nur Fehlercode
+```
+Kein Personenbezug (keine IDs) → nicht im Export und nicht im Löschtest.
+
 **`invite_codes`** — Beta-Tester-Zugang (Selbstregistrierung)
 ```
 code        TEXT UNIQUE (always uppercase)
@@ -1204,6 +1242,8 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 **`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`.
 
+**`security_log_counts(p_since, p_codes)`** — `SECURITY DEFINER`, nur `service_role` (Migration 034). Liefert je Code und Herkunft nur die Anzahl (`code, origin, n`), keine Inhalte. Aufrufer: `security-monitor`.
+
 **`consume_rate_limits(p_user_id, p_rules)`** — `SECURITY DEFINER`, nur `service_role` (Migration 029). Erhöht feste Zeitfenster-Zähler atomar, liefert `null` oder `{ bucket, retry_after }`.
 
 ### Cron-Jobs (pg_cron + pg_net)
@@ -1215,8 +1255,10 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 | `purge-app-logs` | `17 3 * * *` | `app_logs` älter als 30 Tage löschen (Migration 026) |
 | `purge-rate-limits` | `23 3 * * *` | `rate_limit_counters` älter als 2 Tage löschen (Migration 029) |
 | `apply-retention` | `41 3 * * *` | `apply_retention()` — Fristen nach D-4 (Migration 033), Ergebnis als `retention_applied` in `app_logs` |
+| `security-monitor` | `7 * * * *` | `security-monitor` per `net.http_post` mit `x-cron-secret` aus Vault (Migration 034) |
+| `purge-security-alerts` | `29 3 * * *` | `security_alerts` älter als 12 Monate löschen (Migration 034) |
 
-**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs` und `user_feedback` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage. Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (S-22).
+**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs` und `user_feedback` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage. Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (Paket D). `security_alerts` 12 Monate (`purge-security-alerts`).
 
 ### RLS-Prinzip (Least Privilege, Migration 025)
 
@@ -1486,7 +1528,9 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 > Verboten in Logs: Nachrichteninhalte, Prompts, Modellausgaben (auch nicht als Preview), Akte-, Profil- und Stimmen-Felder, Zusammenfassungen, E-Mail-Adressen, Namen, Einladungscodes.
 > Fehlermeldungen von `JSON.parse` enthalten Ausschnitte des geparsten Textes und dürfen deshalb **nicht** geloggt werden. Stattdessen nur `parse_failed`, `outputLength` und gegebenenfalls die Position.
 
-`app_logs`: Client darf nur eigene Zeilen einfügen (nichts lesen), `metadata` ≤ 8 KB, Aufbewahrung 30 Tage (`purge-app-logs`).
+`app_logs`: Client darf nur eigene Zeilen einfügen (nichts lesen), `metadata` ≤ 8 KB, Aufbewahrung 30 Tage (`purge-app-logs`). Seit 034 setzt ein Trigger `origin` (`server` für service_role/postgres, `client` für authenticated/anon) — vom Client nicht fälschbar; das Monitoring zählt danach.
+
+**Monitoring und Notfallplan (S-22):** `security-monitor` (stündlich) → `security_alerts` → Mail über One.com-SMTP (Port 465) bzw. Admin-Tab „Sicherheit“. Für den Ernstfall: `docs/security/notfallplan.md` (sechs Szenarien, 72-Stunden-Frist LDI NRW, Vorfallsprotokoll; ausgedruckt griffbereit).
 
 **Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
 
@@ -1564,7 +1608,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
-3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`, `backfill-embeddings` — bei Änderungen an `_shared/*` alle, die das Modul importieren
+3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `supervision`, `security-monitor`, `backfill-embeddings` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
 5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller` und Eintrag in `supabase/config.toml`; Log-Regel beachten
 6. Neue externe Dienste/Origins: in die CSP (`vercel.json`) aufnehmen

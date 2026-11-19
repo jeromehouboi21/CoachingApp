@@ -59,6 +59,7 @@ Deno.serve(async (req) => {
     // Kein stilles Scheitern: Wenn ein Schritt fehlschlägt, bleibt der Auth-Account
     // bestehen, damit die Löschung wiederholt werden kann.
     if (failures.length > 0) {
+      logger.error('delete_incomplete', { failedSteps: failures.join(',') });   // überwacht S-22
       return jsonResponse({ error: 'delete_incomplete' }, CORS_HEADERS, 500);
     }
 
@@ -66,7 +67,7 @@ Deno.serve(async (req) => {
     // feedback_surveys hängen per ON DELETE CASCADE an auth.users.
     const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
     if (deleteError) {
-      logger.error('Failed to delete auth user', describeError(deleteError));
+      logger.error('auth_delete_failed', describeError(deleteError));   // überwacht S-22
       return jsonResponse({ error: 'auth_delete_failed' }, CORS_HEADERS, 500);
     }
 

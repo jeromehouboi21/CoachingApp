@@ -33,6 +33,11 @@ Antworte ausschließlich mit dem JSON-Objekt, ohne Text davor oder danach.`;
 
 export type ReviewResult = { approved: boolean; reasons: string[] };
 
+/** Technischer Ausfall des Prüfschritts (nicht inhaltliche Ablehnung) – für den Alarm learning_review_failed (S-22). */
+export function isReviewTechnicalFailure(review: ReviewResult): boolean {
+  return review.reasons.some((r) => r === 'review_api_failed' || r === 'review_parse_failed');
+}
+
 /**
  * @param callHaiku (system, user) → Rohtext der Modellantwort
  * @param ignoreReasons Codes, die nicht als Ablehnungsgrund zählen (Supervision: 'low_quality')

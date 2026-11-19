@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useAdminMfaContext } from '../../hooks/useAdminMfa'
 import { ChevronLeft } from 'lucide-react'
 import { functionHeaders, functionUrl } from '../../lib/functions'
+import { SecurityTab } from '../../components/admin/SecurityTab'
 
 export function AdminUsersScreen() {
   const { session, profile } = useAuth()
@@ -14,7 +15,7 @@ export function AdminUsersScreen() {
   const [inactiveCount, setInactiveCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
-  const [tab, setTab] = useState('users') // 'users' | 'feedback'
+  const [tab, setTab] = useState('users') // 'users' | 'feedback' | 'security'
   const [feedback, setFeedback] = useState([])
   const [supervision, setSupervision] = useState([])
   const [openProtocolId, setOpenProtocolId] = useState(null)
@@ -169,7 +170,7 @@ export function AdminUsersScreen() {
           </button>
         )}
         <p className="text-[14px] text-ink-2 mb-4">
-          {tab === 'users' ? `${users.length} Nutzer` : `${feedback.length} Rückmeldungen`}
+          {tab === 'users' ? `${users.length} Nutzer` : tab === 'feedback' ? `${feedback.length} Rückmeldungen` : 'Alarme und Wochenübersicht'}
         </p>
 
         <div className="flex gap-2">
@@ -189,7 +190,17 @@ export function AdminUsersScreen() {
           >
             Feedback
           </button>
+          <button
+            onClick={() => setTab('security')}
+            className={`text-[13px] px-4 py-1.5 rounded-full border ${
+              tab === 'security' ? 'bg-accent text-white border-accent' : 'bg-surface border-[var(--color-border)] text-ink-2'
+            }`}
+          >
+            Sicherheit
+          </button>
         </div>
+
+        {tab === 'security' && <SecurityTab adminGet={adminGet} />}
 
         {tab === 'users' && (
           <div className="mt-4">

@@ -47,7 +47,7 @@ export async function enforceRateLimit(
 ): Promise<void> {
   const { data, error } = await admin.rpc('consume_rate_limits', { p_user_id: userId, p_rules: rules });
   if (error) {
-    logger.error('consume_rate_limits failed', { code: error.code, failOpen });
+    logger.error('rate_limit_db_error', { code: error.code, failOpen });   // Code überwacht S-22
     if (failOpen) return;
     throw new HttpError(500, 'rate_limit_unavailable');
   }

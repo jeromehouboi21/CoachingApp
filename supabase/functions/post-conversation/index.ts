@@ -5,7 +5,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
-import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
+import { reviewLearningEntry, makeHaikuCaller, isReviewTechnicalFailure } from '../_shared/learning.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
@@ -682,6 +682,7 @@ Deno.serve(async (req) => {
         if (!review.approved) {
           // Gründe als Text: sanitizeLogData würde ein Array zu {type,length} reduzieren
           logger.info('learning_rejected', { conversationId, reasons: review.reasons.join(',') });   // nur Codes
+          if (isReviewTechnicalFailure(review)) logger.warn('learning_review_failed', { conversationId });   // Alarm S-22
         } else {
           const embedding = openaiKey
             ? await generateEmbedding([entryFields.context, entryFields.pattern, entryFields.what_helped].filter(Boolean).join(' — '), openaiKey)
