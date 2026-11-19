@@ -3,7 +3,7 @@
 **Produkt:** Friedensstifter · Dein systemischer Begleiter
 **Stand:** Design-Dokument v2.5 implementiert
 **Arbeitsverzeichnis:** `f:/OneDrive/Documents/GitHub/CoachingApp/`
-**Laufend:** Security-Paket B – Auftrag `docs/security/handoff-security-paket-b.md`, Lösungsdesign `docs/security/friedensstifter-security-paket-b-design-v1.md`, Bestandsaufnahme `docs/security/paket-b-discovery.md`
+**Security-Paket B abgeschlossen (19.11.2026):** Bericht `docs/security/paket-b-abschlussbericht.md` · Auftrag `docs/security/handoff-security-paket-b.md`, Lösungsdesign `docs/security/friedensstifter-security-paket-b-design-v1.md`, Bestandsaufnahme `docs/security/paket-b-discovery.md`
 
 ---
 
