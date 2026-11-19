@@ -211,6 +211,9 @@ is_pinned       BOOLEAN DEFAULT FALSE
 surfaced_at     TIMESTAMPTZ  -- U3: auf Heute angezeigt
 confirmed_at    TIMESTAMPTZ  -- U3: vom Nutzer bestätigt/angepasst (source → 'user')
 dismissed_at    TIMESTAMPTZ  -- U3: „Heute nicht“
+user_rating     TEXT CHECK ('helpful' | 'unclear' | 'disagree')  -- U5a: Deine Einschätzung, nur durch den Nutzer
+rated_at        TIMESTAMPTZ  -- U5a
+follows_insight_id UUID (FK → insights, ON DELETE SET NULL)  -- U5a angelegt, befüllt ab U5b
 created_at / updated_at TIMESTAMPTZ
 ```
 
@@ -284,13 +287,18 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 
 ```
 BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennung)
-  + BLOCK 1: Briefing       (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch; bei start 'resume' stattdessen FORTSETZUNG aus diesem Gespräch)
+  + BLOCK 1: Briefing       (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch; entfällt bei start 'resume')
   + BLOCK 2: Coach-Akte     (coach_file_entries + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte  (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext    (Anonyme Erfahrungen)
   + BLOCK 5: Supervision    (Wöchentliche Empfehlung · nur mit Secret SUPERVISION_IN_PROMPT=1, seit 19.11.2026 an)
   + BLOCK 6: Wellness-Check (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
+  + BLOCK 7: Entry-Kontext  (Muster, Tagesimpuls …)
+  + ZULETZT bei start 'resume': FORTSETZUNG (U3) bzw. WEITERARBEITEN (U5a, mit insightId)
+                            → letzter Block = Vorrang; synthetischer Nutzer-Turn verweist darauf
 ```
+
+**Weiterarbeiten (U5a):** `{ conversationId, start: 'resume', insightId }`. `chat` lädt die Erkenntnis selbst (eigene, aus diesem Gespräch, nicht `disagree` – sonst 403/400 `invalid_insight`) und baut WEITERARBEITEN: Zeitbezug + Thema (bei `high` ohne Thema) · Erkenntnis wörtlich · genau eine Frage (`ziel`: wie ist es ergangen; `unclear`: Klärungsangebot) · Ausweg · keine Bewertung. Zählt nicht als neuer Start. Logs `weiterarbeiten_started` / `weiterarbeiten_rejected`.
 
 **Sprachprinzip im System-Prompt — absolut verboten:**
 - „müssen" → „kannst", „hast die Möglichkeit"
@@ -339,7 +347,7 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennun
 startNewConversation(isFirstEver)          → Pool-Text sofort anzeigen, Server speichert (start first/standard)
 startWellnessConversation(wc)              → start 'wellness' — Coach antwortet sofort auf Wellness-Score
 startEntryContextConversation(entryContext) → start 'entry'
-resumeWithOpening(conversationId)          → U3: Verlauf laden + start 'resume', KEINE neue Konversation
+resumeWithOpening(conversationId, { insightId? }) → U3: Verlauf laden + start 'resume', KEINE neue Konversation; U5a: mit insightId = Weiterarbeiten an einer Erkenntnis
 loadConversation(conversationId)           → Verlauf laden ohne Coach-Nachricht (Verlauf, laufendes Gespräch)
 startBriefingConversation()                → start 'briefing' — seit U3 vom Frontend nicht mehr genutzt
 ```
@@ -535,6 +543,7 @@ MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellu
 | `036_s11_privacy_fixes.sql` | S-11: user_feedback/feedback_surveys nur mit consent_given (RLS) · profiles.age_confirmed_at + RPC confirm_age · Schutz-Trigger/handle_new_user angepasst · consent_ip entfernt · apply_retention + feedback_surveys 24 Monate |
 | `037_s06b_user_mfa.sql` | S-06b: `mfa_satisfied()` · restriktive Policy `mfa_required` auf allen Client-Tabellen (ohne app_logs) · set_learning_opt_in/confirm_age mit MFA-Prüfung · `mfa_recovery_codes` (nur Hash, nur service_role) |
 | `038_u4_access_phases.sql` | U4: `trial_sessions_used`, `session_limit` Default 3 (free 20 → 3), `access_state_for()` / `get_access_state()`, `consume_session` zählt gesamt, Cron `reset-monthly-sessions` abgeschaltet |
+| `039_u5a_insight_rating.sql` | U5a: `insights.user_rating` (Check) · `rated_at` · `follows_insight_id` (FK, SET NULL) |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.
 
@@ -580,7 +589,7 @@ Quelle: `docs/Neues_Zielbild/claude-md-ergaenzung-v1.md`. Bei Widerspruch gilt d
 | Gespräch | `/coach` · `CoachScreen`, Einstieg, `/coach/verlauf` |
 | Spiegel: Erkenntnisse / Muster / Entwicklung | `/mirror` · `/mirror/muster/:key` |
 | Deine Einschätzung | `insights.user_rating` (`helpful` · `unclear` · `disagree`) |
-| Daran weiterarbeiten | Entry-Kontext `weiterarbeiten`, Ursprungsgespräch fortsetzen |
+| Daran weiterarbeiten | `start: 'resume'` + `insightId` im Ursprungsgespräch (Block WEITERARBEITEN, U5a) |
 | Kennenlernen / Ruhemodus / Begleitung | `phase` aus `get_access_state()` (`kennenlernen` · `ruhemodus` · `begleitung`), Regeln in `access_state_for()` |
 | Reflexionstage | bisherige Streak-Daten, Anzeige „Tage gesamt" |
 | Das Buch zur App | `/buch` · `profiles.book_status`, `book_progress` |

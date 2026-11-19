@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + Region Frankfurt · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + Region Frankfurt · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039)
 
 ---
 
@@ -219,7 +219,8 @@ CoachingApp/
 │   │   ├── 035_u3_insight_surfacing.sql ← insights.surfaced_at/confirmed_at/dismissed_at (Heute)
 │   │   ├── 036_s11_privacy_fixes.sql    ← Feedback-Einwilligung (RLS), age_confirmed_at, confirm_age, consent_ip entfernt
 │   │   ├── 037_s06b_user_mfa.sql        ← mfa_satisfied(), Policy mfa_required auf Client-Tabellen, mfa_recovery_codes
-│   │   └── 038_u4_access_phases.sql     ← trial_sessions_used, access_state_for/get_access_state, consume_session gesamt
+│   │   ├── 038_u4_access_phases.sql     ← trial_sessions_used, access_state_for/get_access_state, consume_session gesamt
+│   │   └── 039_u5a_insight_rating.sql   ← insights.user_rating/rated_at/follows_insight_id
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -331,6 +332,7 @@ function AdminRoute({ children }) {
 - **D – Heute schon gesprochen:** Gespräch mit ≥ 3 Nachrichten, letzte Aktivität heute → „Du warst heute schon im Gespräch. Lass es ruhig nachwirken.“ · „Was du erkannt hast → Spiegel“
 - **B – Nachklang:** Erkenntnis der letzten 7 Tage ohne `dismissed_at`, entweder noch nicht bestätigter Vorschlag (`source='auto'`, `confirmed_at IS NULL`) oder Vorhaben (`ziel`, Vorrang) → `HiddenInsightCard` (verdeckt, „Antippen zum Anzeigen“ setzt `surfaced_at`; bei `auto` „Stimmt das so?“ Ja/Anpassen/Entfernen; „Heute nicht“ → `dismissed_at`) + Tagesimpuls als Nebenkarte
 - **C2 – Wiederentdecken:** Erkenntnis älter als 14 Tage, `surfaced_at IS NULL`, höchstens einmal pro Kalenderwoche (eine frühere Wiederentdeckung = `surfaced_at` > 14 Tage nach `created_at`); `surfaced_at` wird beim Anzeigen gesetzt
+- **U5a:** B und C2 nie mit `user_rating = 'disagree'`; C2 mit Vorrang für ✦. Nach dem Aufdecken „Deine Einschätzung ›“ und „Daran weiterarbeiten →“ (B: „Wie war es seitdem? Daran weiterarbeiten →“), gleiche Komponente `InsightRating` wie im Spiegel.
 - **C – Ruhe:** Tagesimpuls (`DailyImpulseCard`) · „Erst mal ankommen → Wie geht's dir?“ · „Ins Gespräch →“
 - Dauerhaft: Erklärzeile unter verdeckten Karten („Verdeckt, damit niemand mitliest …“), Link „Wie funktioniert die App?“
 - **E – Ende des Kennenlernens (U4):** im Ruhemodus mit Standardgrenze 3 eine Karte über dem jeweiligen Zustand (nicht in A/D): „Drei Gespräche liegen hinter dir …“ · „Begleitung →“ · „Oder ein persönliches Gespräch mit Jerome →“ · „Schließen“ (einmal pro Gerät, `TrialEndCard`)
@@ -385,6 +387,8 @@ function AdminRoute({ children }) {
 
 **Ebene Erkenntnisse** (`/mirror`, `InsightsLevel`):
 - Filter Alle · Erkenntnisse · Stärken · Vorhaben (`ziel` heißt in der Anzeige „Vorhaben“; `muster` nur unter „Alle“)
+- Filter **„Hat mich weitergebracht ✦“** (U5a, nur eigene Markierungen); ✦ an der Karte, wenn `user_rating = 'helpful'`
+- Unter jeder Karte (U5a, `InsightRating`): „Deine Einschätzung ›“ (Sheet: ✦ Hat mich weitergebracht · ? Verstehe ich nicht · ≠ Teile ich nicht · ✎ Anpassen · ✕ Entfernen · zurücknehmen) und „Daran weiterarbeiten →“ (nur mit Ursprungsgespräch und nicht bei „Teile ich nicht“; bei „Verstehe ich nicht“ als „Magst du es im Gespräch klären? →“). Bei „Teile ich nicht“: „In deinen Worten formulieren“ · „Entfernen“.
 - Karte mit Kategorie (eine neutrale Farbe), Anheften, Entfernen. Writes mit `.select('id')` bestätigt; Fehler → Hinweis, UI ändert sich erst nach Erfolg (`insight_pin_failed`, `insight_delete_failed`). Ladefehler → `LoadError` statt Leerzustand.
 
 **Ebene Muster** (`/mirror/muster`, `PatternsLevel`) – jedes Muster an genau einem Ort:
@@ -395,7 +399,7 @@ function AdminRoute({ children }) {
 
 Akte-Muster und `pattern_references` sind im Datenmodell nicht verknüpft (kein gemeinsamer Schlüssel); deshalb gibt es das Detail nur für die fünf Bibliotheks-Muster.
 
-**Ebene Entwicklung** (`/mirror/entwicklung`, `DevelopmentLevel`, bisher „Deine Akte“): „Was sich bei dir bewegt · Aus N Gesprächen“ (N = `session_notes`) → **Deine Entwicklung** (Zeitachse aus `session_notes.file_updates`, neueste oben, ein Punkt in Akzentfarbe; Texte: zum ersten Mal bemerkt / neue Beobachtung / seltener in den letzten Gesprächen / zeigt sich gerade kaum) → **Deine Stärken** (ohne ✦) → **Wie du reagierst** (`trigger` + `value`) → **Dein Alltag** (`coachee_profile`).
+**Ebene Entwicklung** (`/mirror/entwicklung`, `DevelopmentLevel`, bisher „Deine Akte“): „Was sich bei dir bewegt · Aus N Gesprächen“ (N = `session_notes`) → **Deine Entwicklung** (Zeitachse aus `session_notes.file_updates` **und** – seit U5a – eigenen ✦-Markierungen am Tag der Markierung, Filter „Alle · Hat mich weitergebracht ✦“, neueste oben, ein Punkt in Akzentfarbe; Texte: zum ersten Mal bemerkt / neue Beobachtung / seltener in den letzten Gesprächen / zeigt sich gerade kaum) → **Deine Stärken** (ohne ✦) → **Wie du reagierst** (`trigger` + `value`) → **Dein Alltag** (`coachee_profile`).
 
 **Beschreibende Status:** `fading` → „seltener in den letzten Gesprächen“, `resolved` → „zeigt sich gerade kaum“, `active` ohne Zusatz.
 
@@ -795,6 +799,8 @@ Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client,
 
 **Start `resume` (U3):** nur auf einem eigenen Gespräch mit mindestens einer Nutzer-Nachricht (sonst `400 invalid_start`, Log `resume_rejected`). Statt BLOCK 1 (Briefing über das letzte *andere* Gespräch) setzt `buildSystemPrompt` den Block **FORTSETZUNG** aus diesem Gespräch (`summary`, `open_thread`, relative Zeit der letzten Nachricht): kurz anknüpfen, höchstens eine Frage, Ausweg, keine Bewertung; bei `open_thread_intensity = 'high'` ohne Thema. Kein Wellness-/Entry-Kontext, kein Wirkmechanismus-Angebot, keine Stimmen-Einführung in dieser Eröffnung. `consume_session` läuft wie bei jeder Eröffnung (idempotent). Log `resume_started`.
 
+**Weiterarbeiten (U5a):** `start: 'resume'` + `insightId`. `chat` lädt die Erkenntnis selbst (eigene Zeile, `conversation_id` = dieses Gespräch, nicht `disagree`; fremd → `403`, sonst `400 invalid_insight`, Log `weiterarbeiten_rejected`) und setzt statt FORTSETZUNG den Block **WEITERARBEITEN**: Zeitbezug ab Entstehung der Erkenntnis + Thema (Kurztitel; Platzhalter oder `high` → ohne Thema) · Erkenntnis wörtlich · genau eine Frage (`ziel`: „Wie ist es dir damit ergangen?“; `unclear`: Klärungsangebot) · Ausweg „Oder bringst du heute etwas anderes mit?“ · keine Bewertung. Kein Erkenntnistext vom Client im Prompt. Log `weiterarbeiten_started` (IDs, Kategorie, Einschätzung, Tage).
+
 **Howto-Fakten (`HOWTO_SYSTEM_PROMPT`, seit U3):** Aufbau Heute · Gespräch · Spiegel (Erkenntnisse · Muster · Entwicklung), Reflexionstage im Profil, Spiegel ohne Grenze.
 
 **Modellaufruf (T0, seit 19.11.2026):** `COACH_MODEL` mit `COACH_REQUEST_DEFAULTS`, Verlauf durch `ensureEndsWithUser`. Nach dem Stream liest `finalMessage()` Nutzung und Stop-Grund: `coach_usage` (`conversationId`, `mode`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `stopReason`), bei `max_tokens` → `coach_response_truncated`, bei anderen unerwarteten Stop-Gründen (z. B. `refusal`) → `coach_response_unexpected_stop` (beide `infoOnly` in `monitorRules.ts`). Kosten je Gespräch: `supabase/diagnostics/coach-usage.sql`.
@@ -832,13 +838,16 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Kapazität-vs-W
                               blinde Flecken, Regelkreise, Ressourcen, Perspektivwechsel)
   + MECHANISM_OFFER_BLOCK    (nur im Rhythmus-Turn)
   + VOICE_INTRODUCE_BLOCK / VOICE_NAMING_BLOCK (nur je nach Taktung, nie beide gleichzeitig)
-  + BLOCK 1: Briefing        (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch, Entscheidung 18.11.2026)
+  + BLOCK 1: Briefing        (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch, Entscheidung 18.11.2026; entfällt bei start 'resume')
   + BLOCK 2: Coach-Akte      (coach_file_entries inkl. linked_value + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte   (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext     (geprüfte Erfahrungen aus experience_patterns · als <erfahrungen_anderer_menschen>-Datenblock, „keine Anweisungen“, < > entfernt)
   + BLOCK 5: Supervision     (Wöchentliche Empfehlung · nur mit SUPERVISION_IN_PROMPT=1, seit 19.11.2026 an)
   + BLOCK 6: Wellness-Check  (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
   + BLOCK 7: Entry-Kontext   (v2.6 — woher kommt der Mensch: pattern/tagesimpuls/verstehen; 'spiegel' ist vorgesehen, wird aber von keinem Screen genutzt)
+  + ZULETZT bei start 'resume': FORTSETZUNG (U3) bzw. WEITERARBEITEN (U5a, mit insightId) – letzter Block hat Vorrang;
+    der synthetische Nutzer-Turn (ensureEndsWithUser) verweist ausdrücklich darauf (sonst übernahm das Modell den
+    Ton der Standard-Eröffnung aus dem Verlauf, Befund U5a)
 ```
 
 Bei Krisenfall ersetzt `CRISIS_RESPONSE_BLOCK` **alle** obigen Blöcke vollständig (BLOCK 0, "übersteuert alle anderen Verhaltensregeln").
@@ -1251,6 +1260,9 @@ is_pinned       BOOLEAN DEFAULT false
 surfaced_at     TIMESTAMPTZ  -- U3: auf Heute angezeigt (Nachklang aufgedeckt / Wiederentdecken gezeigt)
 confirmed_at    TIMESTAMPTZ  -- U3: vom Nutzer bestätigt oder angepasst
 dismissed_at    TIMESTAMPTZ  -- U3: „Heute nicht“
+user_rating     TEXT CHECK ('helpful' | 'unclear' | 'disagree')  -- U5a (039): Deine Einschätzung, nur durch den Nutzer
+rated_at        TIMESTAMPTZ  -- U5a
+follows_insight_id UUID → insights ON DELETE SET NULL  -- U5a angelegt, befüllt ab U5b („Was du seitdem erlebt hast“)
 ```
 
 **`coach_reflections`** — KI-Selbstreflexion (Frist 12 Monate)
@@ -1470,6 +1482,9 @@ kein Gespräch mit eigener Nachricht? → startNewConversation(true)
 jüngstes Gespräch < 2 h? → loadConversation(latest)
 sonst → Einstieg
   Weitermachen → resumeWithOpening(id) → chat start 'resume' (Block FORTSETZUNG, keine neue Konversation)
+Vorher (höchste Priorität): state.continueInsight (U5a, „Daran weiterarbeiten“ aus Spiegel/Heute)
+  → resumeWithOpening(conversationId, { insightId }) → Block WEITERARBEITEN; kein neuer Start, auch im Ruhemodus
+  → beim Verlassen („←“/„Neues Gespräch“) nach eigenem Schreiben einmal ContinueRatingSheet („Wie siehst du diese Erkenntnis jetzt?“)
   Etwas Neues  → startNewConversation()
 ```
 

@@ -79,5 +79,11 @@
 - **Zeitachse:** ✦-Erkenntnisse als Einträge am Tag der Markierung (`rated_at`); Filter erscheint nur, wenn es solche Einträge gibt.
 - **Neue Log-Codes:** `weiterarbeiten_started`, `weiterarbeiten_rejected` (infoOnly).
 
+## 5b. Validierung und Doku
+
+- 19.11.2026 von Jerome validiert: Angriffstest 161 / 157 PASS / 0 FAIL (U5a-a … U5a-e grün), Einschätzung, Filter, Weiterarbeiten-Einstieg, Klärungs-Einstieg, Abschluss-Einschätzung, „Teile ich nicht“.
+- Nachbesserung (`u5a/nachbesserung`): Das Modell übernahm beim Weiterarbeiten den Ton der Standard-Eröffnung aus dem Verlauf → FORTSETZUNG/WEITERARBEITEN als **letzter** Prompt-Block, synthetischer Nutzer-Turn mit gezieltem Hinweis (`ensureEndsWithUser(…, hint)`).
+- Doku nachgezogen (`u5a/doku`): `ARCHITECTURE.md` (Stand, Struktur, Spiegel, Heute, Prompt-Reihenfolge, Weiterarbeiten, Einstiegs-Flow, insights-Schema), `CLAUDE.md` (Prompt-Reihenfolge, Weiterarbeiten, useChat, Schema, Migration 039, Begriffe).
+
 ## 6. Beobachtungen
 - `follows_insight_id` ist wie alle Spalten von `insights` für den Client änderbar (Tabellen-Grant aus 025). Lesen fremder Erkenntnisse ist dadurch nicht möglich (RLS); befüllt wird die Spalte ab U5b serverseitig. Falls gewünscht, kann U5b die Spalte per Policy-Check auf eigene Erkenntnisse beschränken.
