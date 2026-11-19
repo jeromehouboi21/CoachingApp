@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { useAuth } from './hooks/useAuth'
 import { AppShell } from './components/layout/AppShell'
 import { LandingScreen } from './screens/landing/LandingScreen'
@@ -15,10 +15,7 @@ import { PremiumScreen } from './screens/premium/PremiumScreen'
 import { AdminUsersScreen } from './screens/admin/AdminUsersScreen'
 import { AdminMfaScreen } from './screens/admin/AdminMfaScreen'
 import { useAdminMfa, AdminMfaContext } from './hooks/useAdminMfa'
-import { StimmenScreen } from './screens/stimmen/StimmenScreen'
-import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
-import { MusterDetail } from './screens/verstehen/MusterDetail'
-import { AusGespraechen } from './screens/verstehen/AusGespraechen'
+import { PatternDetailScreen } from './screens/mirror/PatternDetailScreen'
 import { HistoryScreen } from './screens/history/HistoryScreen'
 import { BetaSurveyScreen } from './screens/feedback/BetaSurveyScreen'
 import { ImpressumScreen } from './screens/legal/ImpressumScreen'
@@ -35,6 +32,12 @@ function LoadingScreen() {
       </div>
     </div>
   )
+}
+
+// /verstehen/:key → /mirror/muster/:key (U2)
+function LegacyPatternRedirect() {
+  const { key } = useParams()
+  return <Navigate to={`/mirror/muster/${encodeURIComponent(key ?? '')}`} replace />
 }
 
 function ProtectedRoute({ children }) {
@@ -80,9 +83,14 @@ export default function App() {
       <Route path="/wellness" element={<ProtectedRoute><WellnessCheckScreen /></ProtectedRoute>} />
       <Route path="/premium" element={<ProtectedRoute><PremiumScreen /></ProtectedRoute>} />
 
-      {/* Verstehen-Modul: Detail-Ansichten bewusst ohne BottomNav (eigener Zurück-Button) */}
-      <Route path="/verstehen/aus-gespraechen" element={<ProtectedRoute><AusGespraechen /></ProtectedRoute>} />
-      <Route path="/verstehen/:key" element={<ProtectedRoute><MusterDetail /></ProtectedRoute>} />
+      {/* Muster-Detail (U2): Vollbild ohne BottomNav, eigener Zurück-Button → /mirror/muster */}
+      <Route path="/mirror/muster/:key" element={<ProtectedRoute><PatternDetailScreen /></ProtectedRoute>} />
+
+      {/* Alte Verstehen-/Stimmen-Adressen leiten in den Spiegel (U2, Lesezeichen der Beta-Tester) */}
+      <Route path="/verstehen" element={<Navigate to="/mirror/muster" replace />} />
+      <Route path="/verstehen/aus-gespraechen" element={<Navigate to="/mirror/muster" replace />} />
+      <Route path="/verstehen/:key" element={<LegacyPatternRedirect />} />
+      <Route path="/stimmen" element={<Navigate to="/mirror/muster" replace />} />
 
       {/* Gesprächsverlauf: gehört zum Gespräch (U1), eigenes Vollbild-Layout ohne BottomNav.
           /verlauf bleibt als Weiterleitung für alte Lesezeichen. */}
@@ -99,10 +107,10 @@ export default function App() {
       <Route element={<AppShell />}>
         <Route path="/home" element={<ProtectedRoute><HomeScreen /></ProtectedRoute>} />
         <Route path="/coach" element={<ProtectedRoute><CoachScreen /></ProtectedRoute>} />
-        <Route path="/mirror" element={<ProtectedRoute><MirrorScreen /></ProtectedRoute>} />
+        <Route path="/mirror" element={<ProtectedRoute><MirrorScreen level="erkenntnisse" /></ProtectedRoute>} />
+        <Route path="/mirror/muster" element={<ProtectedRoute><MirrorScreen level="muster" /></ProtectedRoute>} />
+        <Route path="/mirror/entwicklung" element={<ProtectedRoute><MirrorScreen level="entwicklung" /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
-        <Route path="/verstehen" element={<ProtectedRoute><VorstehenScreen /></ProtectedRoute>} />
-        <Route path="/stimmen" element={<ProtectedRoute><StimmenScreen /></ProtectedRoute>} />
         <Route path="/feedback" element={<ProtectedRoute><BetaSurveyScreen /></ProtectedRoute>} />
       </Route>
 

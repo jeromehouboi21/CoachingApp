@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, Lock, MessageCircle } from 'lucide-react'
+import { ChevronLeft, MessageCircle } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
@@ -8,13 +8,13 @@ import { createLogger } from '../../lib/logger'
 const logger = createLogger('HistoryScreen')
 
 export function HistoryScreen() {
-  const { user, profile } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const [conversations, setConversations] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Konsistent mit CoachScreen.jsx: Tester zählen wie Premium.
-  const isPaidUser = profile?.plan === 'premium' || profile?.plan === 'tester'
+  // Seit U2 ohne Sperre: Nachlesen und Fortsetzen ist für alle frei (UX-Konzept 5.3).
+  // Gezählt und begrenzt wird ausschließlich serverseitig (consume_session in chat).
 
   useEffect(() => {
     if (!user) return
@@ -88,19 +88,12 @@ export function HistoryScreen() {
 
         {!loading && conversations.length > 0 && (
           <div className="flex flex-col gap-4">
-            {conversations.map((conv, i) => {
-              const isLocked = !isPaidUser && i > 0
+            {conversations.map((conv) => {
               return (
                 <div
                   key={conv.id}
-                  className={`bg-surface border border-[var(--color-border)] rounded-xl p-5 relative ${isLocked ? 'opacity-60' : ''}`}
+                  className="bg-surface border border-[var(--color-border)] rounded-xl p-5"
                 >
-                  {isLocked && (
-                    <div className="absolute inset-0 rounded-xl flex flex-col items-center justify-center bg-surface/80 backdrop-blur-[2px] z-10">
-                      <Lock size={20} color="var(--color-ink-3)" className="mb-2" />
-                      <span className="text-[12px] text-ink-3 font-medium">Premium</span>
-                    </div>
-                  )}
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-[11px] text-ink-3">{formatDate(conv.updated_at)}</span>
                     <span className="w-1 h-1 rounded-full bg-ink-3" />
@@ -113,9 +106,8 @@ export function HistoryScreen() {
                     {previewText(conv)}
                   </p>
                   <button
-                    onClick={() => !isLocked && navigate('/coach', { state: { resumeConversationId: conv.id } })}
-                    disabled={isLocked}
-                    className="text-[13px] text-accent font-medium hover:underline disabled:no-underline"
+                    onClick={() => navigate('/coach', { state: { resumeConversationId: conv.id } })}
+                    className="text-[13px] text-accent font-medium hover:underline"
                   >
                     Gespräch fortsetzen →
                   </button>
@@ -123,21 +115,6 @@ export function HistoryScreen() {
               )
             })}
 
-            {/* Premium-CTA wenn Free-Nutzer gesperrte Gespräche sieht */}
-            {!isPaidUser && conversations.length > 1 && (
-              <div className="bg-premium-light border border-[var(--color-premium)]/20 rounded-xl p-5 text-center">
-                <p className="text-[14px] text-ink font-medium mb-1">Deinen ganzen Verlauf freischalten</p>
-                <p className="text-[13px] text-ink-2 mb-4">
-                  Mit Premium siehst du alle deine bisherigen Gespräche und kannst jedes davon weiterführen.
-                </p>
-                <button
-                  onClick={() => navigate('/premium')}
-                  className="bg-accent text-white text-[13px] font-medium px-5 py-2.5 rounded-full hover:bg-accent-2 transition-colors"
-                >
-                  Premium entdecken →
-                </button>
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -34,8 +34,8 @@ const TOOL_CARDS = [
     iconColor: 'var(--color-premium)',
     title: 'Innere Stimmen',
     desc: 'Welche Stimme bremst dich?',
-    to: '/stimmen',
-    badge: 'PRO',
+    to: '/mirror/muster',
+    badge: null,
   },
   {
     id: 'learn',
@@ -44,7 +44,7 @@ const TOOL_CARDS = [
     iconColor: 'var(--color-ink-2)',
     title: 'Verstehen',
     desc: 'Wie Muster entstehen',
-    to: '/verstehen',
+    to: '/mirror/muster',
     badge: null,
   },
 ]

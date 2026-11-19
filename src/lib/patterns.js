@@ -1,11 +1,51 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useAuth } from '../../hooks/useAuth'
-import { useStreak } from '../../hooks/useStreak'
-import { supabase } from '../../lib/supabase'
-import { ChevronLeft } from 'lucide-react'
+// src/lib/patterns.js — die fünf allgemeinen Muster („Kennst du das?“) an einer Stelle (U2).
+// Texte aus dem früheren Verstehen-Modul (VorstehenScreen + MusterDetail), nur ein Tippfehler korrigiert.
+// Die Keys entsprechen pattern_references.pattern_key (post-conversation).
 
-const PATTERN_DATA = {
+const LIBRARY_LIST = [
+  {
+    key: 'rueckzug_unter_druck',
+    label: 'Rückzug unter Druck',
+    icon: '🪞',
+    iconBg: 'bg-accent-light',
+    desc: 'Wenn es eng wird, ziehst du dich zurück — statt anzusprechen, was dich stört.',
+    category: 'Beziehungen',
+  },
+  {
+    key: 'innerer_kritiker',
+    label: 'Der innere Kritiker',
+    icon: '🔍',
+    iconBg: 'bg-surface-2',
+    desc: 'Eine Stimme, die keine Fehler erlaubt — und deshalb vieles stoppt, bevor es beginnt.',
+    category: 'Selbstbild',
+  },
+  {
+    key: 'uebernahme_reflex',
+    label: 'Übernahme-Reflex',
+    icon: '⚡',
+    iconBg: 'bg-premium-light',
+    desc: 'Du übernimmst Verantwortung für andere — auch ohne Einladung dazu.',
+    category: 'Arbeit',
+  },
+  {
+    key: 'harmonie_um_jeden_preis',
+    label: 'Harmonie um jeden Preis',
+    icon: '🕊️',
+    iconBg: 'bg-coral-light',
+    desc: 'Konflikte zu vermeiden fühlt sich sicherer an — selbst wenn du dabei unsichtbar wirst.',
+    category: 'Beziehungen',
+  },
+  {
+    key: 'perfektionismus_blockade',
+    label: 'Perfektionismus-Blockade',
+    icon: '🎯',
+    iconBg: 'bg-surface-2',
+    desc: 'Solange etwas nicht perfekt ist, fühlt es sich nicht gut genug an, um es zu zeigen.',
+    category: 'Arbeit',
+  },
+]
+
+const PATTERN_TEXTS = {
   rueckzug_unter_druck: {
     label: 'Rückzug unter Druck',
     icon: '🪞',
@@ -88,7 +128,7 @@ const PATTERN_DATA = {
       },
       {
         title: 'Was es heute kosten kann',
-        text: 'Manchmal bleibt du dabei unsichtbar. Was du fühlst, was du brauchst — es bleibt ungesagt, um Frieden zu wahren.',
+        text: 'Manchmal bleibst du dabei unsichtbar. Was du fühlst, was du brauchst — es bleibt ungesagt, um Frieden zu wahren.',
       },
     ],
     action: 'Deine Stimme zählt. "Was würde ich sagen, wenn ich keine Konsequenzen fürchten würde?" — das ist eine gute Frage.',
@@ -118,109 +158,11 @@ const PATTERN_DATA = {
   },
 }
 
-export function MusterDetail() {
-  const { key } = useParams()
-  const navigate = useNavigate()
-  const { user, profile, updateProfile } = useAuth()
-  const { updateStreak } = useStreak()
-  const [personalExcerpt, setPersonalExcerpt] = useState(null)
+/** Alle fünf Muster in fester Reihenfolge, Listen- und Detailtexte zusammengeführt. */
+export const PATTERNS = LIBRARY_LIST.map((p) => ({ ...p, ...PATTERN_TEXTS[p.key] }))
 
-  const pattern = PATTERN_DATA[key]
+export const PATTERN_KEYS = PATTERNS.map((p) => p.key)
 
-  useEffect(() => {
-    if (!user || !key) return
-    updateStreak(profile, updateProfile)
-    supabase
-      .from('pattern_references')
-      .select('excerpt')
-      .eq('user_id', user.id)
-      .eq('pattern_key', key)
-      .order('detected_at', { ascending: false })
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (data?.excerpt) setPersonalExcerpt(data.excerpt)
-      })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, key])
-
-  if (!pattern) {
-    return (
-      <div className="min-h-screen bg-bg flex items-center justify-center px-5">
-        <p className="text-ink-2">Muster nicht gefunden.</p>
-      </div>
-    )
-  }
-
-  const handleStartChat = () => {
-    navigate('/coach', { state: { entryContext: { source: 'pattern', topic: pattern.label, topicKey: key } } })
-  }
-
-  return (
-    <div className="min-h-screen bg-bg">
-      {/* Hero */}
-      <div className="bg-accent px-5 pt-12 pb-8">
-        <button
-          onClick={() => navigate('/verstehen')}
-          className="flex items-center gap-1 text-white/70 text-[13px] mb-6"
-        >
-          <ChevronLeft size={16} />
-          Zurück
-        </button>
-        <p className="text-[11px] text-white/60 uppercase tracking-[0.06em] mb-3">MODUL · MUSTER ERKENNEN</p>
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-3xl">{pattern.icon}</span>
-          <h1 className="font-display text-[24px] text-white leading-[1.2]">{pattern.label}</h1>
-        </div>
-        <p className="text-[14px] text-white/80">{pattern.subtitle}</p>
-      </div>
-
-      <div className="px-5 pb-24">
-        {/* Persönliches Coach-Zitat */}
-        {personalExcerpt && (
-          <div className="bg-accent-light border border-accent/20 rounded-xl p-4 mt-6">
-            <p className="text-[11px] text-accent uppercase tracking-[0.06em] font-medium mb-2">Dein Coach hat bemerkt</p>
-            <p className="text-[14px] text-ink-2 italic leading-relaxed">"{personalExcerpt}"</p>
-          </div>
-        )}
-
-        {/* Entstehungsgeschichte */}
-        <div className="mt-6 mb-6">
-          <h2 className="text-[17px] font-medium text-ink mb-4">Wie dieses Muster entsteht</h2>
-          <div className="flex flex-col gap-4">
-            {pattern.steps.map((step, i) => (
-              <div key={i} className="flex gap-4">
-                <div className="flex flex-col items-center">
-                  <div className="w-7 h-7 rounded-full bg-accent-light flex items-center justify-center flex-shrink-0">
-                    <span className="text-[12px] font-medium text-accent">{i + 1}</span>
-                  </div>
-                  {i < pattern.steps.length - 1 && (
-                    <div className="w-px flex-1 bg-[var(--color-border)] mt-2" />
-                  )}
-                </div>
-                <div className="pb-4">
-                  <p className="text-[14px] font-medium text-ink mb-1">{step.title}</p>
-                  <p className="text-[13px] text-ink-2 leading-relaxed">{step.text}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Handlungs-Box */}
-        <div className="bg-accent-light rounded-xl p-5 mb-6">
-          <p className="text-[11px] text-accent uppercase tracking-[0.06em] font-medium mb-2">Was hilft</p>
-          <p className="text-[14px] text-ink leading-relaxed">{pattern.action}</p>
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={handleStartChat}
-          className="w-full bg-accent text-white text-[15px] font-medium py-4 rounded-full hover:bg-accent-2 transition-colors"
-        >
-          Darüber sprechen →
-        </button>
-      </div>
-    </div>
-  )
+export function getPattern(key) {
+  return PATTERNS.find((p) => p.key === key) ?? null
 }

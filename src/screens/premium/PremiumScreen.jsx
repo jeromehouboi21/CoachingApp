@@ -6,15 +6,13 @@ const FEATURES_FREE = [
   'Skalierungsfragen unbegrenzt',
   'Home-Screen & Impulsfragen',
   'Spracheingabe',
-  'Bis zu 10 Erkenntnisse im Spiegel',
+  'Spiegel mit allen Erkenntnissen, Mustern und deiner Entwicklung',
 ]
 
 const FEATURES_PREMIUM = [
   'Unbegrenzte KI-Coach Gespräche',
   'Vollständiges Coach-Gedächtnis',
-  'Mein Spiegel: unbegrenzte Erkenntnisse',
   'Gesprächsverlauf & Zusammenfassungen',
-  'Innere Stimmen Modul',
   'Direkter Kontakt zu Jerome',
 ]
 
