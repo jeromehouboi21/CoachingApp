@@ -37,11 +37,11 @@ export const SECURITY_MEASURES = [
     evidence: 'requireAdmin verlangt is_admin und aal2 (supabase/functions/_shared/auth.ts); AdminRoute + AdminMfaScreen' },
 
   // ── Wo deine Daten liegen ────────────────────────────────────────────────────
-  { id: 'Region', group: 'ort', status: 'text_offen',
-    text: 'Deine Daten liegen in einem Rechenzentrum in Frankfurt am Main.',
-    evidence: '[Region des Supabase-Projekts von Jerome im Dashboard bestätigen: Project Settings → General]' },
+  { id: 'Region', group: 'ort', status: 'live',
+    text: 'Deine Daten liegen in einem Rechenzentrum in Irland, also innerhalb der EU.',
+    evidence: 'Supabase-Projekt-Region eu-west-1 (West EU, Ireland), von Jerome im Dashboard bestätigt (Project Settings → General, 20.11.2026)' },
   { id: 'S-09', group: 'ort', status: 'live',
-    text: 'Auch die Programmteile, die deine Anfragen verarbeiten, laufen in Frankfurt.',
+    text: 'Auch die Programmteile, die deine Anfragen verarbeiten, laufen in der EU.',
     evidence: 'x-region: eu-central-1 in src/lib/functions.js; Angriffstest #32 prüft x-sb-edge-region = eu-central-1 (Paket C-1)' },
   { id: 'R-3 Anthropic', group: 'ort', status: 'text_offen',
     text: 'Für die Antworten des Begleiters geht der Gesprächsverlauf an Anthropic. [Speicherfrist laut aktuellem Vertrag eintragen]',

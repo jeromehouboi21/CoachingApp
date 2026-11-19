@@ -73,3 +73,11 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - Datenschutzerklärung: nur Link „Wie wir deine Daten schützen ›“ unten, keine Textänderung.
 - Profil: Abschnitte „Dein Begleiter“ (inkl. Lernbasis-Karte), „Konto & Sicherheit“ (Passwort ändern, Wie wir deine Daten schützen, Meine Daten herunterladen, Karte „Konto zusätzlich schützen“), „Rechtliches“, Abmelden, Trennlinie, Konto löschen. Alle Funktionen existieren (keine Feature-Konstante nötig).
 - Angezeigt: 16 Aussagen live; `text_offen`: R-1, Region, R-3 Anthropic, R-3 OpenAI, S-15 Fristen; „Was du wissen solltest“: 2 von 3 (S-21 geplant).
+
+## W2 – Befund Region (20.11.2026)
+
+- Supabase-Projekt-Region laut Dashboard: **`eu-west-1` (West EU, Ireland)** – nicht Frankfurt.
+- Die Edge Functions sind seit C-1 (S-09) fest auf **`eu-central-1` (Frankfurt)** gesetzt (`src/lib/functions.js`, Angriffstest #32). Jede Datenbankabfrage einer Function geht damit Frankfurt ↔ Irland (zusätzliche Laufzeit je Abfrage).
+- Sicherheitsseite angepasst: „Deine Daten liegen in einem Rechenzentrum in Irland, also innerhalb der EU.“ (live); S-09: „… laufen in der EU.“
+- R-2-Vorschlag im Paket-C-Abschlussbericht korrigiert (Frankfurt-Satz war falsch).
+- **Offen (Entscheidung Jerome):** Function-Region auf `eu-west-1` umstellen, damit Functions neben der Datenbank laufen.

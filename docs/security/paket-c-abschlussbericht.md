@@ -76,7 +76,7 @@ Paket C wurde für den UX-Umbau (T0, U1–U3) nach C-2 unterbrochen und danach f
 
 Formulierungsvorschläge, keine Rechtsberatung; bitte mit dem Anwalt abstimmen.
 
-- **Region:** „Die Server-Funktionen der App laufen in Rechenzentren unseres Hosters Supabase in Frankfurt am Main (EU). Auch deine Daten werden dort gespeichert.“
+- **Region:** ~~„Die Server-Funktionen der App laufen in Rechenzentren unseres Hosters Supabase in Frankfurt am Main (EU). Auch deine Daten werden dort gespeichert.“~~ **Korrektur 20.11.2026 (Paket K, W2):** Die Datenbank liegt in **Irland** (Supabase-Region `eu-west-1`, im Dashboard bestätigt), nur die Edge Functions laufen seit C-1 in Frankfurt. Vorschlag neu: „Deine Daten werden bei unserem Hoster Supabase in einem Rechenzentrum in Irland (EU) gespeichert und verarbeitet.“ (Formulierung für die Functions je nach Entscheidung zur Function-Region.)
 - **Altersgrenze:** „Friedensstifter richtet sich an Erwachsene. Bei der Registrierung bestätigst du, dass du mindestens 18 Jahre alt bist; wir speichern den Zeitpunkt dieser Bestätigung.“
 - **Spracheingabe:** „Wenn du die Spracheingabe nutzt, verwendet die App die Spracherkennung deines Browsers. Dabei kann das Gesagte an den Anbieter des Browsers (z. B. Google bei Chrome, Apple bei Safari) übertragen und dort in Text umgewandelt werden. Wir erhalten nur den Text, den du anschließend selbst abschickst. Die Spracheingabe ist freiwillig.“
 - **Feedback:** „Feedback und Antworten aus dem Beta-Fragebogen speichern wir nur mit deiner ausdrücklichen Einwilligung, zusammen mit deinem Namen, und löschen sie nach 24 Monaten. Du kannst die Einwilligung jederzeit widerrufen.“
