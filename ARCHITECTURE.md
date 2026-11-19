@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + Region Frankfurt · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + Region Frankfurt · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038)
 
 ---
 
@@ -146,8 +146,8 @@ CoachingApp/
 │       │   └── WellnessCheckScreen.jsx  ← 1–10 Skala + Context-Chips
 │       ├── howto/
 │       │   └── HowItWorksScreen.jsx     ← FAQ-Chat (ohne AppShell)
-│       ├── premium/
-│       │   └── PremiumScreen.jsx
+│       ├── begleitung/
+│       │   └── BegleitungScreen.jsx     ← Info-Seite Begleitung (U4, ersetzt PremiumScreen)
 │       └── legal/
 │           ├── ImpressumScreen.jsx
 │           ├── DatenschutzScreen.jsx
@@ -218,7 +218,8 @@ CoachingApp/
 │   │   ├── 034_s22_security_monitoring.sql ← app_logs.origin, security_alerts, security_log_counts, Cron security-monitor
 │   │   ├── 035_u3_insight_surfacing.sql ← insights.surfaced_at/confirmed_at/dismissed_at (Heute)
 │   │   ├── 036_s11_privacy_fixes.sql    ← Feedback-Einwilligung (RLS), age_confirmed_at, confirm_age, consent_ip entfernt
-│   │   └── 037_s06b_user_mfa.sql        ← mfa_satisfied(), Policy mfa_required auf Client-Tabellen, mfa_recovery_codes
+│   │   ├── 037_s06b_user_mfa.sql        ← mfa_satisfied(), Policy mfa_required auf Client-Tabellen, mfa_recovery_codes
+│   │   └── 038_u4_access_phases.sql     ← trial_sessions_used, access_state_for/get_access_state, consume_session gesamt
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -259,7 +260,8 @@ CoachingApp/
 | `/profile` | ProfileScreen | **ja** | — | **ja** |
 | `/howto` | HowItWorksScreen | **ja** | — | nein |
 | `/wellness` | WellnessCheckScreen | **ja** | — | nein |
-| `/premium` | PremiumScreen | **ja** | — | nein |
+| `/begleitung` | BegleitungScreen (U4) | **ja** | — | nein |
+| `/premium` | → Weiterleitung `/begleitung` | — | — | — |
 | `/coach/verlauf` | HistoryScreen | **ja** | — | nein |
 | `/verlauf` | Weiterleitung → `/coach/verlauf` (alte Lesezeichen, U1) | — | — | — |
 | `/` | Weiterleitung → `/home` (angemeldet) bzw. `/landing` | — | — | — |
@@ -331,6 +333,7 @@ function AdminRoute({ children }) {
 - **C2 – Wiederentdecken:** Erkenntnis älter als 14 Tage, `surfaced_at IS NULL`, höchstens einmal pro Kalenderwoche (eine frühere Wiederentdeckung = `surfaced_at` > 14 Tage nach `created_at`); `surfaced_at` wird beim Anzeigen gesetzt
 - **C – Ruhe:** Tagesimpuls (`DailyImpulseCard`) · „Erst mal ankommen → Wie geht's dir?“ · „Ins Gespräch →“
 - Dauerhaft: Erklärzeile unter verdeckten Karten („Verdeckt, damit niemand mitliest …“), Link „Wie funktioniert die App?“
+- **E – Ende des Kennenlernens (U4):** im Ruhemodus mit Standardgrenze 3 eine Karte über dem jeweiligen Zustand (nicht in A/D): „Drei Gespräche liegen hinter dir …“ · „Begleitung →“ · „Oder ein persönliches Gespräch mit Jerome →“ · „Schließen“ (einmal pro Gerät, `TrialEndCard`)
 - Ladefehler → Zustand C + `today_load_failed`
 
 **Navigiert zu:** `/coach` (mit Entry-Kontext `tagesimpuls`), `/wellness`, `/mirror`, `/howto`
@@ -366,7 +369,7 @@ function AdminRoute({ children }) {
 
 **Post-Conversation-Auslösung (nicht nur der Button!):** vier unabhängige Trigger-Pfade rufen dieselbe `runPostConversation()`-Kernfunktion auf — `visibilitychange` (Tab in Hintergrund), `pagehide` (Tab schließen/Reload), Unmount-Cleanup (SPA-Navigation weg vom Coach) und der explizite Button-Klick. Eine `processedRef`-Map (`conversationId → Nachrichtenzahl beim letzten Anstoß`) verhindert Doppel-Aufrufe für denselben Stand, stößt aber erneut an, sobald das Gespräch gewachsen ist (vorher blockierte ein früher Tab-Wechsel jede spätere Nachbearbeitung). Die Edge Function hat zusätzlich einen serverseitigen Idempotenz-Guard über `post_processed_message_count` und liest den Verlauf selbst aus der DB.
 
-**Session-Limit:** Nur `plan === 'premium'` ist unbegrenzt. `'tester'` zählt wie jeder unbezahlte Account und wird durch `profile.session_limit` begrenzt (individuell pro Nutzer im Admin-Bereich setzbar, `null` = unbegrenzt). Durchsetzung passiert **zweifach**: clientseitig in `handleSend()` (UX, zeigt Limit-Modal) und serverseitig in `chat/index.ts` (harte Grenze, 429 bei Überschreitung — ein direkter Funktionsaufruf am Frontend vorbei wird ebenfalls blockiert).
+**Kennenlernen/Ruhemodus (U4):** `useAccessState()` liefert die Phase; der Mount wartet darauf. Ohne freien Start (`can_start = false`) legen „Etwas Neues mitbringen“, „Wie geht's dir?“, Wellness, Entry-Kontext und „Neues Gespräch“ keine Konversation an, sondern zeigen `RestModeSheet`. `429 session_limit` → ebenfalls `RestModeSheet`; `409 conversation_cap` → `ConversationCapNotice` unter dem Verlauf, Eingabe gesperrt (die abgelehnte Nachricht wird nicht gespeichert und aus der Ansicht entfernt). Maßgeblich ist der Server (siehe [Abschnitt 9](#9-kennenlernen--ruhemodus--begleitung-seit-u4-migration-038)).
 
 **Krisenfall-Rendering:** Nachrichten mit `messageType === 'crisis_response'` werden als `CrisisResponseCard` statt als `ChatBubble` gerendert (siehe [Krisenfall-Flow](#krisenfall-flow)).
 
@@ -439,7 +442,8 @@ Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks
 - **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
 - **„Konto zusätzlich schützen“** (`SecurityCard`, S-06b, freiwillig): ohne Faktor Text + „Einrichten →“ → `MfaEnrollFlow` (Gerätename „Friedensstifter“) → `mfa-recovery codes:generate { afterEnroll: true }` → `RecoveryCodesView` (10 Codes einmalig, „Codes kopieren“, „Ich habe sie gesichert“) → Mail „Zweiter Faktor eingerichtet“. Scheitert das Erzeugen der Codes, bleibt ein sichtbarer Hinweis mit „Noch einmal versuchen“. Mit Faktor: Geräteliste, „Weiteres Gerät hinzufügen“, „Neue Wiederherstellungscodes“ (alte werden ungültig), „Zweiten Faktor entfernen“ (Bestätigungs-Sheet → `disable`). Nach einer Wiederherstellung Hinweis „Du bist wieder angemeldet. Dein zweiter Faktor wurde entfernt …“ mit „Jetzt einrichten →“.
 - **„Meine Daten herunterladen“** (`DataExportSheet`, S-16): Erklärtext → „Datei erstellen“ → `export-my-data` → Download als Blob; 429 → „Du hast heute schon drei Exporte erstellt. Morgen geht es wieder.“
-- Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Meine Daten herunterladen (`export-my-data`, S-16), Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
+- **Phase (U4):** unter dem Namen eine ruhige Zeile aus `get_access_state()` („Kennenlernen · Gespräch n von m“, „Ruhemodus – alles, was du erkannt hast, bleibt sichtbar“, „Begleitung“); bei Testern zusätzlich „Beta“. Kein Countdown.
+- Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Begleitung (nicht für `premium`, → `/begleitung`), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Meine Daten herunterladen (`export-my-data`, S-16), Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
 
 ---
 
@@ -629,7 +633,7 @@ Exports:
 4. Meta-Chunk `{ meta: { userMessageId, assistantMessageId, messageType } }` → Nachricht `status: 'sent'`, `messageType` (z. B. `crisis_response`) am Platzhalter
 5. Jedes `data: {"text": "..."}` an den Platzhalter anhängen (SSE-Zeilen werden gepuffert)
 6. Gespeichert wird **beides vom Server**; der Client speichert nichts
-7. Fehler **vor** dem Meta-Chunk (Netz, 5xx, Rate-Limit, Monatslimit): Nachricht `status: 'failed'` → „Nicht gesendet – nochmal versuchen“ (`retryMessage`, idempotent). Fehler **nach** dem Meta-Chunk: Platzhalter zeigt den Aussetzer-Text, der Server speichert die Antwort trotzdem zu Ende.
+7. Fehler **vor** dem Meta-Chunk (Netz, 5xx, Rate-Limit, kein Kennenlern-Start mehr; `409 conversation_cap` dagegen entfernt die Nachricht und meldet `onConversationCap`): Nachricht `status: 'failed'` → „Nicht gesendet – nochmal versuchen“ (`retryMessage`, idempotent). Fehler **nach** dem Meta-Chunk: Platzhalter zeigt den Aussetzer-Text, der Server speichert die Antwort trotzdem zu Ende.
 8. `409 client_outdated` (nur alte, gecachte App-Versionen kennen das alte Format; die neue zeigt): Hinweis „Es gibt eine neue Version der App. Tipp hier, um sie zu laden.“ → `location.reload()`
 
 **Eröffnungen:** `startWellnessConversation`/`startBriefingConversation`/`startEntryContextConversation`/`resumeWithOpening` laufen über `startStreamedOpening` → `{ conversationId, start: 'wellness' | 'briefing' | 'entry' | 'resume', wellnessCheck?, entryContext? }`. Mit `existing: { convId, messages }` (nur `resume`) wird **keine** Konversation angelegt; die Coach-Nachricht wird an den geladenen Verlauf angehängt. `startNewConversation` zeigt den Pool-Text sofort an und lässt ihn vom Server speichern (`start: 'first' | 'standard'`, `openingIndex`; ohne Modellaufruf, zählt **nicht** als Gespräch).
@@ -724,7 +728,7 @@ Zentrale Datei für alle UI-nahen Texte und Konfigurationen.
 
 #### `src/lib/rateLimit.js`
 
-`readRateLimit(response)` erkennt `429 { error: 'rate_limited', retryAfter }` (abgegrenzt vom Monatslimit), `rateLimitMessage(retryAfter)` liefert den Hinweistext (Minuten- bzw. Tageslimit, immer mit Telefonseelsorge).
+`readRateLimit(response)` erkennt `429 { error: 'rate_limited', retryAfter }` (abgegrenzt von `429 session_limit`, U4), `rateLimitMessage(retryAfter)` liefert den Hinweistext (Minuten- bzw. Tageslimit, immer mit Telefonseelsorge).
 
 ---
 
@@ -812,10 +816,11 @@ Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client,
 0. **Auth + Eigentum** — `requireUser`, Body-Limits, **Rate-Limit** je Modus (`enforceRateLimit`, 429 `rate_limited`, siehe [Abschnitt 9](#9-freemium-logik)), `assertConversationOwner` (400/401/403/413)
 1. **Verlauf + Idempotenz** — Verlauf aus der DB laden; gleiche `clientMessageId` schon vorhanden → ggf. gespeicherte Antwort zurückgeben
 2. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Bei `acute_risk` + Confidence ≥ medium wird `systemPrompt` **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`; der Insert in `crisis_events` (über `admin`) folgt nach dem Speichern der Nutzer-Nachricht, mit deren `message_id`. Läuft **vor** der Limit-Prüfung: Eine Krisenantwort wird auch bei erreichtem Limit ausgeliefert (Entscheidung 18.11.2026).
-3. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'Session limit reached' }` (außer Krisenfall), die Nutzer-Nachricht wird dann **nicht** gespeichert. RPC-Fehler → `500`, kein Durchlassen.
-4. **Nutzer-Nachricht speichern** (Upsert, Fehler → `500 message_insert_failed`, kein Modellaufruf)
-5. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
-6. **Wirkmechanismus-Rhythmus** (`offerMechanism`) — alle 4 Coach-Antworten (ab der 3.) wird aktiv ein Mechanismus angeboten, unabhängig davon ob im Gesagten etwas "offensichtlich" ist
+3. **Kappung (U4)** — `admin.rpc('access_state_for', { p_user_id })`; ist `cap` gesetzt und hat das Gespräch schon `cap` Nachrichten → `409 { error: 'conversation_cap', cap }` (außer Krisenfall), nichts gespeichert, kein Modellaufruf, Log `conversation_cap_reached`. RPC-Fehler → fail-open, Log `access_state_failed` (Alarm).
+4. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'session_limit', phase }` (außer Krisenfall), die Nutzer-Nachricht wird dann **nicht** gespeichert. RPC-Fehler → `500`, kein Durchlassen.
+5. **Nutzer-Nachricht speichern** (Upsert, Fehler → `500 message_insert_failed`, kein Modellaufruf)
+6. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
+7. **Wirkmechanismus-Rhythmus** (`offerMechanism`) — alle 4 Coach-Antworten (ab der 3.) wird aktiv ein Mechanismus angeboten, unabhängig davon ob im Gesagten etwas "offensichtlich" ist
 
 **System-Prompt-Aufbau (`buildSystemPrompt`), wenn kein Krisenfall vorliegt:**
 
@@ -1074,7 +1079,8 @@ onboarding_data                   JSONB
 streak_count                      INTEGER DEFAULT 0
 streak_last_date                  DATE
 plan                              TEXT ('free' | 'premium' | 'tester')
-sessions_used_this_month          INTEGER DEFAULT 0
+sessions_used_this_month          INTEGER DEFAULT 0          -- Altbestand (Monatszählung bis U4, kein Reset mehr)
+trial_sessions_used               INTEGER DEFAULT 0          -- U4 (038): begonnene Gespräche insgesamt, nur consume_session
 last_return_greeting_at           TIMESTAMPTZ
 consent_given_at                  TIMESTAMPTZ
 consent_version                   TEXT ('1.0')
@@ -1082,7 +1088,7 @@ coaching_agreement_accepted_at    TIMESTAMPTZ
 coaching_agreement_version        TEXT ('1.0')
 is_admin                          BOOLEAN DEFAULT false      -- v3.x, manuell im SQL-Editor gesetzt
 is_beta_tester                    BOOLEAN DEFAULT false      -- v3.x, über Admin-Bereich steuerbar
-session_limit                     INTEGER DEFAULT 20         -- v3.x (Default 20 seit Migration 027), null = unbegrenzt, individuell pro Nutzer
+session_limit                     INTEGER DEFAULT 3          -- Starts im Kennenlernen (Default 3 seit 038, vorher 20), null = unbegrenzt, individuell pro Nutzer
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users ON DELETE SET NULL  -- v3.x (seit 033; vorher NO ACTION, blockierte das Löschen des Einladenden)
 age_confirmed_at                  TIMESTAMPTZ                 -- S-11 (036): 18+ bestätigt (handle_new_user aus Signup-Metadaten oder RPC confirm_age); consent_ip entfernt
@@ -1090,7 +1096,7 @@ learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S
 learning_opt_in_updated_at        TIMESTAMPTZ
 learning_opt_in_version           TEXT ("1.0")
 ```
-Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` und (seit 036) `age_confirmed_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version`, `coaching_agreement_version` und (seit 036) `age_confirmed` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. Bestandsnutzer ohne `age_confirmed_at` sehen in der AppShell einmal `AgeConfirmSheet` (RPC `confirm_age`; „Ich bin jünger“ → 116 111 und Löschweg im Profil, kein automatisches Löschen). So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, (seit 038) `trial_sessions_used`, `invited_at`, `invited_by`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` und (seit 036) `age_confirmed_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version`, `coaching_agreement_version` und (seit 036) `age_confirmed` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. Bestandsnutzer ohne `age_confirmed_at` sehen in der AppShell einmal `AgeConfirmSheet` (RPC `confirm_age`; „Ich bin jünger“ → 116 111 und Löschweg im Profil, kein automatisches Löschen). So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
 
 **`conversations`**
 ```
@@ -1332,7 +1338,11 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 **`get_conversation_history()`** — `SECURITY INVOKER`, `search_path = ''`, liefert die Gesprächsliste des eingeloggten Nutzers (Datum, Nachrichtenanzahl, `main_topic`/erste Nutzer-Nachricht) für `/coach/verlauf` und die Profil-Statistik, ohne N+1-Queries. Ausführbar nur für `authenticated`.
 
-**`consume_session(p_conversation_id)`** — `SECURITY DEFINER`, `search_path = ''` (Migration 023). Zählt atomar und idempotent: Ist `conversations.session_counted_at` gesetzt → `{ allowed: true, counted: false }`. Sonst Limit-Prüfung (`plan <> 'premium'` und `session_limit` nicht null) → bei Überschreitung `{ allowed: false, used, limit }`, sonst `session_counted_at` setzen und `sessions_used_this_month + 1`. Fremde Konversation → `42501`. Ausführbar für `authenticated` (aufgerufen von `chat` mit dem Nutzer-Token).
+**`consume_session(p_conversation_id)`** — `SECURITY DEFINER`, `search_path = ''` (Migration 023, seit 038 neu gefasst). Zählt atomar und idempotent: Ist `conversations.session_counted_at` gesetzt → `{ allowed: true, counted: false }`. Sonst Profilzeile sperren und Regeln aus `access_state_for` prüfen: kein freier Start → `{ allowed: false, used, limit, phase }`; sonst `session_counted_at` setzen und `trial_sessions_used + 1`. Fremde Konversation → `42501`. Ausführbar für `authenticated` (aufgerufen von `chat` mit dem Nutzer-Token).
+
+**`access_state_for(p_user_id)`** — `SECURITY DEFINER`, `stable`, nur `service_role` (Migration 038, U4). Einzige Quelle der Regeln für Kennenlernen/Ruhemodus/Begleitung: `{ phase, starts_used, starts_limit, can_start, cap }` (Kappung `c_cap` = 100 ohne Begleitung). Aufrufer: `consume_session`, `chat` (Kappung), `get_access_state`.
+
+**`get_access_state()`** — `SECURITY DEFINER`, ausführbar für `authenticated`, prüft zuerst `mfa_satisfied()` (Migration 038). Liefert `access_state_for(auth.uid())` für die Anzeige im Frontend (`useAccessState`).
 
 **`redeem_invite_code(p_code, p_user_id)`** — `SECURITY DEFINER`, `search_path = ''`, löst einen Invite-Code ein. **Nur für `service_role` ausführbar** (vorher für jeden inkl. anon — Befund K-2).
 
@@ -1352,7 +1362,7 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 | Job | Zeitplan (UTC) | Aufgabe |
 |---|---|---|
-| `reset-monthly-sessions` | `0 0 1 * *` | `sessions_used_this_month = 0` (Migration 023) |
+| ~~`reset-monthly-sessions`~~ | – | seit 038 abgeschaltet (Starts zählen insgesamt, U4) |
 | `weekly-supervision` | `0 6 * * 1` | `supervision` per `net.http_post` mit `x-cron-secret` aus Vault |
 | `purge-app-logs` | `17 3 * * *` | `app_logs` älter als 30 Tage löschen (Migration 026) |
 | `purge-rate-limits` | `23 3 * * *` | `rate_limit_counters` älter als 2 Tage löschen (Migration 029) |
@@ -1573,24 +1583,24 @@ Folgende Turns: rag_context aus conversation_context
 
 ---
 
-## 9. Freemium-Logik
+## 9. Kennenlernen · Ruhemodus · Begleitung (seit U4, Migration 038)
 
-| Feature | Free | Premium | Tester |
+Grundsatz (UX-Konzept 5.2): Was über den Menschen entsteht, bleibt in jeder Phase sichtbar. Begrenzt werden nur neue Gespräche und die Länge eines Gesprächs – dort entstehen die Kosten.
+
+| Bereich | Kennenlernen (`free`) | Ruhemodus | Begleitung |
 |---|---|---|---|
-| Coach-Gespräche | `profile.session_limit` (Default 20, individuell setzbar) | Unbegrenzt | wie Free, eigener `session_limit`-Wert (Admin-Bereich, z. B. 300/500) |
-| Spiegel (Erkenntnisse, Muster, Entwicklung inkl. Zeitachse, Stimmen, Momente) | vollständig (seit U2, keine Anzeige-Sperren) | vollständig | vollständig |
-| Gesprächsverlauf | vollständig (seit U2) | vollständig | vollständig |
-| Coach-Gedächtnis | Begrenzt | Vollständig | Vollständig |
+| Neue Gespräche | `session_limit` insgesamt (Default 3, `null` = unbegrenzt) | – | `premium` unbegrenzt · `tester` eigenes Limit (Admin, z. B. 200/300/500) |
+| Fortsetzen / Weitermachen | bis 100 Nachrichten je Gespräch | bis 100 Nachrichten (Tester ohne Grenze) | ohne Grenze |
+| Heute, Spiegel, Verlauf, Export, Profil | vollständig | vollständig | vollständig |
 
-**Wichtig (Fix, siehe `session_limit` oben):** `isPaidUser` in `CoachScreen`/`HistoryScreen` prüft **nur** `plan === 'premium'` — `'tester'` galt früher fälschlich als unbegrenzt, wodurch individuelle Admin-Limits wirkungslos waren.
-
-**Zähler:** `profiles.sessions_used_this_month`
-**Zählung:** ausschließlich serverseitig und idempotent pro Konversation über `consume_session` (beim ersten `chat`-Aufruf im Gesprächsmodus). Wellness, Briefing, Entry-Kontext zählen sofort beim Start; ein Standard-Gespräch bei der ersten Nutzer-Nachricht; „Neues Gespräch“ zählt beim nächsten Schreiben; Fortsetzen zählt nicht; Howto-FAQ und Gedächtnis-Extraktion zählen nie. Der Client schreibt den Zähler nicht mehr (Schutz-Trigger).
-**Durchsetzung:** serverseitig (`consume_session` in `chat`, `429` → Limit-Modal über `onSessionLimit`), clientseitig nur UX-Vorprüfung in `handleSend()` (bereits gezählte Gespräche dürfen weiterlaufen). Krisenantwort, Howto und Extraktion sind vom Limit ausgenommen.
+**Regeln:** `access_state_for(uid)` (SQL, nur service_role) ist die einzige Quelle: `premium` → Begleitung; `tester` → Begleitung, solange Starts übrig sind, sonst Ruhemodus, keine Kappung; sonst Kennenlernen, solange Starts übrig sind, sonst Ruhemodus, Kappung 100 (Konstante `c_cap`). Bestandsgespräche (schon gezählt) lassen sich ohne neuen Start fortsetzen.
+**Zähler:** `profiles.trial_sessions_used` (insgesamt, server-only). `sessions_used_this_month` ist Altbestand; der Monats-Reset ist abgeschaltet.
+**Zählung:** ausschließlich serverseitig und idempotent pro Konversation über `consume_session` (beim ersten `chat`-Aufruf im Gesprächsmodus). Wellness, Briefing, Entry-Kontext zählen sofort beim Start; ein Standard-Gespräch bei der ersten Nutzer-Nachricht; Fortsetzen zählt nicht; Howto-FAQ und Gedächtnis-Extraktion zählen nie.
+**Durchsetzung:** nur serverseitig – `429 { error: 'session_limit', phase }` (kein Start mehr) und `409 { error: 'conversation_cap', cap }` (Kappung, geprüft vor Zählung und Speichern). Krisenantworten gehen in beiden Fällen durch. Das Frontend (`useAccessState`) zeigt nur an und vermeidet leere Konversationen im Ruhemodus.
+**Übergangstexte (UX 5.4):** 1. vor dem letzten Kennenlern-Gespräch (Einstieg und oben im neuen Gespräch, bis zur ersten Nachricht) · 2. Karte „Ende des Kennenlernens“ auf Heute (nur Standardgrenze 3, mit „Schließen“) · 3. `RestModeSheet` („Für ein neues Gespräch gibt es die Begleitung …“) · 4. `ConversationCapNotice` (Eingabe gesperrt). „Einmalig“ pro Gerät über `localStorage` (`fs_trial_last_hint_v1`, `fs_trial_end_card_v1`). Kein Zähler im Chat; im Profil eine ruhige Zeile zur Phase.
 
 **Rate-Limits pro Nutzer** (Migration 029, RPC `consume_rate_limits`, Werte zentral in `supabase/functions/_shared/rateLimit.ts`): `chat` Gespräch 10/Minute + 200/Tag · Howto 30/Stunde · Extraktion 30/Tag · `post-conversation` 60/Tag · `validate-invite-code` 5/Stunde + 10/Tag. Antwort `429 { error: 'rate_limited', retryAfter }` + `Retry-After`-Header; das Frontend zeigt dann einen Hinweis inkl. Telefonseelsorge statt des Limit-Modals (`src/lib/rateLimit.js`). chat/post-conversation fail-open bei DB-Fehler (protokolliert), Invite-Code fail-closed. Zähler werden täglich nach 2 Tagen gelöscht (Cron `purge-rate-limits`).
-**Reset:** Cron-Job `reset-monthly-sessions` am 1. des Monats, 00:00 UTC (seit Migration 023 — vorher existierte kein Reset)
-**Upgrade-Flow:** Limit-Modal → `/premium`
+**Begleitung:** Info-Seite `/begleitung` (`BegleitungScreen`, noch ohne Bezahlung, Kontakt zu Jerome); `/premium` leitet dorthin. Erreichbar über Ruhemodus-Hinweis, Karte auf Heute, Kappungshinweis, Profil und „Wie es funktioniert“.
 
 ---
 

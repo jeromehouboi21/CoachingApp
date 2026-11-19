@@ -126,6 +126,12 @@
 - **Entfernt:** `PremiumScreen` (→ `/begleitung`, `/premium` leitet weiter), `LimitModal`, Zähler-Badge im Chat, Badge „Kostenlos/Premium“ im Profil.
 - **Neue Log-Codes:** `conversation_cap_reached` (Info), `access_state_failed` (Alarm, Kappungsprüfung fail-open).
 
+## 5b. Validierung und Doku
+
+- 19.11.2026 von Jerome validiert: Angriffstest 156 / 153 PASS / 0 FAIL / 3 SKIP (U4-a … U4-f grün), Testkonto A durch alle Phasen, Übergangstexte, Ruhemodus, Kappung, `/begleitung`.
+- Nachbesserung (`u4/nachbesserung`): Hinweis vor dem letzten Kennenlern-Gespräch verschwand sofort bzw. fehlte über „Neues Gespräch“ → bleibt bis zur ersten Nachricht, auch im neuen Gespräch; Angriffstest-Korrekturen (Wertwechsel bei U4-c, frische Anmeldung bei U4-f, Hinweis bei übrig gebliebenem zweiten Faktor).
+- Doku nachgezogen (`u4/doku`): `ARCHITECTURE.md` (Abschnitt 9 neu, CoachScreen, Heute E, Profil, Routen, RPCs, Cron, Schema), `CLAUDE.md` (Abschnitt 8 neu, Routen, Schema, Migration 038, Begriffe).
+
 ## 6. Beobachtungen
 - O-2 (Kappungsgrenze nachjustieren): `supabase/diagnostics/coach-usage.sql` (T0) und `u4-audit.sql` liefern die Daten; die Konstante sitzt danach an einer Stelle.
 - Spend-Limit bei Anthropic (Konzept 5.5) ist eine Dashboard-Einstellung, kein Code.
