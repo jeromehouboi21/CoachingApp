@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
     const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
     if (deleteError) {
       logger.error('Failed to delete auth user', describeError(deleteError));
-      return jsonResponse({ error: 'Failed to delete account' }, CORS_HEADERS, 500);
+      return jsonResponse({ error: 'auth_delete_failed' }, CORS_HEADERS, 500);
     }
 
     // Ohne user_id loggen: Das Profil existiert nicht mehr (FK app_logs.user_id → profiles).

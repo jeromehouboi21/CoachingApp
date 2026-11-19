@@ -10,6 +10,7 @@ export function AdminUsersScreen() {
   const mfa = useAdminMfaContext()
   const [loadError, setLoadError] = useState(null)
   const [users, setUsers] = useState([])
+  const [inactiveCount, setInactiveCount] = useState(null)
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
   const [tab, setTab] = useState('users') // 'users' | 'feedback'
@@ -50,7 +51,7 @@ export function AdminUsersScreen() {
     setLoading(true)
     try {
       const data = await adminGet('admin-users')
-      if (data) { setUsers(data.users ?? []); setLoadError(null) }
+      if (data) { setUsers(data.users ?? []); setInactiveCount(data.inactiveCount ?? null); setLoadError(null) }
     } catch {
       setLoadError('Die Nutzerliste konnte gerade nicht geladen werden.')
     } finally {
@@ -165,6 +166,11 @@ export function AdminUsersScreen() {
         </button>
         <h1 className="font-display text-[24px] text-ink mb-2">Nutzerverwaltung</h1>
         {loadError && <p className="text-[13px] text-coral mb-2">{loadError}</p>}
+        {inactiveCount > 0 && (
+          <p className="text-[12px] text-ink-3 mb-2">
+            {inactiveCount} {inactiveCount === 1 ? 'Konto' : 'Konten'} seit über 24 Monaten ohne Anmeldung
+          </p>
+        )}
         {mfa && mfa.factors.length < 2 && (
           <button onClick={mfa.beginAddDevice} className="text-[12px] text-accent mb-3">
             Zweites Gerät für den Admin-Code hinzufügen

@@ -523,6 +523,15 @@ async function testsS13(b) {
   }
 }
 
+// ── S-15 (Paket B): Fristen- und Berichtsfunktionen nur serverseitig ─────────
+async function testsS15(b) {
+  for (const [fn, args] of [['apply_retention', {}], ['inactive_accounts_report', { p_months: 24 }]]) {
+    const { data, error } = await b.client.rpc(fn, args);
+    record('S15', `rpc ${fn} (als B)`, 'Fehler',
+      error ? PASS : FAIL, error ? errCode(error) : `aufrufbar (${Array.isArray(data) ? data.length + ' Zeilen' : 'Ergebnis'})`);
+  }
+}
+
 async function testsRateLimits(a, b) {
   // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
   // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
@@ -582,6 +591,7 @@ function printResults() {
   await testsAnonymous();
   await testsS12(a, b);
   await testsS13(b);
+  await testsS15(b);
   await testsRateLimits(a, b);
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen

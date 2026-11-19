@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "security:test": "node --env-file=.env.security.local scripts/security/attack-test.mjs"
+    "security:test": "node --env-file=.env.security.local scripts/security/attack-test.mjs",
+    "security:deletion-test": "node --env-file=.env.security.local scripts/security/deletion-test.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

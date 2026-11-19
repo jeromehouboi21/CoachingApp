@@ -62,8 +62,14 @@ Deno.serve(async (req) => {
         last_sign_in_at: authById.get(p.id)?.lastSignInAt ?? null,
       }));
 
-      logger.info('Admin fetched user list', { count: merged.length });
-      return jsonResponse({ users: merged }, CORS_HEADERS);
+      // S-15: Konten seit über 24 Monaten ohne Anmeldung (nur Anzahl; Löschung erst mit Mailkanal)
+      let inactiveCount: number | null = null;
+      const { data: inactive, error: inactiveError } = await supabase.rpc('inactive_accounts_report', { p_months: 24 });
+      if (inactiveError) logger.error('inactive_accounts_report failed', { code: inactiveError.code });
+      else inactiveCount = (inactive ?? []).length;
+
+      logger.info('Admin fetched user list', { count: merged.length, inactiveCount });
+      return jsonResponse({ users: merged, inactiveCount }, CORS_HEADERS);
     }
 
     if (req.method === 'PATCH') {

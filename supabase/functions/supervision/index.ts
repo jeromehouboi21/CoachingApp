@@ -118,7 +118,8 @@ Deno.serve(async (req) => {
       resistance_rate: totalConversations > 0 ? parseFloat((resistanceCount / totalConversations * 100).toFixed(2)) : 0,
       breakthrough_rate: breakthroughRate,
       improvement_recs: improvementRecs,
-      raw_reflections: reflections ?? [],
+      // Keine Volltext-Kopie der Reflexionen mehr (S-15, Datenminimierung; wird nirgends gelesen)
+      raw_reflections: null,
     });
     if (insertError) {
       logger.error('supervision_logs insert failed', { code: insertError.code });
