@@ -26,7 +26,7 @@ export function ChatInput({ onSend, disabled }) {
     setInterimText(text)
   }, [])
 
-  const { isListening, isSupported, toggle } = useVoiceInput({
+  const { isListening, isSupported, toggle, stop: stopListening } = useVoiceInput({
     onTranscript: handleTranscript,
     onInterim: handleInterim,
   })
@@ -40,6 +40,7 @@ export function ChatInput({ onSend, disabled }) {
 
   const handleSubmit = () => {
     if (!value.trim() || disabled) return
+    if (isListening) stopListening()   // beim Absenden Mikrofon aus
     onSend(value.trim())
     setValue('')
     setInterimText('')
