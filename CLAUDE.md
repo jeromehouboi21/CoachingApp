@@ -424,6 +424,7 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 - Fehlermeldung im Chat: "Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da."
 - Alle Edge Functions verwenden `_shared/logger.ts` für strukturiertes Logging
 - **Nur der Server schreibt `messages`** — kein `supabase.from('messages').insert` im Frontend (S-12)
+- **Neue Tabellen mit Personenbezug** brauchen eine `ON DELETE CASCADE`-Kette zu `auth.users`/`profiles`/`conversations`, gehören ggf. in `apply_retention()` (Migration 033) und werden mit dem Löschtest geprüft (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0).
 - **Lernbasis (S-13):** Inhalte gelangen nur mit `RAG_LEARNING_ENABLED=1`, Opt-in (`profiles.learning_opt_in`, nur über RPC `set_learning_opt_in`) und über `reviewLearningEntry` (`_shared/learning.ts`) in `experience_patterns`. Das gilt für jeden neuen nutzerübergreifenden Kanal. RAG-Treffer stehen im Prompt nur als gekennzeichneter Datenblock.
 - Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 
@@ -449,6 +450,7 @@ Beide Logger (`src/lib/logger.ts`, `supabase/functions/_shared/logger.ts`) schic
 - Edge Functions deployen mit `supabase functions deploy <namen> --no-verify-jwt`
 - **Angriffstest:** `npm run security:test` → alle PASS (Testkonten in `.env.security.local`, Vorlage `.env.security.example`; `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein)
 - Header prüfen: `curl -sI https://app.friedensstifter.coach` (HSTS, CSP, Permissions-Policy …)
+- **Löschtest** bei Änderungen an Tabellen mit Personenbezug oder an der Löschlogik: `npm run security:deletion-test` (frisches Testkonto C) + `supabase/security/deletion-check.sql` → überall 0
 
 ---
 
@@ -493,5 +495,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `030_s12_server_messages.sql` | messages.client_message_id + eindeutiger Index (conversation_id, client_message_id) · metadata-Default · S-12 Welle 2a |
 | `031_s12_revoke_client_message_insert.sql` | Insert-Recht des Clients auf messages entzogen · S-12 Welle 2b |
 | `032_s13_learning_base.sql` | profiles.learning_opt_in(+_updated_at/_version) · experience_patterns.source_user_id/review_status · RPC set_learning_opt_in · match_experiences nur approved · Bestand gelöscht (D-2) |
+| `033_s15_cascade_and_retention.sql` | invited_by SET NULL · user_feedback/coach_reflections CASCADE · raw_reflections geleert, protocol_text · apply_retention + Cron apply-retention · inactive_accounts_report |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

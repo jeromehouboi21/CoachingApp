@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a (Server schreibt Nachrichten) und Welle 3 (Lernbasis mit Opt-in und Prüfschritt)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a (Server schreibt Nachrichten), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest)
 
 ---
 
@@ -192,12 +192,14 @@ CoachingApp/
 │   │   ├── 029_rate_limits.sql          ← rate_limit_counters, consume_rate_limits
 │   │   ├── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
 │   │   ├── 031_s12_revoke_client_message_insert.sql ← Client darf messages nicht mehr schreiben (Welle 2b)
-│   │   └── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
+│   │   ├── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
+│   │   └── 033_s15_cascade_and_retention.sql ← Löschregeln, apply_retention, inactive_accounts_report
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
 │
 ├── scripts/security/attack-test.mjs     ← Angriffstest (npm run security:test)
+├── scripts/security/deletion-test.mjs   ← Löschtest (npm run security:deletion-test, Testkonto C)
 ├── docs/security/                       ← Discovery, Handoffs, Lösungsdesign, Abschlussberichte
 ├── vercel.json                          ← SPA-Rewrite, Cache-, Security-Header, CSP
 ├── tailwind.config.js                   ← Custom Colors via CSS-Variablen
@@ -831,8 +833,8 @@ Siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster) für das gemeinsame S
 
 | Function | Methode(n) | Zweck |
 |---|---|---|
-| `admin-users` | GET, PATCH | Nutzerliste inkl. E-Mail/`last_sign_in_at`; setzt `is_beta_tester`/`session_limit` |
-| `admin-feedback` | GET | Alle `user_feedback`-Einträge inkl. Name/E-Mail |
+| `admin-users` | GET, PATCH | Nutzerliste inkl. E-Mail/`last_sign_in_at` + `inactiveCount` (Konten > 24 Monate ohne Anmeldung, über `inactive_accounts_report`); setzt `is_beta_tester`/`session_limit` |
+| `admin-feedback` | GET | Alle `user_feedback`-Einträge inkl. Name/E-Mail + die letzten 26 Supervision-Protokolle (`supervision_logs`, S-15) |
 | `admin-invite-user` | POST | `auth.admin.inviteUserByEmail()` + setzt Beta-Rechte + `invited_at`/`invited_by` direkt |
 
 Alle drei verlangen seit S-06 einen zweiten Faktor (`403 mfa_required`, geloggt als `mfa_required`).
@@ -846,8 +848,9 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 ### `delete-account` — Account-Löschung
 
 - Löscht ausschließlich `user.id` aus dem JWT (jede ID im Body wird ignoriert)
-- Prüft jedes Lösch-Ergebnis; scheitert ein Schritt → `500 delete_incomplete`, der Auth-Account bleibt bestehen (Wiederholung möglich, kein stilles Scheitern)
-- Hard-Delete des Auth-Users via `service_role`; `inner_voices`, `crisis_events`, `feedback_surveys` hängen per CASCADE an `auth.users`
+- Prüft jedes Lösch-Ergebnis; scheitert ein Schritt → `500 delete_incomplete`, der Auth-Account bleibt bestehen (Wiederholung möglich, kein stilles Scheitern); Fehler beim Auth-Löschen → `500 auth_delete_failed`
+- Hard-Delete des Auth-Users via `service_role`; per CASCADE an `auth.users` hängen `inner_voices`, `crisis_events`, `feedback_surveys`, `rate_limit_counters`, `experience_patterns` (`source_user_id`); an `conversations` hängen `messages`, `session_notes`, `conversation_context` und seit 033 `coach_reflections`
+- Nachweis: Löschtest (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0) — nach jeder Änderung an Tabellen mit Personenbezug oder an der Löschlogik ausführen
 - Aufgerufen von `ProfileScreen` nach Bestätigungs-Modal
 
 ---
@@ -855,6 +858,8 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 ### `supervision` — Wöchentliche KI-Supervision
 
 **Läuft per Cron** (`weekly-supervision`, Mo 06:00 UTC, über `pg_net`). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
+
+**Protokoll (S-15, Entscheidung 19.11.2026):** Gespeichert werden Zähler, die geprüfte Empfehlung (`improvement_recs`) und das vollständige, ebenfalls geprüfte Protokoll (`protocol_text`, Punkte 1–3). Die frühere Volltext-Kopie der Reflexionen (`raw_reflections`) wird nicht mehr gespeichert und wurde mit 033 geleert. Sichtbar im Admin-Bereich (Tab Feedback → Supervision).
 
 **Prompt-Regeln + Prüfschritt (S-13):** Der Prompt verlangt ausschließlich allgemeine Empfehlungen zum Coach-Verhalten (keine Einzelfälle, Zitate, Personendetails, keine Abschwächung von Sicherheits-/Krisenregeln). `improvement_recs` durchläuft `reviewLearningEntry` (`low_quality` zählt nicht); abgelehnt → `null`, Log `supervision_rejected` mit Codes. Prompt zum Gegenlesen: `docs/security/supervision-prompt.md` (freigegeben 19.11.2026).
 
@@ -914,7 +919,7 @@ is_admin                          BOOLEAN DEFAULT false      -- v3.x, manuell im
 is_beta_tester                    BOOLEAN DEFAULT false      -- v3.x, über Admin-Bereich steuerbar
 session_limit                     INTEGER DEFAULT 20         -- v3.x (Default 20 seit Migration 027), null = unbegrenzt, individuell pro Nutzer
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
-invited_by                        UUID → auth.users           -- v3.x
+invited_by                        UUID → auth.users ON DELETE SET NULL  -- v3.x (seit 033; vorher NO ACTION, blockierte das Löschen des Einladenden)
 consent_ip                        TEXT                        -- v2.7, wird aktuell nicht befüllt
 learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S-13), nur über RPC set_learning_opt_in
 learning_opt_in_updated_at        TIMESTAMPTZ
@@ -1074,9 +1079,9 @@ source          TEXT ('auto' | 'user')
 is_pinned       BOOLEAN DEFAULT false
 ```
 
-**`coach_reflections`** — KI-Selbstreflexion
+**`coach_reflections`** — KI-Selbstreflexion (Frist 12 Monate)
 ```
-conversation_id    UUID → conversations
+conversation_id    UUID → conversations ON DELETE CASCADE (seit 033; vorher SET NULL → verwaiste Zeilen)
 was_helpful        BOOLEAN
 what_worked        TEXT
 what_missed        TEXT
@@ -1085,15 +1090,27 @@ resistance_handled TEXT
 improvement_note   TEXT
 ```
 
-**`user_feedback`** — Nutzerfeedback (inkl. Beta-Feedback-Modal im Profil)
+**`user_feedback`** — Nutzerfeedback (inkl. Beta-Feedback-Modal im Profil, Frist 24 Monate)
 ```
-user_id         UUID → profiles (nullable)
+user_id         UUID → profiles ON DELETE CASCADE (seit 033)
 conversation_id UUID → conversations (nullable)
 feedback_type   TEXT ('improvement' | 'praise' | 'bug' | 'general' | 'beta')
 content         TEXT
 context         TEXT
 consent_given   BOOLEAN DEFAULT true
 processed       BOOLEAN DEFAULT false
+```
+
+**`supervision_logs`** — Wöchentliche Supervision (Frist 24 Monate)
+```
+week_start           DATE
+total_conversations  INTEGER
+resistance_rate      NUMERIC
+breakthrough_rate    NUMERIC   -- derzeit fest 0 (keine outcome-Auswertung)
+top_patterns / top_blockers JSONB  -- werden nicht befüllt
+improvement_recs     TEXT      -- geprüfte Empfehlung (Punkt 3), fließt mit SUPERVISION_IN_PROMPT=1 in BLOCK 5
+protocol_text        TEXT      -- geprüftes Gesamtprotokoll (Migration 033)
+raw_reflections      JSONB     -- seit 033 leer (nicht mehr gespeichert)
 ```
 
 **`invite_codes`** — Beta-Tester-Zugang (Selbstregistrierung)
@@ -1143,6 +1160,9 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 | `weekly-supervision` | `0 6 * * 1` | `supervision` per `net.http_post` mit `x-cron-secret` aus Vault |
 | `purge-app-logs` | `17 3 * * *` | `app_logs` älter als 30 Tage löschen (Migration 026) |
 | `purge-rate-limits` | `23 3 * * *` | `rate_limit_counters` älter als 2 Tage löschen (Migration 029) |
+| `apply-retention` | `41 3 * * *` | `apply_retention()` — Fristen nach D-4 (Migration 033), Ergebnis als `retention_applied` in `app_logs` |
+
+**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs` und `user_feedback` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage. Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (S-22).
 
 ### RLS-Prinzip (Least Privilege, Migration 025)
 
