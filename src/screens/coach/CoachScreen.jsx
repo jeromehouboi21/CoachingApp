@@ -234,10 +234,12 @@ export function CoachScreen() {
     updateStreak(profile, updateProfile)
   }
 
-  // processedRef: verhindert, dass derselbe conversationId-Wert mehrfach clientseitig
-  // angestoßen wird (z.B. visibilitychange UND pagehide kurz hintereinander).
-  // Wird bei einem neuen conversationId implizit "vergessen".
-  const processedRef = useRef(new Set())
+  // processedRef: conversationId → Anzahl Nachrichten beim letzten Anstoß. Verhindert, dass
+  // derselbe Stand mehrfach angestoßen wird (z.B. visibilitychange UND pagehide kurz
+  // hintereinander), erlaubt aber einen neuen Lauf, wenn das Gespräch seitdem gewachsen ist
+  // (z.B. Tab-Wechsel nach der ersten Nachricht, danach weitergeschrieben). Der Server ist
+  // zusätzlich idempotent (post_processed_message_count).
+  const processedRef = useRef(new Map())
 
   // Gemeinsame Kern-Funktion für ALLE Trigger-Pfade (v2.9, Abschnitt 6b.0).
   // keepalive: true sorgt dafür, dass der Request auch dann noch abgeschickt wird,
@@ -247,8 +249,8 @@ export function CoachScreen() {
   // Token im Authorization-Header braucht.
   const runPostConversation = useCallback(async (msgs, convId) => {
     if (!convId || !msgs || msgs.length < 3) return
-    if (processedRef.current.has(convId)) return // Idempotenz — Client-Seite
-    processedRef.current.add(convId)
+    if ((processedRef.current.get(convId) ?? 0) >= msgs.length) return // Idempotenz — Client-Seite
+    processedRef.current.set(convId, msgs.length)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) return
