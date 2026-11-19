@@ -292,8 +292,8 @@ const CORS_HEADERS = {
 // Body-Limit bleibt großzügig, weil alte Clients (gecachte PWA) noch den Verlauf mitschicken.
 const MAX_BODY_BYTES = 512 * 1024;
 const MAX_PROCESSED_MESSAGES = 200;
-// Welle 2b: false → altes Format (mit messages[]) bekommt 409 client_outdated
-const LEGACY_FORMAT_ALLOWED = true;
+// Seit Welle 2b: altes Format (mit messages[]) bekommt 409 client_outdated
+const LEGACY_FORMAT_ALLOWED = false;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

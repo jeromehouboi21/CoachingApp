@@ -266,6 +266,18 @@ async function testsAsB(a, b) {
       error ? PASS : FAIL, error ? errCode(error) : `eingefügt (${data?.length ?? 0})`);
   }
 
+  // 5b (S-12, Welle 2b): Nachricht in die EIGENE Konversation schreiben — nur der Server darf das
+  if (bConvIds.length) {
+    for (const role of ['user', 'assistant']) {
+      const { data, error } = await b.client.from('messages')
+        .insert({ conversation_id: bConvIds[0], role, content: 'Sicherheitstest' }).select('id');
+      record('5b', `insert messages (${role}) in B's eigene Konversation`, 'Fehler',
+        error ? PASS : FAIL, error ? errCode(error) : `eingefügt (${data?.length ?? 0})`);
+    }
+  } else {
+    record('5b', "insert messages in B's eigene Konversation", 'Fehler', SKIP, 'B hat noch kein Gespräch');
+  }
+
   // 6a: Updates auf A's Zeilen (No-op-Werte)
   const updates = [
     { table: 'conversations', id: a.conv.id, patch: { title: a.conv.title } },
@@ -282,13 +294,12 @@ async function testsAsB(a, b) {
       error || !data?.length ? PASS : FAIL, error ? errCode(error) : `betroffen=${data.length}`);
   }
 
-  // 7: post-conversation mit A's conversationId (+ altes Feld userId = A).
-  //    Nur 2 Nachrichten → ohne Auth-Prüfung würde die Function heute mit "too few messages"
-  //    antworten, ohne KI-Aufruf und ohne Schreibzugriff.
+  // 7: post-conversation mit A's conversationId (+ altes Feld userId = A). Eigentumsprüfung
+  //    greift vor allem anderen (auch vor der Format-Prüfung).
   {
     const r = await callFunction('post-conversation', {
       token: b.token,
-      body: { messages: [{ role: 'user', content: 'Test' }, { role: 'assistant', content: 'Test' }], conversationId: a.conv.id, userId: a.userId },
+      body: { conversationId: a.conv.id, userId: a.userId },
     });
     record(7, "post-conversation mit A's conversationId", 'HTTP 403', r.status === 403 ? PASS : FAIL, `HTTP ${r.status}`);
   }
@@ -297,7 +308,7 @@ async function testsAsB(a, b) {
   {
     const r = await callFunction('chat', {
       token: b.token,
-      body: { messages: [{ role: 'user', content: 'Hallo' }], conversationId: a.conv.id, requestId: 'sectest' },
+      body: { message: { clientMessageId: crypto.randomUUID(), content: 'Hallo' }, conversationId: a.conv.id, requestId: 'sectest' },
     });
     record(8, "chat mit A's conversationId", 'HTTP 403', r.status === 403 ? PASS : FAIL,
       `HTTP ${r.status}${r.isStream ? ' (Stream, abgebrochen)' : ''}`);
@@ -480,7 +491,8 @@ async function testsS12(a, b) {
       `HTTP ${r1.status}/${r2.status}, Antwort gespeichert=${replied}, user=${userCount ?? '?'}, antworten=${replyCount ?? '?'}`);
   }
 
-  // S12-c: post-conversation mit leerem Gespräch und 3 erfundenen Nachrichten → Body wird ignoriert
+  // S12-c: post-conversation mit 3 erfundenen Nachrichten → seit Welle 2b abgelehnt (409);
+  //        ohne messages[] → aus der DB (leeres Gespräch) → übersprungen
   {
     const r = await callFunction('post-conversation', {
       token: b.token,
@@ -493,8 +505,21 @@ async function testsS12(a, b) {
         ],
       },
     });
-    record('S12-c', 'post-conversation mit erfundenem messages[]', 'HTTP 200, übersprungen',
-      r.status === 200 && r.json?.skipped === true ? PASS : FAIL, `HTTP ${r.status}, skipped=${r.json?.skipped ?? '?'}`);
+    record('S12-c', 'post-conversation mit erfundenem messages[]', '409 client_outdated',
+      r.status === 409 && r.json?.error === 'client_outdated' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+    const r2 = await callFunction('post-conversation', { token: b.token, body: { conversationId: emptyConvId } });
+    record('S12-c2', 'post-conversation neues Format, leeres Gespräch', 'HTTP 200, übersprungen',
+      r2.status === 200 && r2.json?.skipped === true ? PASS : FAIL, `HTTP ${r2.status}, skipped=${r2.json?.skipped ?? '?'}`);
+  }
+
+  // S12-d: chat im alten Format (nur messages[]) → 409 client_outdated, nichts gespeichert
+  {
+    const r = await callFunction('chat', {
+      token: b.token,
+      body: { conversationId: convId, messages: [{ role: 'user', content: 'Altes Format' }], requestId: 'sectest-s12d' },
+    });
+    record('S12-d', 'chat im alten Format', '409 client_outdated',
+      r.status === 409 && r.json?.error === 'client_outdated' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
   }
 }
 
@@ -551,7 +576,7 @@ async function testsRateLimits(a, b) {
     for (let i = 0; i < 12; i++) {
       const r = await callFunction('chat', {
         token: b.token,
-        body: { messages: [{ role: 'user', content: 'Hallo' }], conversationId: a.conv.id, requestId: 'sectest-rl' },
+        body: { message: { clientMessageId: crypto.randomUUID(), content: 'Hallo' }, conversationId: a.conv.id, requestId: 'sectest-rl' },
       });
       statuses.push(r.status);
       if (r.status === 429) break;
