@@ -36,7 +36,7 @@ export function HomeScreen() {
     Promise.all([
       supabase.rpc('get_conversation_history'),
       supabase.from('insights')
-        .select('id, content, category, source, created_at, surfaced_at, confirmed_at, dismissed_at')
+        .select('id, content, category, source, created_at, surfaced_at, confirmed_at, dismissed_at, user_rating, conversation_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(300),
@@ -127,6 +127,7 @@ export function HomeScreen() {
           <HiddenInsightCard
             heading="Aus deinem letzten Gespräch"
             insight={today.insight}
+            continueLabel="Wie war es seitdem? Daran weiterarbeiten →"
             onReveal={() => markSurfaced(today.insight.id)}
             onDismiss={async () => {
               const { ok } = await dismissInsight(today.insight.id)

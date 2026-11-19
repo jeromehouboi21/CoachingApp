@@ -22,6 +22,7 @@ const chip = 'text-[12px] bg-surface-2 text-ink-2 px-3 py-1.5 rounded-full borde
 export function DevelopmentLevel({ userId }) {
   const [data, setData] = useState(null)
   const [loadFailed, setLoadFailed] = useState(false)
+  const [onlyRated, setOnlyRated] = useState(false)   // Filter „Hat mich weitergebracht ✦“ (U5a)
 
   const load = useCallback(() => {
     if (!userId) return
@@ -39,20 +40,29 @@ export function DevelopmentLevel({ userId }) {
         .select('created_at, file_updates')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
-    ]).then(([entriesRes, profileRes, notesRes]) => {
-      const failed = [entriesRes, profileRes, notesRes].find(r => r.error)
+      // U5a (E-U5a-3): eigene ✦-Markierungen erscheinen als Einträge der Zeitachse
+      supabase.from('insights')
+        .select('id, content, rated_at')
+        .eq('user_id', userId)
+        .eq('user_rating', 'helpful'),
+    ]).then(([entriesRes, profileRes, notesRes, ratedRes]) => {
+      const failed = [entriesRes, profileRes, notesRes, ratedRes].find(r => r.error)
       if (failed) {
         logger.error('development_load_failed', { code: failed.error.code })
         setLoadFailed(true)
         return
       }
       const notes = notesRes.data ?? []
-      // neueste zuerst; innerhalb eines Gesprächs in der gespeicherten Reihenfolge
-      const timeline = notes.flatMap(s =>
+      // innerhalb eines Gesprächs in der gespeicherten Reihenfolge; danach alles neueste zuerst
+      const fileItems = notes.flatMap(s =>
         (Array.isArray(s.file_updates) ? s.file_updates : []).map(u => ({
-          date: s.created_at, action: u.action, label: u.label, note: u.note, new_status: u.new_status,
+          kind: 'file', date: s.created_at, action: u.action, label: u.label, note: u.note, new_status: u.new_status,
         }))
       )
+      const ratedItems = (ratedRes.data ?? []).map(i => ({ kind: 'rated', date: i.rated_at, content: i.content, id: i.id }))
+      const timeline = [...ratedItems, ...fileItems]
+        .map((item, idx) => ({ ...item, idx }))
+        .sort((a, b) => (new Date(b.date) - new Date(a.date)) || (a.idx - b.idx))
       setData({ entries: entriesRes.data ?? [], profile: profileRes.data, timeline, conversationCount: notes.length })
     })
   }, [userId])
@@ -101,16 +111,37 @@ export function DevelopmentLevel({ userId }) {
       {data.timeline.length > 0 && (
         <section className="mb-7">
           <SectionLabel>Deine Entwicklung</SectionLabel>
+          {data.timeline.some(t => t.kind === 'rated') && (
+            <div className="flex gap-2 mb-4">
+              {[{ v: false, l: 'Alle' }, { v: true, l: 'Hat mich weitergebracht ✦' }].map(f => (
+                <button
+                  key={f.l}
+                  onClick={() => setOnlyRated(f.v)}
+                  className={`text-[13px] font-medium px-4 py-1.5 rounded-full border transition-all ${
+                    onlyRated === f.v ? 'bg-accent text-white border-accent' : 'bg-surface text-ink-2 border-[var(--color-border)]'
+                  }`}
+                >
+                  {f.l}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="flex flex-col gap-4">
-            {data.timeline.map((item, i) => (
+            {data.timeline.filter(t => !onlyRated || t.kind === 'rated').map((item, i) => (
               <div key={i} className="flex gap-3 items-start">
                 <div className="w-2 h-2 rounded-full bg-accent flex-none mt-1.5" />
                 <div className="flex-1 min-w-0">
                   <p className="text-[11px] text-ink-3 mb-0.5">{formatDay(item.date, true)}</p>
-                  <p className="text-[13px] text-ink">
-                    {item.label}: <span className="text-ink-2">{timelineText(item)}</span>
-                  </p>
-                  {item.note && <p className="text-[12px] text-ink-3 mt-0.5 leading-relaxed">{item.note}</p>}
+                  {item.kind === 'rated' ? (
+                    <p className="text-[13px] text-ink">
+                      Hat mich weitergebracht <span className="text-accent">✦</span>: <span className="text-ink-2">„{item.content}“</span>
+                    </p>
+                  ) : (
+                    <p className="text-[13px] text-ink">
+                      {item.label}: <span className="text-ink-2">{timelineText(item)}</span>
+                    </p>
+                  )}
+                  {item.kind !== 'rated' && item.note && <p className="text-[12px] text-ink-3 mt-0.5 leading-relaxed">{item.note}</p>}
                 </div>
               </div>
             ))}

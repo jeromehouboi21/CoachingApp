@@ -21,7 +21,10 @@ export function chooseTodayState(conversations, insights, now = Date.now()) {
   if (conversations.some(c => Number(c.message_count) >= 3 && isToday(c.updated_at))) return { state: 'D' }
 
   // B – Nachklang: letzte 7 Tage, nicht weggeschoben; noch nicht bestätigte Vorschläge oder Vorhaben.
-  const recent = insights
+  // U5a: „Teile ich nicht“ erscheint nie auf Heute (UX 8.1)
+  const visible = insights.filter(i => i.user_rating !== 'disagree')
+
+  const recent = visible
     .filter(i => now - new Date(i.created_at).getTime() <= 7 * DAY && !i.dismissed_at)
     .filter(i => i.category === 'ziel' || (i.source === 'auto' && !i.confirmed_at))
     .sort((a, b) => (a.category === 'ziel') === (b.category === 'ziel')
@@ -36,9 +39,11 @@ export function chooseTodayState(conversations, insights, now = Date.now()) {
     && new Date(i.surfaced_at).getTime() >= ws
     && new Date(i.surfaced_at) - new Date(i.created_at) > 14 * DAY)
   if (!rediscoveredThisWeek) {
-    const candidates = insights
+    // Vorrang für ✦ (Hat mich weitergebracht), sonst die neueste (U5a, UX 8.1)
+    const candidates = visible
       .filter(i => !i.surfaced_at && !i.dismissed_at && now - new Date(i.created_at).getTime() > 14 * DAY)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .sort((a, b) => ((b.user_rating === 'helpful') - (a.user_rating === 'helpful'))
+        || (new Date(b.created_at) - new Date(a.created_at)))
     if (candidates.length) return { state: 'C2', insight: candidates[0] }
   }
   return { state: 'C' }

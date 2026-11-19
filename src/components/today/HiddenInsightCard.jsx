@@ -1,15 +1,18 @@
 import { useState } from 'react'
 import { Lock } from 'lucide-react'
 import { SuggestionActions } from '../insights/SuggestionActions'
+import { InsightRating } from '../insights/InsightRating'
 
 // Verdeckte Erkenntnis auf Heute (UX-Konzept 4.1, Zustand B und C2, U3).
 // Heute ist öffentlicher Raum: Text erst nach Antippen, Erklärzeile dauerhaft sichtbar.
 // onReveal() wird beim Aufdecken aufgerufen (z. B. surfaced_at setzen).
 // onDismiss: „Heute nicht“ (nur Nachklang). onSuggestionDone: Ergebnis von „Stimmt das so?“.
-export function HiddenInsightCard({ heading, insight, onReveal, onDismiss, onSuggestionDone }) {
+// continueLabel (U5a): Text für „Daran weiterarbeiten“ (Nachklang: „Wie war es seitdem? …“).
+export function HiddenInsightCard({ heading, insight, onReveal, onDismiss, onSuggestionDone, continueLabel }) {
   const [revealed, setRevealed] = useState(false)
   const [content, setContent] = useState(insight.content)
   const [source, setSource] = useState(insight.source)
+  const [rating, setRating] = useState(insight.user_rating ?? null)
   const [dismissFailed, setDismissFailed] = useState(false)
 
   const reveal = () => {
@@ -50,6 +53,16 @@ export function HiddenInsightCard({ heading, insight, onReveal, onDismiss, onSug
           <>
             <p className="font-display text-[18px] text-ink leading-[1.4]">„{content}“</p>
             {source === 'auto' && <SuggestionActions insight={{ ...insight, content }} onDone={handleSuggestion} />}
+            {/* U5a: Deine Einschätzung · Daran weiterarbeiten */}
+            <InsightRating
+              insight={{ ...insight, content, source, user_rating: rating }}
+              continueLabel={continueLabel}
+              onUpdated={(f) => {
+                if ('user_rating' in f) setRating(f.user_rating)
+                if (f.content) { setContent(f.content); setSource('user') }
+              }}
+              onRemoved={() => onSuggestionDone?.({ action: 'removed' })}
+            />
           </>
         )}
 

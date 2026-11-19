@@ -534,6 +534,46 @@ DEINE ERSTE NACHRICHT JETZT:
   return block;
 }
 
+// U5a: Weiterarbeiten an einer Erkenntnis im Ursprungsgespräch (start: 'resume' + insightId).
+// Alle Inhalte lädt der Server selbst (kein Erkenntnistext vom Client im Prompt, wie S-12).
+interface ContinueContext {
+  insightText: string;
+  category: 'muster' | 'stärke' | 'erkenntnis' | 'ziel' | null;
+  rating: 'helpful' | 'unclear' | null;
+  originDateLabel: string;            // relativ ab Entstehung der Erkenntnis
+  originTopic: string | null;         // Kurztitel des Gesprächs (U3), sonst null
+  originIntensity: 'low' | 'medium' | 'high' | null;
+}
+
+function buildContinueBlock(c: ContinueContext): string {
+  const topicLine = c.originIntensity === 'high' || !c.originTopic
+    ? `Ursprung: ${c.originDateLabel}. Das Thema NICHT nennen${c.originIntensity === 'high' ? ' (das Gespräch hat den Menschen sichtbar bewegt)' : ''}.`
+    : `Ursprung: ${c.originDateLabel}, Thema: ${c.originTopic}`;
+  const question = c.rating === 'unclear'
+    ? `3. Statt einer Erfahrungsfrage: Biete an, gemeinsam zu klären, was an dem Satz nicht greifbar ist
+   (z. B. „Du hattest geschrieben, dass dieser Satz für dich nicht ganz greifbar war. Magst du mir erzählen, was daran unklar ist?“).`
+    : c.category === 'ziel'
+      ? `3. GENAU EINE Frage: Wie ist es ihm mit diesem Vorhaben ergangen?`
+      : `3. GENAU EINE Frage zum Jetzt: Wo ist ihm das seitdem begegnet, was hat er damit erlebt?`;
+  return `
+
+--- WEITERARBEITEN AN EINER ERKENNTNIS ---
+Der Mensch hat dieses Gespräch bewusst wieder geöffnet, um an einer früheren Erkenntnis weiterzuarbeiten.
+Der Verlauf oben ist das Gespräch, in dem sie entstanden ist.
+${topicLine}
+${c.category === 'ziel' ? 'Vorhaben' : 'Erkenntnis'} (seine Worte): "${c.insightText}"
+
+DEINE ERSTE ANTWORT – PFLICHTSTRUKTUR (wie ein Coach in einer Folgesitzung):
+1. Zeitbezug${c.originIntensity === 'high' || !c.originTopic ? '' : ' und Thema'} in einem Halbsatz${c.originIntensity === 'high' ? ' – ohne das Thema zu nennen (z. B. „Vor drei Wochen ist für dich ein Satz entstanden: …“)' : ''}.
+2. Die ${c.category === 'ziel' ? 'Vorhaben' : 'Erkenntnis'} wörtlich als seinen Satz nennen.
+${question}
+4. Ausweg zum Schluss: „Oder bringst du heute etwas anderes mit?“
+
+KEINE Bewertung: kein „wichtige Erkenntnis“, kein „toll, dass du dranbleibst“.
+Höchstens drei kurze Sätze plus die Frage. Keine Zusammenfassung des ganzen Gesprächs.
+--- ENDE WEITERARBEITEN ---`;
+}
+
 interface EntryContext {
   source: 'pattern' | 'tagesimpuls' | 'verstehen' | 'spiegel' | 'direct';
   topic?: string;
@@ -587,7 +627,7 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice, resume?: ResumeContext): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice, resume?: ResumeContext, continueCtx?: ContinueContext): string {
   let prompt = BASE_SYSTEM_PROMPT + '\n\n' + SYSTEMIC_WITNESSING_BLOCK;
 
   // Nur für den Turn, in dem der Rhythmus greift, zusätzlich anhängen.
@@ -607,7 +647,9 @@ function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisi
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
   // Nur vorhanden wenn ein vorheriges Gespräch existiert.
   // U3: Beim Fortsetzen ersetzt der Block FORTSETZUNG das Briefing über das letzte andere Gespräch.
-  if (resume) {
+  if (continueCtx) {
+    prompt += buildContinueBlock(continueCtx);   // U5a: ersetzt FORTSETZUNG
+  } else if (resume) {
     prompt += buildResumeBlock(resume);
   } else if (briefing && briefing.conversationCount > 1) {
     let briefingText = `\n\n--- PRE-SESSION-BRIEFING ---
@@ -1347,6 +1389,7 @@ Deno.serve(async (req) => {
     // U3: Fortsetzen mit Coach-Eröffnung – nur auf einem Gespräch mit mindestens einer eigenen Nachricht.
     //     Eigentum ist oben (assertConversationOwner) geprüft. Keine neue Konversation.
     let resumeContext: ResumeContext | undefined;
+    let continueContext: ContinueContext | undefined;
     if (start === 'resume') {
       const lastUser = [...history].reverse().find((m) => m.role === 'user');
       if (!lastUser || !convId) {
@@ -1370,6 +1413,44 @@ Deno.serve(async (req) => {
         intensity: intensity === 'low' || intensity === 'medium' || intensity === 'high' ? intensity : null,
       };
       logger.info('resume_started', { conversationId: convId, daysSince, hasOpenThread: !!conv?.open_thread, intensity: resumeContext.intensity });
+
+      // U5a: Weiterarbeiten an einer Erkenntnis – nur eigene, aus DIESEM Gespräch, nicht „Teile ich nicht“
+      if (b.insightId !== undefined && b.insightId !== null) {
+        if (!isUuid(b.insightId)) throw new HttpError(400, 'invalid_insight');
+        const { data: ins, error: insError } = await admin.from('insights')
+          .select('id, content, category, user_rating, conversation_id, created_at')
+          .eq('id', b.insightId).eq('user_id', user.id).maybeSingle();
+        if (insError) {
+          logger.error('weiterarbeiten_context_failed', { conversationId: convId, code: insError.code });
+          throw new HttpError(500, 'resume_failed');
+        }
+        if (!ins) {
+          logger.warn('weiterarbeiten_rejected', { conversationId: convId, reason: 'not_found' });
+          throw new HttpError(403, 'forbidden');
+        }
+        if (ins.conversation_id !== convId || ins.user_rating === 'disagree' || !ins.content) {
+          logger.warn('weiterarbeiten_rejected', {
+            conversationId: convId,
+            reason: ins.conversation_id !== convId ? 'other_conversation' : ins.user_rating === 'disagree' ? 'disagree' : 'empty',
+          });
+          throw new HttpError(400, 'invalid_insight');
+        }
+        const { data: convMeta } = await admin.from('conversations').select('title')
+          .eq('id', convId).eq('user_id', user.id).maybeSingle();
+        const rawTitle = typeof convMeta?.title === 'string' ? convMeta.title.trim() : '';
+        const placeholder = !rawTitle || /^(neues gespräch|gespräch|wellness-check)$/i.test(rawTitle);
+        const insightDays = Math.max(0, Math.floor((Date.now() - new Date(ins.created_at).getTime()) / 86400000));
+        const category = ['muster', 'stärke', 'erkenntnis', 'ziel'].includes(ins.category) ? ins.category : null;
+        continueContext = {
+          insightText: String(ins.content).slice(0, 600),
+          category,
+          rating: ins.user_rating === 'helpful' || ins.user_rating === 'unclear' ? ins.user_rating : null,
+          originDateLabel: relativeDateLabel(insightDays),
+          originTopic: placeholder ? null : rawTitle.slice(0, 80),
+          originIntensity: resumeContext.intensity,
+        };
+        logger.info('weiterarbeiten_started', { conversationId: convId, insightId: ins.id, category, rating: continueContext.rating, daysSince: insightDays });
+      }
     }
 
     // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat.
@@ -1544,7 +1625,7 @@ Deno.serve(async (req) => {
         ? HOWTO_SYSTEM_PROMPT
         : resumeContext
           // Fortsetzen: kein Wellness-/Entry-Kontext, kein Briefing über ein anderes Gespräch
-          ? buildSystemPrompt(memory, ragContext, supervisionNote, undefined, undefined, coachFile, undefined, offerMechanism, introduceVoice, namingVoice, resumeContext)
+          ? buildSystemPrompt(memory, ragContext, supervisionNote, undefined, undefined, coachFile, undefined, offerMechanism, introduceVoice, namingVoice, resumeContext, continueContext)
           : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
 
     if (wellnessCheck && isCoaching) {

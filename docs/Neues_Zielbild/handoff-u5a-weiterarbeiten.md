@@ -1,11 +1,11 @@
-# Handoff U5a – Weiterarbeiten & Deine Einschätzung (v0.1, Entwurf zur Freigabe)
+# Handoff U5a – Weiterarbeiten & Deine Einschätzung (v1.0, freigegeben)
 
 **Für:** Claude Code · **Stand:** 19.11.2026 · **Basis:** `main` nach U4 (`3e4b1b65`)
 **Konzept:** UX „Kreislauf“ v1.2, Abschnitte 4.1 (B/C2), 4.2c, 4.2d, 4.3a, 4.3c, 4.3d, 8.1 (Einschätzungs-Spalten), 8.5 · Umsetzungsplan v1.0, Tranche U5a
 **Branch:** `u5a/weiterarbeiten` · ein Deploy: **Migration 039** + Edge Function `chat` + Frontend
 **Bewusst nicht in U5a:** Lernen aus den Einschätzungen (`INSIGHT_PROMPT`, Resonanzkarte, Konfidenz, `follows_insight_id` befüllen, „Was du seitdem erlebt hast“) → U5b
 
-> Aus der Code-Inventur. Punkte mit **[E-U5a-x]** weichen vom Konzept ab, füllen eine Lücke oder brauchen Jeromes Entscheidung. **Gebaut wird erst nach Freigabe.**
+> Aus der Code-Inventur. Punkte mit **[E-U5a-x]** weichen vom Konzept ab, füllen eine Lücke oder brauchen Jeromes Entscheidung. **Alle am 19.11.2026 von Jerome nach Empfehlung freigegeben.**
 
 ---
 
@@ -71,5 +71,13 @@
 ## 5. Designdokument nach Verifikation
 `ARCHITECTURE.md` (insights-Spalten, `chat` Start `resume` + `insightId`, Spiegel, Heute, Abschluss), `CLAUDE.md` (Schema, Migration 039, Begriffe „Deine Einschätzung“, „Daran weiterarbeiten“) – erst nach Jeromes Validierung.
 
+## 5a. Bauhinweise (19.11.2026)
+
+- **Weiterarbeiten:** Navigation-State `{ continueInsight: { insightId, conversationId, content } }` (`content` nur für die Anzeige im Abschluss); `CoachScreen` startet `resumeWithOpening(convId, { insightId })`. Der Server prüft Eigentum, Gesprächszugehörigkeit und „Teile ich nicht“ und baut den Block WEITERARBEITEN (ersetzt FORTSETZUNG). Zeitbezug ab Entstehung der Erkenntnis, Thema = Kurztitel (Platzhalter → kein Thema), bei `high` ohne Thema.
+- **Bedienung:** `components/insights/InsightRating.jsx` (Link „Deine Einschätzung ›“, Sheet mit ✦ / ? / ≠ / Anpassen / Entfernen / zurücknehmen, Weiterarbeiten-Link, Folgeangebote bei „Verstehe ich nicht“ und „Teile ich nicht“). Gleiche Komponente im Spiegel und auf Heute.
+- **Abschluss:** `ContinueRatingSheet` erscheint bei „Neues Gespräch“ oder „←“, wenn im Weiterarbeiten-Gespräch selbst geschrieben wurde; danach läuft der bisherige Ablauf (Abschluss-Modal, neues Gespräch bzw. Einstieg).
+- **Zeitachse:** ✦-Erkenntnisse als Einträge am Tag der Markierung (`rated_at`); Filter erscheint nur, wenn es solche Einträge gibt.
+- **Neue Log-Codes:** `weiterarbeiten_started`, `weiterarbeiten_rejected` (infoOnly).
+
 ## 6. Beobachtungen
-- (leer)
+- `follows_insight_id` ist wie alle Spalten von `insights` für den Client änderbar (Tabellen-Grant aus 025). Lesen fremder Erkenntnisse ist dadurch nicht möglich (RLS); befüllt wird die Spalte ab U5b serverseitig. Falls gewünscht, kann U5b die Spalte per Policy-Check auf eigene Erkenntnisse beschränken.

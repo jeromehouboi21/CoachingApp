@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { LoadingDots, LoadError, formatDay } from './shared'
 import { SuggestionActions } from '../../components/insights/SuggestionActions'
+import { InsightRating } from '../../components/insights/InsightRating'
 
 const logger = createLogger('InsightsLevel')
 
@@ -13,6 +14,7 @@ const FILTERS = [
   { id: 'erkenntnis', label: 'Erkenntnisse' },
   { id: 'stärke', label: 'Stärken' },
   { id: 'ziel', label: 'Vorhaben' },
+  { id: 'helpful', label: 'Hat mich weitergebracht ✦' },   // U5a: nur eigene Markierungen
 ]
 
 const CATEGORY_LABELS = {
@@ -22,14 +24,20 @@ const CATEGORY_LABELS = {
   ziel: 'Vorhaben',
 }
 
-function InsightCard({ insight, busy, onPin, onDelete, onSuggestionDone }) {
+function InsightCard({ insight, busy, onPin, onDelete, onSuggestionDone, onUpdated, onRemoved }) {
   return (
     <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 shadow-sm">
       <div className="flex items-start justify-between mb-3">
         {/* eine neutrale Farbe für alle Kategorien – keine Wertung über Farbe (E-U2-4) */}
-        <span className="text-[11px] font-medium px-[10px] py-[3px] rounded-full uppercase tracking-[0.04em] bg-surface-2 text-ink-2">
-          {CATEGORY_LABELS[insight.category] || 'Erkenntnis'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-medium px-[10px] py-[3px] rounded-full uppercase tracking-[0.04em] bg-surface-2 text-ink-2">
+            {CATEGORY_LABELS[insight.category] || 'Erkenntnis'}
+          </span>
+          {/* ✦ nur dort, wo der Mensch selbst markiert hat (U5a) */}
+          {insight.user_rating === 'helpful' && (
+            <span className="text-[14px] text-accent" title="Hat mich weitergebracht" aria-label="Hat mich weitergebracht">✦</span>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => onPin(insight)}
@@ -55,6 +63,8 @@ function InsightCard({ insight, busy, onPin, onDelete, onSuggestionDone }) {
       {insight.source === 'auto' && (
         <SuggestionActions insight={insight} question="Vorschlag – stimmt das?" onDone={(r) => onSuggestionDone(insight, r)} />
       )}
+      {/* U5a: Deine Einschätzung · Daran weiterarbeiten */}
+      <InsightRating insight={insight} onUpdated={(f) => onUpdated(insight, f)} onRemoved={() => onRemoved(insight)} />
     </div>
   )
 }
@@ -141,7 +151,13 @@ export function InsightsLevel({ userId }) {
     }
   }
 
-  const filtered = filter === 'all' ? insights : insights.filter(i => i.category === filter)
+  const handleUpdated = (insight, fields) =>
+    setInsights(prev => prev.map(i => i.id === insight.id ? { ...i, ...fields } : i))
+  const handleRemoved = (insight) => setInsights(prev => prev.filter(i => i.id !== insight.id))
+
+  const filtered = filter === 'all' ? insights
+    : filter === 'helpful' ? insights.filter(i => i.user_rating === 'helpful')
+    : insights.filter(i => i.category === filter)
 
   return (
     <>
@@ -183,6 +199,8 @@ export function InsightsLevel({ userId }) {
               onPin={handlePin}
               onDelete={handleDelete}
               onSuggestionDone={handleSuggestionDone}
+              onUpdated={handleUpdated}
+              onRemoved={handleRemoved}
             />
           ))}
         </div>

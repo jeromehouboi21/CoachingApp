@@ -39,6 +39,12 @@ export function markSurfaced(id) {
   return updateOne(id, { surfaced_at: new Date().toISOString() }, 'insight_surface_failed')
 }
 
+/** „Deine Einschätzung“ (U5a): 'helpful' | 'unclear' | 'disagree' oder null (zurücknehmen). */
+export function rateInsight(id, rating) {
+  const value = ['helpful', 'unclear', 'disagree'].includes(rating) ? rating : null
+  return updateOne(id, { user_rating: value, rated_at: value ? new Date().toISOString() : null }, 'insight_rate_failed')
+}
+
 /** „Entfernen“: Erkenntnis löschen. */
 export async function removeInsight(id) {
   const { data, error } = await supabase.from('insights').delete().eq('id', id).select('id')

@@ -53,6 +53,9 @@ export const RULES: Rule[] = [
   // Gesprächseinstieg U3:
   { id: 'resume_started',          codes: ['resume_started'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Gespräch weitergeführt (Einstieg)' },
   { id: 'resume_rejected',         codes: ['resume_rejected'],         windowMin: 10080, threshold: 0, infoOnly: true, label: 'Weiterführen abgelehnt (kein eigener Beitrag)' },
+  // Weiterarbeiten U5a:
+  { id: 'weiterarbeiten_started',  codes: ['weiterarbeiten_started'],  windowMin: 10080, threshold: 0, infoOnly: true, label: 'An einer Erkenntnis weitergearbeitet' },
+  { id: 'weiterarbeiten_rejected', codes: ['weiterarbeiten_rejected'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Weiterarbeiten abgelehnt (fremd, anderes Gespräch, „Teile ich nicht“)' },
   // Kennenlernen/Kappung U4:
   { id: 'conversation_cap_reached', codes: ['conversation_cap_reached'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Gespräch an der Kappungsgrenze' },
   { id: 'display_title_invalid',  codes: ['display_title_invalid'],   windowMin: 10080, threshold: 0, infoOnly: true, label: 'Kurztitel unbrauchbar' },

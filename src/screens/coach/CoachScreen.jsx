@@ -12,6 +12,7 @@ import { ChatInput } from '../../components/coach/ChatInput'
 import { QuickReplies } from '../../components/coach/QuickReplies'
 import { ConversationEndModal } from '../../components/coach/ConversationEndModal'
 import { ConversationEntry } from '../../components/coach/ConversationEntry'
+import { ContinueRatingSheet } from '../../components/coach/ContinueRatingSheet'
 import { createConfirmedInsight } from '../../lib/insightActions'
 import { RestModeSheet } from '../../components/access/RestModeSheet'
 import { ConversationCapNotice } from '../../components/access/ConversationCapNotice'
@@ -111,6 +112,11 @@ export function CoachScreen() {
   const entryContextRef = useRef(location.state?.entryContext ?? null)
   const wellnessCheckRef = useRef(location.state?.wellnessCheck ?? null)
   const resumeConversationIdRef = useRef(location.state?.resumeConversationId ?? null)
+  // U5a: „Daran weiterarbeiten“ – { insightId, conversationId, content } (content nur zur Anzeige)
+  const continueInsightRef = useRef(location.state?.continueInsight ?? null)
+  const [activeContinue, setActiveContinue] = useState(null)
+  const continueWroteRef = useRef(false)          // im Weiterarbeiten-Gespräch selbst geschrieben?
+  const [ratingSheet, setRatingSheet] = useState(null)   // { insight, then }
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [endModal, setEndModal] = useState(null) // { content, category }
   // U3: Einstieg vor dem Chat. mode: 'loading' | 'entry' | 'chat'
@@ -172,10 +178,30 @@ export function CoachScreen() {
     const wc = wellnessCheckRef.current
     const entryCtx = entryContextRef.current
     const resumeId = resumeConversationIdRef.current
+    const continueIns = continueInsightRef.current
 
     // State löschen via React Router — kein erneutes Triggern bei Back-Navigation
-    if (entryCtx || wc || resumeId) {
+    if (entryCtx || wc || resumeId || continueIns) {
       navigate('/coach', { replace: true, state: {} })
+    }
+
+    // U5a: Weiterarbeiten an einer Erkenntnis im Ursprungsgespräch (Coach steigt ein wie in einer
+    // Folgesitzung). Setzt ein bestehendes Gespräch fort → kein neuer Start, auch im Ruhemodus.
+    if (continueIns?.insightId && continueIns?.conversationId) {
+      logger.info('Continue insight', { conversationId: continueIns.conversationId })
+      setMode('chat')
+      setShowQuickReplies(false)
+      setActiveContinue(continueIns)
+      continueWroteRef.current = false
+      fetchEntryData().catch(() => {})   // für „←“ zurück zum Einstieg
+      resumeWithOpening(continueIns.conversationId, { insightId: continueIns.insightId }).then(ok => {
+        if (!ok) {
+          logger.warn('Continue insight failed', { conversationId: continueIns.conversationId })
+          setActiveContinue(null)
+          setMode('entry')
+        }
+      })
+      return
     }
 
     // VARIANTE 0: Bestehendes Gespräch aus dem Verlauf fortsetzen.
@@ -267,6 +293,7 @@ export function CoachScreen() {
       return
     }
     setShowQuickReplies(false)
+    if (activeContinue && activeContinue.conversationId === conversationId) continueWroteRef.current = true
     if (!conversationHasOwnMessage(messages)) acknowledgeTrialHint()
     await sendMessage(content, inputMode)
     if (!alreadyCounted) { refreshProfile(); refreshAccess() } // Phase nach dem ersten Senden aktualisieren
@@ -372,14 +399,34 @@ export function CoachScreen() {
     startNewConversation(false)
   }
 
+  // U5a (E-U5a-5): Nach einem Weiterarbeiten-Gespräch, in dem selbst geschrieben wurde, einmalig
+  // und überspringbar nach der Einschätzung fragen – danach geht es mit `next` weiter.
+  const withContinueRating = (next) => {
+    if (activeContinue && continueWroteRef.current) {
+      setRatingSheet({ insight: activeContinue, then: next })
+      return
+    }
+    setActiveContinue(null)
+    next()
+  }
+  const finishRating = () => {
+    const next = ratingSheet?.then
+    setRatingSheet(null)
+    setActiveContinue(null)
+    continueWroteRef.current = false
+    next?.()
+  }
+
   // „←“ im Chat: zurück zum Einstieg. Nachbearbeitung wie beim Verlassen des Screens.
-  const handleBackToEntry = async () => {
+  const handleBackToEntry = () => withContinueRating(async () => {
     runPostConversation(messagesRef.current, conversationIdRef.current)
     setMode('entry')
     try { await fetchEntryData() } catch { /* Liste bleibt wie zuletzt */ }
-  }
+  })
 
-  const handleNewConversation = async () => {
+  const handleNewConversation = () => withContinueRating(startNewWithClosing)
+
+  const startNewWithClosing = async () => {
     // Gedächtnis extrahieren bevor neues Gespräch startet
     if (messages.length >= 3) {
       // Post-processing fire-and-forget (RAG + Selbstreflexion)
@@ -458,6 +505,7 @@ export function CoachScreen() {
           lastStartLabel={access?.starts_limit === 3 ? 'dritte' : 'letzte'}
         />
         {showRestSheet && <RestModeSheet onClose={() => setShowRestSheet(false)} />}
+        {ratingSheet && <ContinueRatingSheet insight={ratingSheet.insight} onDone={finishRating} />}
       </div>
     )
   }
@@ -582,6 +630,9 @@ export function CoachScreen() {
 
       {/* Ruhemodus-Hinweis (U4, Übergangstext 3) */}
       {showRestSheet && <RestModeSheet onClose={() => setShowRestSheet(false)} />}
+
+      {/* Einschätzung nach einem Weiterarbeiten-Gespräch (U5a) */}
+      {ratingSheet && <ContinueRatingSheet insight={ratingSheet.insight} onDone={finishRating} />}
     </div>
   )
 }

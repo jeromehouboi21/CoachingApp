@@ -786,6 +786,53 @@ async function testsU4(a, b) {
   }
 }
 
+// ── U5a: Weiterarbeiten & Deine Einschätzung ────────────────────────────────
+// Alle Ablehnungen passieren vor jedem Modellaufruf (keine Kosten).
+async function testsU5a(a, b) {
+  const convId = await ensureBConversation(b, 'SECTEST S-12');
+  const aInsight = a.targets?.insights;
+  // a) Weiterarbeiten mit fremder Erkenntnis (A's) im eigenen Gespräch → 403
+  if (aInsight?.id) {
+    const r = await callFunction('chat', {
+      token: b.token, body: { conversationId: convId, start: 'resume', insightId: aInsight.id, requestId: 'sectest-u5a-a' },
+    });
+    record('U5a-a', 'Weiterarbeiten mit fremder insightId', 'HTTP 403', r.status === 403 ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+  } else {
+    record('U5a-a', 'Weiterarbeiten mit fremder insightId', 'HTTP 403', SKIP, 'A hat keine Test-Erkenntnis');
+  }
+  // b) Eigene Erkenntnis aus einem ANDEREN Gespräch → 400 invalid_insight
+  const { data: own } = await b.client.from('insights').select('id, conversation_id, user_rating').eq('user_id', b.userId);
+  const other = (own ?? []).find(i => i.conversation_id !== convId);
+  if (other) {
+    const r = await callFunction('chat', {
+      token: b.token, body: { conversationId: convId, start: 'resume', insightId: other.id, requestId: 'sectest-u5a-b' },
+    });
+    record('U5a-b', 'Weiterarbeiten: Erkenntnis aus anderem Gespräch', '400 invalid_insight',
+      r.status === 400 && r.json?.error === 'invalid_insight' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+  } else {
+    record('U5a-b', 'Weiterarbeiten: Erkenntnis aus anderem Gespräch', '400 invalid_insight', SKIP, 'B hat keine passende Erkenntnis');
+  }
+  // c) Ungültiger Wert für user_rating → Check-Constraint
+  const mine = (own ?? [])[0];
+  if (mine) {
+    const { data, error } = await b.client.from('insights').update({ user_rating: 'super' }).eq('id', mine.id).select('id');
+    record('U5a-c', 'user_rating mit ungültigem Wert', 'Fehler (Check)', error ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+    // d) Gültige eigene Einschätzung → 1 Zeile; danach alter Stand
+    const set = await b.client.from('insights').update({ user_rating: 'helpful', rated_at: new Date().toISOString() }).eq('id', mine.id).select('id');
+    await b.client.from('insights').update({ user_rating: mine.user_rating ?? null }).eq('id', mine.id);
+    record('U5a-d', 'eigene Einschätzung setzen (als B)', '1 Zeile', !set.error && set.data?.length === 1 ? PASS : FAIL,
+      set.error ? errCode(set.error) : `betroffen=${set.data?.length ?? 0}`);
+  } else {
+    record('U5a-c', 'user_rating mit ungültigem Wert', 'Fehler (Check)', SKIP, 'B hat keine Erkenntnis');
+  }
+  // e) Einschätzung an A's Erkenntnis → 0 Zeilen
+  if (aInsight?.id) {
+    const { data, error } = await b.client.from('insights').update({ user_rating: 'disagree' }).eq('id', aInsight.id).select('id');
+    record('U5a-e', 'Einschätzung an fremder Erkenntnis', '0 Zeilen / Fehler',
+      error || !data?.length ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+  }
+}
+
 // ── S-06b (Paket C, C-5): Zweiter Faktor für alle ───────────────────────────
 // Immer: #33 Codes-Tabelle gesperrt, codes:generate ohne aal2 abgelehnt.
 // Mit ATTACK_TEST_MFA=1: #34–#38. TOTP-Schlüssel, Codes und Wiederherstellungscodes bleiben im
@@ -1029,6 +1076,7 @@ function printResults() {
   const exportResult = await testsS16(a, b);
   await testsS06b(b);
   await testsU4(a, b);   // vor den Rate-Limit-Tests (chat-Zählung)
+  await testsU5a(a, b);
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)

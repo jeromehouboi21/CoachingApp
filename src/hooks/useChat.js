@@ -223,7 +223,8 @@ export function useChat(userId, session, options = {}) {
 
   // Weitermachen aus dem Gesprächseinstieg (U3): Verlauf laden, dann eröffnet der Coach mit einem
   // kurzen Anknüpfen an DIESES Gespräch (start 'resume'). Keine neue Konversation.
-  const resumeWithOpening = useCallback(async (convId) => {
+  // opts.insightId (U5a): Weiterarbeiten an einer Erkenntnis aus diesem Gespräch – den Text lädt der Server.
+  const resumeWithOpening = useCallback(async (convId, opts = {}) => {
     if (!userId || !convId) return false
     const { data, error } = await supabase
       .from('messages')
@@ -237,7 +238,8 @@ export function useChat(userId, session, options = {}) {
     countedConvIdsRef.current.add(convId)
     await startStreamedOpening({
       variant: 'resume',
-      errorLabel: 'Resume start failed',
+      extra: opts.insightId ? { insightId: opts.insightId } : {},
+      errorLabel: opts.insightId ? 'Continue-insight start failed' : 'Resume start failed',
       existing: { convId, messages: data.map(m => ({ role: m.role, content: m.content, id: m.id, messageType: m.message_type })) },
     })
     return true
