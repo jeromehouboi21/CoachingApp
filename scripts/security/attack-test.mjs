@@ -149,6 +149,14 @@ async function callFunction(name, { token, apikey = true, method = 'POST', body 
 async function setupA() {
   const a = await signIn('A', A);
 
+  // S-06b: Mit verifiziertem zweiten Faktor sieht eine Passwort-Sitzung (aal1) keine Daten (RLS mfa_required)
+  {
+    const { data: lf } = await a.client.auth.mfa.listFactors();
+    if ((lf?.all ?? []).some(f => f.status === 'verified')) {
+      abort('Testkonto A hat einen zweiten Faktor – bitte in der App (Profil → „Zweiten Faktor entfernen“) oder im Supabase-Dashboard entfernen');
+    }
+  }
+
   // Konversation: vorhandene nehmen oder über den normalen App-Weg anlegen
   let { data: convs, error } = await a.client
     .from('conversations').select('id, title').eq('user_id', a.userId)
@@ -994,6 +1002,12 @@ function printResults() {
   const a = await setupA();
   const b = await signIn('B', B);
   if (a.userId === b.userId) abort('A und B sind dasselbe Konto');
+  {
+    const { data: lf } = await b.client.auth.mfa.listFactors();
+    if ((lf?.all ?? []).some(f => f.status === 'verified')) {
+      abort('Testkonto B hat einen zweiten Faktor (z. B. aus einem abgebrochenen MFA-Lauf) – bitte entfernen');
+    }
+  }
   console.log('• Testkonten A und B angemeldet');
 
   await testsAsB(a, b);
