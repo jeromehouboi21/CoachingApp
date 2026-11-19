@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA) und Welle 2a (Server schreibt Nachrichten)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA) und Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht)
 
 ---
 
@@ -186,7 +186,8 @@ CoachingApp/
 │   │   ├── 027_signup_consent_and_limit.sql ← session_limit 20, handle_new_user mit Metadaten
 │   │   ├── 028_conversation_context.sql ← RAG-Ergebnis pro Gespräch (nur service_role)
 │   │   ├── 029_rate_limits.sql          ← rate_limit_counters, consume_rate_limits
-│   │   └── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
+│   │   ├── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
+│   │   └── 031_s12_revoke_client_message_insert.sql ← Client darf messages nicht mehr schreiben (Welle 2b)
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -547,7 +548,7 @@ Exports:
 5. Jedes `data: {"text": "..."}` an den Platzhalter anhängen (SSE-Zeilen werden gepuffert)
 6. Gespeichert wird **beides vom Server**; der Client speichert nichts
 7. Fehler **vor** dem Meta-Chunk (Netz, 5xx, Rate-Limit, Monatslimit): Nachricht `status: 'failed'` → „Nicht gesendet – nochmal versuchen“ (`retryMessage`, idempotent). Fehler **nach** dem Meta-Chunk: Platzhalter zeigt den Aussetzer-Text, der Server speichert die Antwort trotzdem zu Ende.
-8. `409 client_outdated` (ab Welle 2b): Hinweis „Es gibt eine neue Version der App. Tipp hier, um sie zu laden.“ → `location.reload()`
+8. `409 client_outdated` (nur alte, gecachte App-Versionen kennen das alte Format; die neue zeigt): Hinweis „Es gibt eine neue Version der App. Tipp hier, um sie zu laden.“ → `location.reload()`
 
 **Eröffnungen:** `startWellnessConversation`/`startBriefingConversation`/`startEntryContextConversation` laufen über `startStreamedOpening` → `{ conversationId, start: 'wellness' | 'briefing' | 'entry', wellnessCheck?, entryContext? }`. `startNewConversation` zeigt den Pool-Text sofort an und lässt ihn vom Server speichern (`start: 'first' | 'standard'`, `openingIndex`; ohne Modellaufruf, zählt **nicht** als Gespräch).
 
@@ -686,7 +687,7 @@ Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client,
 
 **Verlauf und Speicherung (S-12):** Im Gesprächsmodus lädt `chat` den Verlauf aus der DB (bis 400 Zeilen, ans Modell die letzten 60; gleiche Rollen hintereinander werden zusammengeführt). Ein mitgeschicktes `messages[]` wird ignoriert (`body_messages_ignored`). Die Nutzer-Nachricht wird **nach** `consume_session` per Upsert auf `(conversation_id, client_message_id)` gespeichert — eine Wiederholung legt nichts doppelt an; ist sie schon beantwortet, kommt die gespeicherte Antwort zurück (`meta.replayed`). Die Antwort bekommt vorab eine ID, wird per `EdgeRuntime.waitUntil` auch nach einem Client-Abbruch zu Ende generiert und gespeichert (D-7, `metadata: { model, client_aborted, stop_reason, stream_failed }`; Fehler → `assistant_insert_failed`). `start: 'first' | 'standard'` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`), ohne Modellaufruf und ohne `consume_session`. Krisen-Events bekommen die `message_id` der Nutzer-Nachricht.
 
-**Übergang (Welle 2a → 2b):** Das alte Format (`messages[]` ohne `message`/`start`) wird noch beantwortet, aber nichts gespeichert (der alte Client speichert selbst) und der mitgeschickte Verlauf durch den aus der DB ersetzt; jeder Aufruf wird als `legacy_format` geloggt. Ab Welle 2b (`LEGACY_FORMAT_ALLOWED = false`) → `409 client_outdated`.
+**Altes Format:** `messages[]` ohne `message`/`start` (Gesprächsmodus) bzw. Extraktion ohne `conversationId` → `409 client_outdated` (seit Welle 2b, `LEGACY_FORMAT_ALLOWED = false`; geloggt als `legacy_format`). Howto ist nicht betroffen. Welle 2b wurde vorgezogen: Die Aktivitätsprüfung vom 19.11.2026 zeigte keine echten Nutzer seit 02.09.2026, alle `legacy_format`-Aufrufe stammten aus dem Angriffstest.
 
 `memory`, `coachFile`, `briefing`, `ragContext`, `supervisionNote` im Body werden **ignoriert** (S-12). `wellnessCheck` (Score 1–10, Texte gekürzt) und `entryContext` (Quelle aus fester Liste, Texte gekürzt) werden geprüft übernommen – sie steuern nur den eigenen Prompt.
 
@@ -752,7 +753,7 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 ```json
 { "conversationId": "uuid" }
 ```
-Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst aus der DB. Ein mitgeschicktes `messages` wird ignoriert und als `legacy_format` geloggt (ab Welle 2b → `409 client_outdated`).
+Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst aus der DB. Ein mitgeschicktes `messages` führt seit Welle 2b zu `409 client_outdated` (geloggt als `legacy_format`); die Eigentumsprüfung läuft davor.
 
 **Sicherheit:** Nutzer nur aus dem JWT (`requireUser`). Ein mitgeschicktes `userId` wird ignoriert; weicht es ab, wird `userId mismatch` geloggt (Angriffssignal). `conversationId` ist Pflicht und wird **vor** allem anderen auf Eigentum geprüft. IDs aus der Modellausgabe (`entry_id`, `cluster_entry_ids`, `existing_voice_id`) werden nur übernommen, wenn sie zu den eigenen Einträgen/Stimmen gehören; alle Writes filtern zusätzlich auf `user_id` (Schutz gegen Prompt-Injection).
 
@@ -941,7 +942,7 @@ message_type      TEXT DEFAULT 'standard' ('standard' | 'crisis_response')  -- v
 client_message_id UUID                 -- Migration 030, eindeutig je (conversation_id, client_message_id)
 created_at        TIMESTAMPTZ
 ```
-Seit S-12 (Welle 2a) schreibt nur noch `chat` (service_role) Nachrichten. Das Insert-Recht von `authenticated` entfällt mit Migration 031 (Welle 2b). Der eindeutige Index ist bewusst **nicht** partiell, weil PostgREST `ON CONFLICT` sonst nicht auflösen kann; alte Zeilen haben `NULL` und verletzen ihn nicht.
+Nur `chat` (service_role) schreibt Nachrichten. `authenticated` hat seit Migration 031 (Welle 2b) nur noch SELECT. Der eindeutige Index ist bewusst **nicht** partiell, weil PostgREST `ON CONFLICT` sonst nicht auflösen kann; alte Zeilen haben `NULL` und verletzen ihn nicht.
 
 ### Coach-Gedächtnis
 
@@ -1135,7 +1136,7 @@ Alle Tabellen haben RLS. Policies gelten **nur für `authenticated`**, nie für 
 |---|---|---|
 | `profiles` | SELECT, UPDATE | `id = auth.uid()` + Schutz-Trigger |
 | `conversations` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` + Schutz-Trigger |
-| `messages` | SELECT, INSERT (INSERT entfällt mit Migration 031 / Welle 2b) | Konversation gehört dem Nutzer |
+| `messages` | SELECT (seit Migration 031 kein INSERT mehr — nur der Server schreibt) | Konversation gehört dem Nutzer |
 | `insights` | SELECT, INSERT, UPDATE, DELETE | `user_id = auth.uid()`; `conversation_id` nur eigene |
 | `user_memory` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` |
 | `inner_voices` | SELECT, UPDATE | `user_id = auth.uid()` |

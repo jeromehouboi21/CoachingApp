@@ -259,7 +259,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 
 ### `chat` — System-Prompt Aufbau
 
-**Nachrichten schreibt nur der Server (S-12, Paket B Welle 2a):** Gesprächsmodus `{ conversationId, message: { clientMessageId, content, inputMode } }` bzw. Eröffnung `{ conversationId, start: 'first'|'standard'|'wellness'|'briefing'|'entry' }`. `chat` lädt den Verlauf aus der DB, speichert die Nutzer-Nachricht idempotent (nach `consume_session`) und die Antwort per `EdgeRuntime.waitUntil` auch nach Client-Abbruch. `first`/`standard` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`!), ohne Modellaufruf und ohne Zählung. Altes Format (`messages[]`) → noch erlaubt und als `legacy_format` geloggt, ab Welle 2b `409 client_outdated`.
+**Nachrichten schreibt nur der Server (S-12, Paket B Welle 2a):** Gesprächsmodus `{ conversationId, message: { clientMessageId, content, inputMode } }` bzw. Eröffnung `{ conversationId, start: 'first'|'standard'|'wellness'|'briefing'|'entry' }`. `chat` lädt den Verlauf aus der DB, speichert die Nutzer-Nachricht idempotent (nach `consume_session`) und die Antwort per `EdgeRuntime.waitUntil` auch nach Client-Abbruch. `first`/`standard` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`!), ohne Modellaufruf und ohne Zählung. Altes Format (`messages[]`) → `409 client_outdated` (seit Welle 2b, geloggt als `legacy_format`). `authenticated` hat auf `messages` nur noch SELECT (Migration 031).
 
 **Kontext lädt `chat` selbst (S-12):** Akte, Profil, Resonanzkarte, Briefing, Legacy-Gedächtnis, RAG und Supervision kommen aus der DB (`loadCoachContext`). Entsprechende Body-Felder werden ignoriert; vom Client kommen nur `messages`, `conversationId`, `wellnessCheck` und `entryContext` (typ- und längengeprüft). RAG läuft einmal pro Gespräch beim ersten Nutzer-Input (`_shared/rag.ts`) und wird in `conversation_context` gespeichert (kein Client-Zugriff).
 
@@ -490,5 +490,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `028_conversation_context.sql` | conversation_context (RAG-Ergebnis pro Gespräch, nur service_role) · S-12 |
 | `029_rate_limits.sql` | rate_limit_counters · RPC consume_rate_limits (nur service_role) · Cron purge-rate-limits |
 | `030_s12_server_messages.sql` | messages.client_message_id + eindeutiger Index (conversation_id, client_message_id) · metadata-Default · S-12 Welle 2a |
+| `031_s12_revoke_client_message_insert.sql` | Insert-Recht des Clients auf messages entzogen · S-12 Welle 2b |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.

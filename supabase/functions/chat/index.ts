@@ -1039,9 +1039,9 @@ const MAX_MESSAGE_ENTRIES = 400;   // nur Howto/Legacy-Body
 const MAX_CONTENT_CHARS = 8000;
 const CHAT_MODEL = 'claude-sonnet-4-5';
 
-// Altes Format (Client schickt messages[] und speichert selbst). Welle 2a: noch erlaubt,
-// Welle 2b (Mig. 031): false → 409 client_outdated.
-const LEGACY_FORMAT_ALLOWED = true;
+// Altes Format (Client schickt messages[] und speichert selbst). Seit Welle 2b (Mig. 031,
+// Client hat kein Insert-Recht mehr): 409 client_outdated. Howto ist nicht betroffen.
+const LEGACY_FORMAT_ALLOWED = false;
 
 // Eröffnungstexte für Standard-Starts. Quelle: src/lib/prompts.js (OPENING_MESSAGES,
 // FIRST_OPENING_MESSAGE) — bei Änderungen beide Stellen anpassen.
