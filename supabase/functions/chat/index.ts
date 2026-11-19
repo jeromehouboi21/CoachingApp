@@ -1,4 +1,4 @@
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
+import Anthropic from 'https://esm.sh/@anthropic-ai/sdk@1.10.0';
 import { detectCrisis } from './crisisDetection.ts';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import {

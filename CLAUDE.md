@@ -423,6 +423,7 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 - Coach-Gedächtnis ist für den User unsichtbar
 - Fehlermeldung im Chat: "Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da."
 - Alle Edge Functions verwenden `_shared/logger.ts` für strukturiertes Logging
+- Imports in Edge Functions **immer mit fester Version** (`npm:@supabase/supabase-js@2.119.0`, `npm:@anthropic-ai/sdk@1.10.0`) — ohne Version zieht jeder Deploy die neueste Version (Ausfall 19.11.2026: frisch veröffentlichtes Paket nicht abrufbar). Updates bewusst und mit Test.
 - **Nur der Server schreibt `messages`** — kein `supabase.from('messages').insert` im Frontend (S-12)
 - **Neue Tabellen mit Personenbezug** brauchen eine `ON DELETE CASCADE`-Kette zu `auth.users`/`profiles`/`conversations`, gehören ggf. in `apply_retention()` (Migration 033) und werden mit dem Löschtest geprüft (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0).
 - **Lernbasis (S-13):** Inhalte gelangen nur mit `RAG_LEARNING_ENABLED=1`, Opt-in (`profiles.learning_opt_in`, nur über RPC `set_learning_opt_in`) und über `reviewLearningEntry` (`_shared/learning.ts`) in `experience_patterns`. Das gilt für jeden neuen nutzerübergreifenden Kanal. RAG-Treffer stehen im Prompt nur als gekennzeichneter Datenblock.

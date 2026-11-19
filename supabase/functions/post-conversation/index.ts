@@ -3,7 +3,7 @@
 // 4 parallele Prompts: Session-Notes · Akte-Updates · Profil-Update · Anonyme RAG-Zusammenfassung
 // + Coach-Selbstreflexion
 
-import Anthropic from 'npm:@anthropic-ai/sdk';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
 import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
 import {
