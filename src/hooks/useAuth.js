@@ -1,39 +1,72 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { createLogger, setLoggerUserId } from '../lib/logger'
 import { functionHeaders, functionUrl } from '../lib/functions'
+import { requestMfaCheck } from '../lib/mfa'
 
 const logger = createLogger('useAuth')
 const CURRENT_CONSENT_VERSION = '1.0'
 const CURRENT_COACHING_AGREEMENT_VERSION = '1.0'
+
+// S-06b: aal1 + verifizierter Faktor → Code-Abfrage, BEVOR das Profil geladen wird.
+// (Die RLS-Policy mfa_required liefert sonst 0 Zeilen, und ein leeres Profil sähe aus wie
+// „neuer Nutzer → Onboarding“.) Die Prüfung ist lokal (Sitzung + Faktorliste der Sitzung).
+async function evaluateMfaGate() {
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (error) {
+    logger.warn('mfa_level_failed', { code: error.code ?? 'unknown' })
+    return 'ok'
+  }
+  return data?.currentLevel === 'aal1' && data?.nextLevel === 'aal2' ? 'required' : 'ok'
+}
 
 export function useAuth() {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [mfaGate, setMfaGate] = useState('ok')   // 'ok' | 'required'
+  const seqRef = useRef(0)                        // nur das jüngste Auth-Ereignis zählt
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user)
-        setSession(session)
-        setLoggerUserId(session.user.id)
-        logger.info('Session restored', { userId: session.user.id })
-        loadProfile(session.user.id)
-      } else {
-        logger.debug('No session found')
-        setLoading(false)
-      }
-    })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // Sitzung übernehmen: erst Sicherheitsstufe, dann (falls frei) Profil.
+    async function applySession(session) {
+      const seq = ++seqRef.current
       setUser(session?.user ?? null)
       setSession(session ?? null)
+      if (!session?.user) {
+        setProfile(null)
+        setMfaGate('ok')
+        setLoggerUserId(null)
+        setLoading(false)
+        return 'none'
+      }
+      setLoggerUserId(session.user.id)
+      const gate = await evaluateMfaGate()
+      if (seq !== seqRef.current) return 'stale'
+      if (gate === 'required') {
+        setMfaGate('required')
+        setProfile(null)
+        setLoading(false)
+        return 'required'
+      }
+      // Erst Profil, dann Freigabe – sonst sähe App kurz ein leeres Profil
+      await loadProfile(session.user.id)
+      if (seq === seqRef.current) setMfaGate('ok')
+      return 'ok'
+    }
 
-      if (session?.user) {
-        setLoggerUserId(session.user.id)
-        loadProfile(session.user.id)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) logger.info('Session restored', { userId: session.user.id })
+      else logger.debug('No session found')
+      applySession(session)
+    })
+
+    // Kein await von supabase.auth-Aufrufen direkt im Callback (Auth-Sperre) → setTimeout
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setTimeout(async () => {
+        const result = await applySession(session)
+        if (result !== 'ok' || !session?.access_token) return
 
         // Pending Invite Code einlösen (nach E-Mail-Bestätigung)
         const pendingCode = localStorage.getItem('pendingInviteCode')
@@ -59,14 +92,25 @@ export function useAuth() {
             logger.warn('Failed to redeem pending invite code', { errorType: err?.name ?? 'Error' })
           }
         }
-      } else {
-        setProfile(null)
-        setLoggerUserId(null)
-        setLoading(false)
-      }
+      }, 0)
     })
 
-    return () => subscription.unsubscribe()
+    // Zurück in die App (anderer Tab, Gerät entsperrt): Sicherheitsstufe erneut prüfen
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session?.user) return
+        evaluateMfaGate().then((gate) => {
+          if (gate === 'required') { setMfaGate('required'); setProfile(null) }
+        })
+      })
+    }
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [])
 
   async function loadProfile(userId) {
@@ -139,7 +183,7 @@ export function useAuth() {
   // Profil neu laden (z. B. nach einem neuen Gespräch oder einem 429 vom Server),
   // damit Zähler und Limit-Modal den serverseitigen Stand zeigen.
   async function refreshProfile() {
-    if (!user) return
+    if (!user || mfaGate === 'required') return
     await loadProfile(user.id)
   }
 
@@ -170,5 +214,5 @@ export function useAuth() {
     return 'valid'
   }
 
-  return { user, session, profile, loading, signUp, signIn, sendMagicLink, signOut, updateProfile, refreshProfile, checkConsent, checkCoachingAgreement }
+  return { user, session, profile, loading, mfaGate, refreshMfa: requestMfaCheck, signUp, signIn, sendMagicLink, signOut, updateProfile, refreshProfile, checkConsent, checkCoachingAgreement }
 }

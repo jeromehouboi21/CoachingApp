@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { LEARNING_CONSENT_VERSION } from '../../lib/consent'
+import { reportIfMfaRpcError } from '../../lib/mfa'
 
 const logger = createLogger('LearningConsentCard')
 const ERROR_TEXT = 'Das hat gerade nicht geklappt. Versuch es bitte noch einmal.'
@@ -38,6 +39,7 @@ export function LearningConsentCard({ profile, onChanged }) {
     })
     setBusy(false)
     if (rpcError) {
+      reportIfMfaRpcError(rpcError)
       logger.warn('learning_opt_in_failed', { code: rpcError.code ?? 'unknown', optIn: value })
       setError(ERROR_TEXT)
       return

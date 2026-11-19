@@ -33,19 +33,44 @@ export function createAdminClient(): SupabaseClient {
   return createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 }
 
-export async function requireUser(req: Request): Promise<AuthContext> {
+/**
+ * Prüft das JWT und liefert den Aufrufer.
+ * S-06b (Paket C): Hat der Nutzer einen verifizierten zweiten Faktor, wird nur eine aal2-Sitzung
+ * angenommen (403 mfa_required). allowAal1 setzt ausschließlich mfa-recovery (Wiederherstellung).
+ */
+export async function requireUser(req: Request, opts: { allowAal1?: boolean } = {}): Promise<AuthContext> {
   const token = bearerToken(req);
   if (!token) throw new HttpError(401, 'missing_token');
 
   const admin = createAdminClient();
   const { data, error } = await admin.auth.getUser(token);
   if (error || !data?.user) throw new HttpError(401, 'invalid_token');
+  const user = data.user;
+
+  if (!opts.allowAal1 && readVerifiedClaims(token).aal !== 'aal2') {
+    let factors = user.factors;
+    if (!Array.isArray(factors)) {
+      // GoTrue liefert factors sonst mit; Fallback über die Admin-API
+      const { data: list, error: listError } = await admin.auth.admin.mfa.listFactors({ userId: user.id });
+      if (listError) throw new HttpError(500, 'mfa_check_failed');
+      factors = list?.factors ?? [];
+    }
+    if (factors.some((f) => f.status === 'verified')) {
+      createLogger('auth', undefined, user.id).info('user_mfa_required');   // nicht 'mfa_required' (Admin-Alarm)
+      throw new HttpError(403, 'mfa_required');
+    }
+  }
 
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
   });
-  return { user: data.user, token, admin, userClient };
+  return { user, token, admin, userClient };
+}
+
+/** Verlangt eine aal2-Sitzung, unabhängig davon, ob ein Faktor vorhanden ist (mfa-recovery). */
+export function assertAal2(ctx: AuthContext): void {
+  if (readVerifiedClaims(ctx.token).aal !== 'aal2') throw new HttpError(403, 'mfa_required');
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

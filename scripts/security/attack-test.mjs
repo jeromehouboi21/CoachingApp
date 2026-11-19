@@ -3,6 +3,7 @@
 //
 // Aufruf:   npm run security:test
 // Optional: ATTACK_TEST_SUPERVISION=1 npm run security:test   (siehe Test 15)
+//           ATTACK_TEST_MFA=1 npm run security:test           (MFA-Lauf #34–#38 mit Testkonto B)
 //
 // Grundregeln dieses Skripts:
 // - Läuft NUR gegen die zwei Testkonten aus .env.security.local.
@@ -15,6 +16,7 @@
 // - Exit-Code 1, sobald ein FAIL dabei ist.
 
 import { createClient } from '@supabase/supabase-js';
+import { createHmac } from 'node:crypto';
 
 // ── Konfiguration ────────────────────────────────────────────────────────────
 const env = process.env;
@@ -24,6 +26,8 @@ const A = { email: env.TEST_A_EMAIL, password: env.TEST_A_PASSWORD };
 const B = { email: env.TEST_B_EMAIL, password: env.TEST_B_PASSWORD };
 // trim(): cmd.exe setzt bei 'set X=1 && …' den Wert inkl. Leerzeichen ('1 ')
 const RUN_SUPERVISION = ['1', 'true', 'yes'].includes((env.ATTACK_TEST_SUPERVISION ?? '').trim().toLowerCase());
+// MFA-Lauf (#34–#38): B richtet vorübergehend einen zweiten Faktor ein und entfernt ihn am Ende wieder
+const RUN_MFA = ['1', 'true', 'yes'].includes((env.ATTACK_TEST_MFA ?? '').trim().toLowerCase());
 
 function abort(msg) {
   console.error(`\n✖ Abbruch: ${msg}\n`);
@@ -60,7 +64,7 @@ const ALL_TABLE_NAMES = [...OWNED_TABLES.map(t => t.name), MESSAGE_TABLE.name, .
 const EDGE_FUNCTIONS = [
   'chat', 'post-conversation', 'pre-session-briefing', 'validate-invite-code',
   'delete-account', 'admin-users', 'admin-feedback', 'admin-invite-user', 'supervision', 'backfill-embeddings',
-  'export-my-data',
+  'export-my-data', 'mfa-recovery',
 ];
 
 // ── Ergebnis-Sammlung ────────────────────────────────────────────────────────
@@ -703,6 +707,137 @@ async function testsS16(a, b) {
   return r;
 }
 
+// ── S-06b (Paket C, C-5): Zweiter Faktor für alle ───────────────────────────
+// Immer: #33 Codes-Tabelle gesperrt, codes:generate ohne aal2 abgelehnt.
+// Mit ATTACK_TEST_MFA=1: #34–#38. TOTP-Schlüssel, Codes und Wiederherstellungscodes bleiben im
+// Speicher und werden nie ausgegeben. Hinweis: Das Einrichten beendet B's übrige aal1-Sitzungen
+// (z. B. im Browser), das ist Verhalten von Supabase Auth.
+
+function base32Decode(s) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const ch of s.replace(/=+$/, '').toUpperCase().replace(/\s/g, '')) {
+    const v = alphabet.indexOf(ch);
+    if (v < 0) throw new Error('base32');
+    bits += v.toString(2).padStart(5, '0');
+  }
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return Buffer.from(bytes);
+}
+/** RFC 6238 (SHA-1, 6 Stellen, 30 s) – wie jede Authenticator-App */
+function totp(secret, offsetSteps = 0) {
+  const counter = Math.floor(Date.now() / 1000 / 30) + offsetSteps;
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64BE(BigInt(counter));
+  const h = createHmac('sha1', base32Decode(secret)).update(buf).digest();
+  const o = h[h.length - 1] & 0x0f;
+  const n = ((h[o] & 0x7f) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3];
+  return String(n % 1_000_000).padStart(6, '0');
+}
+
+async function testsS06b(b) {
+  {
+    const r = await countRows(b.client, 'mfa_recovery_codes');
+    record(33, 'select mfa_recovery_codes (als B)', '0 / Fehler', noAccessOrZero(r), r.error ? errCode(r.error) : `${r.count} Zeilen`);
+  }
+  {
+    const r = await callFunction('mfa-recovery', { token: b.token, body: { action: 'codes:generate' } });
+    record(33, 'mfa-recovery codes:generate ohne aal2 (als B)', '403 mfa_required',
+      r.status === 403 && r.json?.error === 'mfa_required' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+  }
+}
+
+async function testsMfaRun(b) {
+  if (!RUN_MFA) {
+    record('34-38', 'MFA-Lauf (Einrichten, aal1-Sperre, Wiederherstellung)', 'alle PASS', SKIP, 'ATTACK_TEST_MFA=1 setzen');
+    return;
+  }
+  // aal2-Client von B, mit dem am Ende aufgeräumt wird (disable). Startet als B's normale Sitzung.
+  const mfaClient = newClient();
+  const { data: login, error: loginErr } = await mfaClient.auth.signInWithPassword({ email: B.email, password: B.password });
+  if (loginErr || !login?.session) { record(34, 'MFA-Lauf: Anmeldung B', 'ok', FAIL, errCode(loginErr)); return; }
+  let aal2Token = null;
+
+  try {
+    // 34: Faktor einrichten
+    const { data: enroll, error: enrollErr } = await mfaClient.auth.mfa.enroll({ factorType: 'totp', friendlyName: `SECTEST ${Date.now()}` });
+    if (enrollErr || !enroll?.totp?.secret) { record(34, 'MFA einrichten (als B)', 'ok', FAIL, errCode(enrollErr)); return; }
+    const secret = enroll.totp.secret;
+    const { error: verErr } = await mfaClient.auth.mfa.challengeAndVerify({ factorId: enroll.id, code: totp(secret) });
+    if (verErr) { record(34, 'MFA einrichten (als B)', 'ok', FAIL, errCode(verErr)); return; }
+    aal2Token = (await mfaClient.auth.getSession()).data.session?.access_token ?? null;
+
+    // Neue Anmeldung mit Passwort → aal1 mit Faktor
+    const b1 = await signIn('B (aal1)', B);
+    {
+      const r = await countRows(b1.client, 'conversations', (q) => q.eq('user_id', b.userId));
+      record(34, 'aal1 mit Faktor: select conversations', '0 Zeilen', !r.network && (r.error || r.count === 0) ? PASS : FAIL,
+        r.error ? errCode(r.error) : `zeilen=${r.count}`);
+    }
+    {
+      const r = await callFunction('chat', { token: b1.token, body: {} });
+      record(34, 'aal1 mit Faktor: chat', '403 mfa_required', r.status === 403 && r.json?.error === 'mfa_required' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+    }
+    {
+      const r = await callFunction('export-my-data', { token: b1.token, body: {} });
+      record(34, 'aal1 mit Faktor: export-my-data', '403 mfa_required', r.status === 403 && r.json?.error === 'mfa_required' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+    }
+    {
+      const { error } = await b1.client.rpc('confirm_age');
+      record(34, 'aal1 mit Faktor: rpc confirm_age', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'ok');
+    }
+
+    // 35: falscher Wiederherstellungscode
+    {
+      const r = await callFunction('mfa-recovery', { token: b1.token, body: { action: 'recover', code: 'AAAAA-AAAAA' } });
+      record(35, 'mfa-recovery recover mit falschem Code', '400 invalid_code', r.status === 400 && r.json?.error === 'invalid_code' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+    }
+
+    // 36: aal2 über Challenge + Verify (nächstes Zeitfenster, falls der Code schon benutzt wurde)
+    {
+      let { error } = await b1.client.auth.mfa.challengeAndVerify({ factorId: enroll.id, code: totp(secret) });
+      if (error) ({ error } = await b1.client.auth.mfa.challengeAndVerify({ factorId: enroll.id, code: totp(secret, 1) }));
+      const token2 = (await b1.client.auth.getSession()).data.session?.access_token;
+      if (!error && token2) aal2Token = token2;
+      const c2 = newClient(token2);
+      const r = await countRows(c2, 'conversations', (q) => q.eq('user_id', b.userId));
+      record(36, 'aal2: select conversations', '> 0 Zeilen', !error && !r.error && r.count > 0 ? PASS : FAIL, error ? errCode(error) : `zeilen=${r.count}`);
+      const p = await callFunction('pre-session-briefing', { token: token2, body: {} });
+      record(36, 'aal2: pre-session-briefing', 'HTTP 200', p.status === 200 ? PASS : FAIL, `HTTP ${p.status}`);
+    }
+
+    // 37: Codes erzeugen → mit einem Code wiederherstellen → Faktoren weg, derselbe Code erneut → 400
+    {
+      const g = await callFunction('mfa-recovery', { token: aal2Token, body: { action: 'codes:generate' } });
+      const codes = Array.isArray(g.json?.codes) ? g.json.codes : [];
+      record(37, 'codes:generate (aal2)', '10 Codes', g.status === 200 && codes.length === 10 ? PASS : FAIL, `HTTP ${g.status}, codes=${codes.length}`);
+      if (codes.length) {
+        const b2 = await signIn('B (aal1, Wiederherstellung)', B);
+        const rec = await callFunction('mfa-recovery', { token: b2.token, body: { action: 'recover', code: codes[0] } });
+        const b3 = await signIn('B (nach Wiederherstellung)', B);
+        const { data: lf } = await b3.client.auth.mfa.listFactors();
+        const left = (lf?.all ?? []).length;
+        record(37, 'recover mit gültigem Code', '200, Faktoren = 0', rec.status === 200 && left === 0 ? PASS : FAIL, `HTTP ${rec.status}, faktoren=${left}`);
+        const again = await callFunction('mfa-recovery', { token: b3.token, body: { action: 'recover', code: codes[0] } });
+        record(37, 'recover mit demselben Code erneut', '400 invalid_code', again.status === 400 ? PASS : FAIL, `HTTP ${again.status}`);
+      }
+    }
+  } finally {
+    // 38: Aufräumen, unabhängig vom Ergebnis
+    let cleanup = 'kein aal2-Token';
+    if (aal2Token) {
+      const d = await callFunction('mfa-recovery', { token: aal2Token, body: { action: 'disable' } });
+      cleanup = `disable HTTP ${d.status}`;
+    }
+    const check = await signIn('B (Kontrolle)', B);
+    const { data: lf } = await check.client.auth.mfa.listFactors();
+    const left = (lf?.all ?? []).length;
+    record(38, 'Aufräumen: B ohne Faktor', 'Faktoren = 0', left === 0 ? PASS : FAIL, `${cleanup}, faktoren=${left}`);
+    await check.client.auth.signOut({ scope: 'local' });
+  }
+}
+
 async function testsRateLimits(a, b) {
   // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
   // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
@@ -807,8 +942,10 @@ function printResults() {
   await testsHeaders();
   await testsS22(b);
   const exportResult = await testsS16(a, b);
+  await testsS06b(b);
   await testsRateLimits(a, b);
-  await testsRegion(b, exportResult);   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
+  await testsRegion(b, exportResult);
+  await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen
   // der Testkonten auf anderen Geräten (Standard von signOut() ist 'global').

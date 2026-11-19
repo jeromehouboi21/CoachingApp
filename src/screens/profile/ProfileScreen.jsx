@@ -7,6 +7,7 @@ import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSqua
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
+import { SecurityCard } from '../../components/profile/SecurityCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
 
@@ -151,6 +152,9 @@ export function ProfileScreen() {
 
       {/* Datenschutz: Beitrag zur Lernbasis (S-13) */}
       <LearningConsentCard profile={profile} onChanged={refreshProfile} />
+
+      {/* Sicherheit: zweiter Faktor für alle (S-06b) */}
+      <SecurityCard />
 
       {/* Settings */}
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">

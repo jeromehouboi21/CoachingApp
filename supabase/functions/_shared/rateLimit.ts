@@ -27,6 +27,10 @@ export const RATE_LIMITS = {
                   { bucket: 'invite_day', limit: 10, window_seconds: DAY }],
   // Datenexport (S-16), fail-closed
   export:        [{ bucket: 'export_day', limit: 3, window_seconds: DAY }],
+  // Zweiter Faktor (S-06b), beide fail-closed
+  mfaCodes:      [{ bucket: 'mfa_codes_day', limit: 5, window_seconds: DAY }],
+  mfaRecover:    [{ bucket: 'mfa_recover_hour', limit: 5, window_seconds: HOUR },
+                  { bucket: 'mfa_recover_day', limit: 10, window_seconds: DAY }],
 } satisfies Record<string, RateRule[]>;
 
 export class RateLimitError extends HttpError {

@@ -46,3 +46,6 @@ verify_jwt = false
 
 [functions.export-my-data]
 verify_jwt = false
+
+[functions.mfa-recovery]
+verify_jwt = false

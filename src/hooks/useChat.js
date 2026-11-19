@@ -4,6 +4,7 @@ import { OPENING_MESSAGES, FIRST_OPENING_MESSAGE } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 import { readRateLimit, rateLimitMessage } from '../lib/rateLimit'
 import { functionHeaders, functionUrl } from '../lib/functions'
+import { checkMfaResponse } from '../lib/mfa'
 
 const logger = createLogger('useChat')
 const CHAT_URL = functionUrl('chat')
@@ -16,12 +17,14 @@ function generateRequestId() {
   return crypto.randomUUID().slice(0, 8)
 }
 
-function postChat(accessToken, body) {
-  return fetch(CHAT_URL, {
+async function postChat(accessToken, body) {
+  const res = await fetch(CHAT_URL, {
     method: 'POST',
     headers: functionHeaders(accessToken),
     body: JSON.stringify(body),
   })
+  await checkMfaResponse(res)   // 403 mfa_required → Code-Abfrage (S-06b)
+  return res
 }
 
 async function isClientOutdated(response) {

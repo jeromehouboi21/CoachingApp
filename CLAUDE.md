@@ -267,6 +267,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | `security-monitor` | Cron stündlich :07 (`x-cron-secret`) | Monitoring S-22: Log-Codes zählen (`_shared/monitorRules.ts`), Lebenszeichen der Cron-Jobs, Alarm-Mail über One.com-SMTP 465, montags Wochenübersicht (nur intern) |
 | `admin-security` | Admin-Tab „Sicherheit“ | Alarme + Wochenübersicht (`requireAdmin`, aal2) |
 | `export-my-data` | Profil → „Meine Daten herunterladen“ | Selbstauskunft S-16: alle eigenen Daten als JSON (`EXPORT_TABLES`), `requireUser`, 3/Tag fail-closed, `export_incomplete` bei Teilausfall |
+| `mfa-recovery` | Profil → Sicherheit, Code-Abfrage | Zweiter Faktor für alle (S-06b): `codes:generate` (aal2, 10 Codes, HMAC mit `MFA_CODE_PEPPER`) · `recover` (auch aal1, entfernt alle Faktoren) · `disable` (aal2) |
 | `backfill-embeddings` | Manuell (SQL-Editor, `net.http_post` + Vault-Secret) | Wartung: fehlende Vektoren in experience_patterns nachtragen (nur intern) |
 | `admin-users` / `admin-feedback` / `admin-invite-user` | Admin-Bereich | nur mit `is_admin` **und** zweitem Faktor (`aal2`, S-06) |
 
@@ -421,7 +422,7 @@ perfektionismus_blockade → Perfektionismus-Blockade
 
 Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** über RPC `consume_session` in der `chat`-Function (idempotent pro Konversation, `conversations.session_counted_at`) · Reset: Cron-Job `reset-monthly-sessions` am 1. des Monats (seit Migration 023) · Limit gilt für alle außer `plan = 'premium'`; Krisenantwort, Howto-FAQ und Gedächtnis-Extraktion sind ausgenommen
 
-**Rate-Limits pro Nutzer** (Migration 029, RPC `consume_rate_limits`, Werte zentral in `supabase/functions/_shared/rateLimit.ts`): `chat` Gespräch 10/Minute + 200/Tag · Howto 30/Stunde · Extraktion 30/Tag · `post-conversation` 60/Tag · `validate-invite-code` 5/Stunde + 10/Tag · `export-my-data` 3/Tag (fail-closed). Antwort `429 { error: 'rate_limited', retryAfter }` + `Retry-After`-Header; das Frontend zeigt dann einen Hinweis inkl. Telefonseelsorge statt des Limit-Modals (`src/lib/rateLimit.js`). chat/post-conversation fail-open bei DB-Fehler (protokolliert), Invite-Code fail-closed. Zähler werden täglich nach 2 Tagen gelöscht (Cron `purge-rate-limits`).
+**Rate-Limits pro Nutzer** (Migration 029, RPC `consume_rate_limits`, Werte zentral in `supabase/functions/_shared/rateLimit.ts`): `chat` Gespräch 10/Minute + 200/Tag · Howto 30/Stunde · Extraktion 30/Tag · `post-conversation` 60/Tag · `validate-invite-code` 5/Stunde + 10/Tag · `export-my-data` 3/Tag (fail-closed) · `mfa-recovery` Codes 5/Tag, Wiederherstellung 5/Stunde + 10/Tag (fail-closed). Antwort `429 { error: 'rate_limited', retryAfter }` + `Retry-After`-Header; das Frontend zeigt dann einen Hinweis inkl. Telefonseelsorge statt des Limit-Modals (`src/lib/rateLimit.js`). chat/post-conversation fail-open bei DB-Fehler (protokolliert), Invite-Code fail-closed. Zähler werden täglich nach 2 Tagen gelöscht (Cron `purge-rate-limits`).
 
 ---
 
@@ -449,6 +450,7 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 
 ### Sicherheitsmuster (Security-Paket A, Pflicht)
 - **Jede Edge Function** ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` (Cron) aus `supabase/functions/_shared/auth.ts` auf; Admin-Functions zusätzlich `requireAdmin(ctx)` — das verlangt seit S-06 auch den zweiten Faktor (`aal2`), Frontend dazu: `AdminRoute` + `AdminMfaScreen` + `useAdminMfa`.
+- **Zweiter Faktor für alle (S-06b, Migration 037):** `requireUser` verlangt aal2, sobald der Nutzer einen verifizierten Faktor hat (`403 mfa_required`, Log `user_mfa_required`); `allowAal1` nur für `mfa-recovery`. Jede neue Tabelle mit Client-Rechten bekommt die restriktive Policy `mfa_required` (`using/with check ((select public.mfa_satisfied()))`), jede neue Client-RPC mit SECURITY DEFINER prüft zuerst `public.mfa_satisfied()`. Frontend: Code-Abfrage über `useAuth.mfaGate` **vor** dem Profil-Laden (`MfaChallengeScreen`), Bausteine in `src/components/mfa/`, Logik in `src/lib/mfa.js`.
 - Identität **nur** aus dem JWT (`ctx.user.id`), nie aus Body-Feldern wie `userId`. Jede `conversationId` mit `assertConversationOwner()` prüfen, bevor gelesen oder geschrieben wird. IDs aus Modellausgaben nur übernehmen, wenn sie dem Nutzer gehören; Writes über `admin` zusätzlich mit `.eq('user_id', userId)`.
 - `admin` = echter service_role-Client ohne Nutzer-Token; `userClient` = Rolle `authenticated` (für RPCs mit `auth.uid()`, z. B. `consume_session`).
 - Fehlerantworten nur als `{ error: <code> }` (`errorResponse`), keine `error.message`-Texte an den Client.
@@ -491,6 +493,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...        # optional, für Embeddings
 SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
 CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault als 'cron_secret'
+MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellungscodes (≥ 32 Zeichen, offline sichern)
 ```
 
 ---
@@ -524,6 +527,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `034_s22_security_monitoring.sql` | app_logs.origin (Trigger, server/client) · security_alerts · RPC security_log_counts (nur service_role) · Cron security-monitor + purge-security-alerts |
 | `035_u3_insight_surfacing.sql` | insights.surfaced_at · confirmed_at · dismissed_at + Index (user_id, created_at) · Zielbild U3 (Paket C rückt auf 036/037) |
 | `036_s11_privacy_fixes.sql` | S-11: user_feedback/feedback_surveys nur mit consent_given (RLS) · profiles.age_confirmed_at + RPC confirm_age · Schutz-Trigger/handle_new_user angepasst · consent_ip entfernt · apply_retention + feedback_surveys 24 Monate |
+| `037_s06b_user_mfa.sql` | S-06b: `mfa_satisfied()` · restriktive Policy `mfa_required` auf allen Client-Tabellen (ohne app_logs) · set_learning_opt_in/confirm_age mit MFA-Prüfung · `mfa_recovery_codes` (nur Hash, nur service_role) |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.
 

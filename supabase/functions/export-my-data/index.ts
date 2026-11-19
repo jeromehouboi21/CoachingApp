@@ -29,6 +29,7 @@ interface ExportTable {
 // source_user_id oder conversation_id → hier eintragen oder in EXCLUDED_TABLES begründen.
 export const EXPORT_TABLES: ExportTable[] = [
   { table: 'profiles',            group: 'konto',              filter: 'id',              order: ['id'] },
+  { table: 'mfa_recovery_codes',  group: 'konto',              filter: 'user_id',         order: ['created_at', 'id'] },   // ohne code_hash
   { table: 'conversations',       group: 'gespraeche',         filter: 'user_id',         order: ['created_at', 'id'] },
   { table: 'messages',            group: 'gespraeche',         filter: 'conversation_id', order: ['created_at', 'id'] },
   { table: 'insights',            group: 'spiegel_akte',       filter: 'user_id',         order: ['created_at', 'id'] },
@@ -60,7 +61,7 @@ export const EXCLUDED_TABLES: Record<string, string> = {
 const DROP_COLUMNS = new Set(['embedding', 'code_hash', 'invited_by']);
 
 const GROUP_INFO: Record<string, string> = {
-  konto: 'Dein Konto: E-Mail-Adresse, Anlage- und Anmeldezeitpunkte, eingerichtete zweite Faktoren (ohne Geheimnisse) und dein Profil mit Einwilligungen.',
+  konto: 'Dein Konto: E-Mail-Adresse, Anlage- und Anmeldezeitpunkte, eingerichtete zweite Faktoren (ohne Geheimnisse), wann Wiederherstellungscodes erzeugt und verwendet wurden (ohne die Codes) und dein Profil mit Einwilligungen.',
   gespraeche: 'Alle deine Gespräche mit dem Coach, mit jeder Nachricht von dir und vom Coach.',
   spiegel_akte: 'Was im Spiegel steht und was der Coach sich über dich merkt: Erkenntnisse, Akte-Einträge, Personenprofil, erkannte Muster und Innere Stimmen.',
   coach_notizen: 'Die Notizen, die der Coach im Hintergrund führt: Gesprächsnotizen, Resonanzkarte und seine Selbstreflexion zu deinen Gesprächen.',
@@ -189,7 +190,7 @@ Deno.serve(async (req) => {
     if (authUser.email) {
       const mail = sendMail(authUser.email, 'Dein Datenexport wurde erstellt',
         'Hallo,\n\nfür dein Friedensstifter-Konto wurde gerade ein Datenexport erstellt und heruntergeladen.\n\n' +
-        'Warst du das nicht? Dann ändere bitte dein Passwort und melde dich bei jerome@houboi.de.\n\nFriedensstifter')
+        'Warst du das nicht? Antworte auf diese Mail, dann schauen wir gemeinsam darauf.\n\nFriedensstifter')
         .then((r) => { if (!r.ok) logger.warn('export_mail_failed', { code: r.code ?? 'unknown' }); })
         .catch((e) => logger.warn('export_mail_failed', describeError(e)));
       // deno-lint-ignore no-explicit-any

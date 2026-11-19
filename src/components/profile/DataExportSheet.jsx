@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
+import { checkMfaResponse } from '../../lib/mfa'
 
 const logger = createLogger('DataExportSheet')
 
@@ -33,6 +34,7 @@ export function DataExportSheet({ onClose }) {
         return
       }
       if (!res.ok) {
+        await checkMfaResponse(res)   // 403 mfa_required → Code-Abfrage (S-06b)
         let code = 'unknown'
         try { code = (await res.json())?.error ?? code } catch { /* Antwort ohne JSON */ }
         logger.error('export_request_failed', { status: res.status, code })

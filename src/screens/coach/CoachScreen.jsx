@@ -18,6 +18,7 @@ import { ProfileButton } from '../../components/layout/ProfileButton'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { functionHeaders, functionUrl } from '../../lib/functions'
+import { checkMfaResponse } from '../../lib/mfa'
 
 const logger = createLogger('CoachScreen')
 
@@ -133,6 +134,7 @@ export function CoachScreen() {
       body: JSON.stringify({}),
     })
     if (!response.ok) {
+      await checkMfaResponse(response)   // 403 mfa_required → Code-Abfrage (S-06b)
       logger.warn('entry_data_failed', { status: response.status })
       return null
     }

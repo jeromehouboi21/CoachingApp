@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
+import { reportIfMfaRpcError } from '../../lib/mfa'
 
 const logger = createLogger('AgeConfirmSheet')
 
@@ -19,6 +20,7 @@ export function AgeConfirmSheet({ onConfirmed, onGoToProfile }) {
     const { error } = await supabase.rpc('confirm_age')
     setBusy(false)
     if (error) {
+      reportIfMfaRpcError(error)
       logger.error('confirm_age_failed', { code: error.code })
       setFailed(true)
       return

@@ -21,6 +21,7 @@ import { BetaSurveyScreen } from './screens/feedback/BetaSurveyScreen'
 import { ImpressumScreen } from './screens/legal/ImpressumScreen'
 import { DatenschutzScreen } from './screens/legal/DatenschutzScreen'
 import { CoachingAgreementScreen } from './screens/legal/CoachingAgreementScreen'
+import { MfaChallengeScreen } from './screens/auth/MfaChallengeScreen'
 
 function LoadingScreen() {
   return (
@@ -41,9 +42,11 @@ function LegacyPatternRedirect() {
 }
 
 function ProtectedRoute({ children }) {
-  const { user, profile, loading, checkCoachingAgreement } = useAuth()
+  const { user, profile, loading, mfaGate, checkCoachingAgreement } = useAuth()
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/landing" replace />
+  // S-06b: Code-Abfrage vor allem anderen – ein leeres Profil heißt hier NICHT „Onboarding“
+  if (mfaGate === 'required') return <MfaChallengeScreen />
   // Eingeladene Nutzer sind zwar authentifiziert, haben die Coaching-
   // Vereinbarung aber ggf. noch nicht akzeptiert — dann zurück ins Onboarding
   // statt in die App zu lassen.
@@ -64,9 +67,21 @@ function AdminRoute({ children }) {
 }
 
 export default function App() {
-  const { user, profile, loading, checkCoachingAgreement } = useAuth()
+  const { user, profile, loading, mfaGate, checkCoachingAgreement } = useAuth()
 
   if (loading) return <LoadingScreen />
+
+  // S-06b: Angemeldet mit aal1, aber zweiter Faktor vorhanden → nur Code-Abfrage und Rechtliches.
+  // Steht hier (nicht nur in ProtectedRoute), damit /onboarding mit leerem Profil nicht greift.
+  if (user && mfaGate === 'required') {
+    return (
+      <Routes>
+        <Route path="/impressum" element={<ImpressumScreen />} />
+        <Route path="/datenschutz" element={<DatenschutzScreen />} />
+        <Route path="*" element={<MfaChallengeScreen />} />
+      </Routes>
+    )
+  }
 
   const onboardingDone = user && checkCoachingAgreement(profile) === 'valid'
 
