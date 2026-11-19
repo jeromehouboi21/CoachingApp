@@ -34,13 +34,16 @@ export function SecurityTab({ adminGet }) {
   if (!data) return null
 
   const { alerts = [], digest, lastRunAt, labels = {} } = data
-  const runStale = !lastRunAt || Date.now() - new Date(lastRunAt).getTime() > RUN_STALE_MS
+  // Ohne bisherigen Lauf (z. B. direkt nach dem Deploy) ist das kein Fehler; rot nur, wenn der letzte Lauf zu alt ist
+  const runStale = !!lastRunAt && Date.now() - new Date(lastRunAt).getTime() > RUN_STALE_MS
   const counts = digest?.details?.counts ?? {}
 
   return (
     <div className="mt-4 flex flex-col gap-6">
       <p className={`text-[13px] ${runStale ? 'text-[var(--color-coral)]' : 'text-ink-3'}`}>
-        Letzter Monitor-Lauf: {lastRunAt ? formatDate(lastRunAt) : 'noch keiner'}
+        {lastRunAt
+          ? <>Letzter Monitor-Lauf: {formatDate(lastRunAt)}</>
+          : 'Noch kein Monitor-Lauf. Der erste kommt zur nächsten vollen Stunde, 7 Minuten danach.'}
         {runStale && ' – der stündliche Lauf ist überfällig. Cron-Job security-monitor prüfen.'}
       </p>
 
