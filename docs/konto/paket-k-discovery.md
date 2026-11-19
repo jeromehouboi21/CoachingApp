@@ -81,3 +81,9 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - Sicherheitsseite angepasst: „Deine Daten liegen in einem Rechenzentrum in Irland, also innerhalb der EU.“ (live); S-09: „… laufen in der EU.“
 - R-2-Vorschlag im Paket-C-Abschlussbericht korrigiert (Frankfurt-Satz war falsch).
 - **Offen (Entscheidung Jerome):** Function-Region auf `eu-west-1` umstellen, damit Functions neben der Datenbank laufen.
+
+## W2 – Befund Drittanbieter (20.11.2026)
+
+- **OpenAI-Schlüssel ist gesetzt** (Supabase-Secrets, von Jerome per Screenshot bestätigt, nur Prüfsummen sichtbar). Damit gehen die erste Nachricht jedes Gesprächs (RAG-Suche) und – mit Opt-in – die geprüften Lernbasis-Einträge zur Vektorberechnung an OpenAI.
+- **Die Datenschutzerklärung nennt OpenAI nicht** (`DatenschutzScreen.jsx` erwähnt nur Anthropic). → Für R-2/R-3: OpenAI als Empfänger bzw. Auftragsverarbeiter aufnehmen (Zweck, Rechtsgrundlage, Speicherfrist laut Vertrag). Die Sicherheitsseite zeigt den OpenAI-Satz erst danach (`text_offen`).
+- **Widersprüchliche Aussagen zu Anthropic:** `DatenschutzScreen.jsx:107` sagt „Es gilt die Zero Data Retention Policy von Anthropic“, das Löschmodal im Profil (`ProfileScreen.jsx`) sagt „Deine Daten bei Anthropic (API-Logs) werden nach 30 Tagen automatisch von Anthropic gelöscht“. Zero Data Retention gilt bei Anthropic nur mit einer ausdrücklichen Vereinbarung. → Für R-3 klären, welche Aussage für den eigenen Vertrag stimmt; danach beide Stellen und den Anthropic-Satz der Sicherheitsseite einheitlich fassen. Keine Textänderung durch Claude Code (Handoff, Spielregel 4).
