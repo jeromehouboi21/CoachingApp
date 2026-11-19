@@ -22,6 +22,8 @@ import { ImpressumScreen } from './screens/legal/ImpressumScreen'
 import { DatenschutzScreen } from './screens/legal/DatenschutzScreen'
 import { CoachingAgreementScreen } from './screens/legal/CoachingAgreementScreen'
 import { MfaChallengeScreen } from './screens/auth/MfaChallengeScreen'
+import { PasswordChangeScreen } from './screens/account/PasswordChangeScreen'
+import { PasswordResetScreen } from './screens/account/PasswordResetScreen'
 
 function LoadingScreen() {
   return (
@@ -116,6 +118,10 @@ export default function App() {
 
       {/* Coaching-Vereinbarung: nachträglicher Rückblick inkl. Zustimmungsdatum, nur eingeloggt sinnvoll */}
       <Route path="/vereinbarung" element={<ProtectedRoute><CoachingAgreementScreen /></ProtectedRoute>} />
+
+      {/* Paket K W1: Passwort ändern (geschützt) und neues Passwort nach dem Reset-Link (eigene Sitzungsprüfung) */}
+      <Route path="/profil/passwort" element={<ProtectedRoute><PasswordChangeScreen /></ProtectedRoute>} />
+      <Route path="/passwort-neu" element={<PasswordResetScreen />} />
 
       {/* Startadresse: angemeldet → Heute (/home), sonst Landing (U1, E-U1-1) */}
       <Route path="/" element={user ? <Navigate to="/home" replace /> : <Navigate to="/landing" replace />} />

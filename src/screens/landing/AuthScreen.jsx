@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
+import { ForgotPasswordForm } from '../../components/auth/ForgotPasswordForm'
 
 export function AuthScreen() {
   const navigate = useNavigate()
   // Registrierung läuft ausschließlich über /onboarding (Einwilligung + Vereinbarung).
   // Dieser Screen ist nur noch für die Anmeldung bestehender Konten.
   const { signIn, sendMagicLink } = useAuth()
-  const [mode, setMode] = useState('login') // login | magic
+  const [mode, setMode] = useState('login') // login | magic | forgot (Paket K W1)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -81,7 +82,9 @@ export function AuthScreen() {
           Alles, was du hier teilst, bleibt bei dir. Keine Weitergabe. Keine Werbung.
         </p>
 
-        {mode === 'magic' ? (
+        {mode === 'forgot' ? (
+          <ForgotPasswordForm onCancel={() => setMode('login')} />
+        ) : mode === 'magic' ? (
           <form onSubmit={handleMagicLink} className="flex flex-col gap-3">
             <div>
               <label className="text-[12px] text-ink-3 font-medium uppercase tracking-wide block mb-1.5">E-Mail</label>
@@ -123,7 +126,8 @@ export function AuthScreen() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  placeholder="Mindestens 8 Zeichen"
+                  autoComplete="current-password"
+                  placeholder="Dein Passwort"
                   className="w-full bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 pr-12 text-[15px] text-ink placeholder:text-ink-3 outline-none focus:border-accent transition-colors"
                 />
                 <button
@@ -135,6 +139,13 @@ export function AuthScreen() {
                 </button>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => { setError(''); setMode('forgot') }}
+              className="text-[13px] text-accent self-start -mt-1 hover:underline"
+            >
+              Passwort vergessen?
+            </button>
             {error && <p className="text-[13px] text-coral">{error}</p>}
             <Button type="submit" variant="primary" className="w-full py-4 mt-2" disabled={loading}>
               {loading ? 'Lädt…' : 'Anmelden'}

@@ -53,6 +53,10 @@ export const RULES: Rule[] = [
   // Gesprächseinstieg U3:
   { id: 'resume_started',          codes: ['resume_started'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Gespräch weitergeführt (Einstieg)' },
   { id: 'resume_rejected',         codes: ['resume_rejected'],         windowMin: 10080, threshold: 0, infoOnly: true, label: 'Weiterführen abgelehnt (kein eigener Beitrag)' },
+  // Passwort Paket K W1 (Ereignisse aus dem Frontend → origin client, nur Wochenübersicht):
+  { id: 'password_changed',        codes: ['password_changed', 'password_reset_done'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Passwort geändert bzw. neu gesetzt' },
+  { id: 'password_change_failed',  codes: ['password_change_failed', 'password_reset_failed', 'invite_password_failed'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Passwort ändern gescheitert' },
+  { id: 'password_reset_requests', codes: ['password_reset_request_failed', 'signout_others_failed'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Reset-Link bzw. Abmelden anderer Geräte gescheitert' },
   // Weiterarbeiten U5a:
   { id: 'weiterarbeiten_started',  codes: ['weiterarbeiten_started'],  windowMin: 10080, threshold: 0, infoOnly: true, label: 'An einer Erkenntnis weitergearbeitet' },
   { id: 'weiterarbeiten_rejected', codes: ['weiterarbeiten_rejected'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Weiterarbeiten abgelehnt (fremd, anderes Gespräch, „Teile ich nicht“)' },

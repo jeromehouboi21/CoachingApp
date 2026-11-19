@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 import { createLogger } from '../../lib/logger'
 import { functionHeaders, functionUrl } from '../../lib/functions'
+import { PASSWORD_HINT, PASSWORD_MESSAGES, checkNewPassword, mapAuthError } from '../../lib/passwordPolicy'
 
 const logger = createLogger('Step4Auth')
 
@@ -35,6 +36,9 @@ export function Step4Auth({ onSuccess, onboardingData }) {
     e.preventDefault()
     if (!consentPrivacy || !consentSensitive || !ageConfirmed) return   // zweite Linie zum inaktiven Button
     setError('')
+    // Paket K W1 (D-2): gleiche Passwortregel wie im Dashboard (12 Zeichen), deutsche Texte
+    const tooShort = checkNewPassword(password)
+    if (tooShort) { setError(PASSWORD_MESSAGES[tooShort]); return }
     setLoading('register')
     try {
       // Einwilligung, Coaching-Vereinbarung und Onboarding-Antworten gehen als
@@ -83,7 +87,8 @@ export function Step4Auth({ onSuccess, onboardingData }) {
 
       onSuccess()
     } catch (err) {
-      setError(err.message)
+      const key = mapAuthError(err)
+      setError(key === 'weak_password' || key === 'rate_limited' ? PASSWORD_MESSAGES[key] : err.message)
     } finally {
       setLoading('')
     }
@@ -173,8 +178,10 @@ export function Step4Auth({ onSuccess, onboardingData }) {
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
+            autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
             className="w-full bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 text-[15px] text-ink placeholder:text-ink-3 outline-none focus:border-accent transition-colors"
           />
+          {mode === 'register' && <p className="text-[12px] text-ink-3 -mt-1">{PASSWORD_HINT}</p>}
           {mode === 'register' && (
             <div>
               {!showInviteField ? (

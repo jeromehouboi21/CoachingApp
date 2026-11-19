@@ -3,6 +3,8 @@ import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { createLogger } from '../../lib/logger'
+import { PASSWORD_HINT, PASSWORD_MESSAGES, PASSWORD_MIN_LENGTH, checkNewPassword, mapAuthError } from '../../lib/passwordPolicy'
 
 const StepDots = ({ current, total }) => (
   <div className="flex gap-2">
@@ -11,6 +13,8 @@ const StepDots = ({ current, total }) => (
     ))}
   </div>
 )
+
+const logger = createLogger('InvitedSetPassword')
 
 export function InvitedSetPassword({ onSuccess }) {
   const { updateProfile } = useAuth()
@@ -23,11 +27,20 @@ export function InvitedSetPassword({ onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    // Paket K W1 (D-2): gleiche Passwortregel wie im Dashboard
+    const tooShort = checkNewPassword(password)
+    if (tooShort) { setError(PASSWORD_MESSAGES[tooShort]); return }
     setLoading(true)
     try {
       // Passwort für die bereits bestehende Invite-Session setzen.
       const { error: updateUserError } = await supabase.auth.updateUser({ password })
-      if (updateUserError) throw updateUserError
+      if (updateUserError) {
+        // Erstes Passwort: kein aktuelles Passwort vorhanden. Scheitert das mit „Require current password“
+        // im Dashboard, steht der Code im Log (D-3) – nie das Passwort.
+        logger.warn('invite_password_failed', { code: updateUserError.code ?? 'unknown', status: updateUserError.status ?? null })
+        setError(PASSWORD_MESSAGES[mapAuthError(updateUserError) === 'current_password_wrong' ? 'generic' : mapAuthError(updateUserError)])
+        return
+      }
 
       await updateProfile({
         onboarding_completed: true,
@@ -64,9 +77,11 @@ export function InvitedSetPassword({ onSuccess }) {
           value={password}
           onChange={e => setPassword(e.target.value)}
           required
-          minLength={6}
+          minLength={PASSWORD_MIN_LENGTH}
+          autoComplete="new-password"
           className="w-full bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 text-[15px] text-ink placeholder:text-ink-3 outline-none focus:border-accent transition-colors"
         />
+        <p className="text-[12px] text-ink-3 -mt-1">{PASSWORD_HINT}</p>
 
         <div className="flex flex-col gap-3 mt-1">
           <label className="flex items-start gap-3 cursor-pointer">
@@ -103,7 +118,7 @@ export function InvitedSetPassword({ onSuccess }) {
           type="submit"
           variant="primary"
           className="w-full py-4 text-base"
-          disabled={loading || !consentPrivacy || !consentSensitive || password.length < 6}
+          disabled={loading || !consentPrivacy || !consentSensitive || password.length < PASSWORD_MIN_LENGTH}
         >
           {loading ? 'Wird gespeichert…' : 'Loslegen'}
         </Button>

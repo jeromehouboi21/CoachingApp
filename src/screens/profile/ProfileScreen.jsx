@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { useAccessState } from '../../lib/accessState'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
@@ -174,6 +174,7 @@ export function ProfileScreen() {
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setBetaConsent(false); setBetaError(false); setShowBetaModal(true) } }] : []),
           ...(profile?.plan === 'tester' || profile?.plan === 'premium' ? [{ icon: ClipboardList, label: 'Beta-Fragebogen ausfüllen', action: () => navigate('/feedback') }] : []),
           { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },
+          { icon: KeyRound, label: 'Passwort', action: () => navigate('/profil/passwort') },   // Paket K W1, bis W2 hier
           { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
           { icon: Download, label: 'Meine Daten herunterladen', action: () => setShowExportSheet(true) },
           { icon: FileText, label: 'Impressum', action: () => navigate('/impressum') },

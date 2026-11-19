@@ -833,6 +833,45 @@ async function testsU5a(a, b) {
   }
 }
 
+// ── Paket K W1: Passwort ─────────────────────────────────────────────────────
+// K1/K2 belegen die Dashboard-Einstellung „Require current password when updating“.
+// Sollte eine Änderung trotzdem durchgehen, bekommt B sofort sein Passwort zurück.
+// K3: Reset-Anfrage für eine unbekannte Adresse unterscheidet sich nicht von einer bekannten.
+async function testsK(b) {
+  const tmp = `SECTEST-${crypto.randomUUID()}`;
+  const restore = async () => {
+    let { error } = await b.client.auth.updateUser({ password: B.password, current_password: tmp });
+    if (error) ({ error } = await b.client.auth.updateUser({ password: B.password }));
+    return !error;
+  };
+  {
+    const { error } = await b.client.auth.updateUser({ password: tmp });
+    let detail = error ? (error.code || `HTTP ${error.status}`) : 'geändert';
+    if (!error) detail += (await restore()) ? ', zurückgesetzt' : ', ZURÜCKSETZEN FEHLGESCHLAGEN – B manuell zurücksetzen';
+    record('K1', 'Passwort ändern ohne aktuelles Passwort (als B)', 'Fehler', error ? PASS : FAIL, detail);
+  }
+  {
+    const { error } = await b.client.auth.updateUser({ password: tmp, current_password: `falsch-${crypto.randomUUID()}` });
+    let detail = error ? (error.code || `HTTP ${error.status}`) : 'geändert';
+    if (!error) detail += (await restore()) ? ', zurückgesetzt' : ', ZURÜCKSETZEN FEHLGESCHLAGEN – B manuell zurücksetzen';
+    record('K2', 'Passwort ändern mit falschem aktuellem Passwort', 'Fehler', error ? PASS : FAIL, detail);
+  }
+  {
+    // Nichts ausgeben außer Status/Codes; an B geht dabei eine echte Reset-Mail (einmal pro Lauf)
+    const redirectTo = `${APP_URL}/passwort-neu`;
+    const ghost = await newClient().auth.resetPasswordForEmail(`sectest+${crypto.randomUUID()}@example.com`, { redirectTo });
+    const known = await newClient().auth.resetPasswordForEmail(B.email, { redirectTo });
+    const rl = (e) => e && (e.status === 429 || /rate_limit/.test(e.code ?? ''));
+    if (rl(known.error) || rl(ghost.error)) {
+      record('K3', 'Reset-Link: unbekannte vs. bekannte Adresse', 'kein Unterschied', SKIP, 'Mail-Rate-Limit von Supabase – später erneut');
+    } else {
+      const same = !!ghost.error === !!known.error && (ghost.error?.status ?? 200) === (known.error?.status ?? 200);
+      record('K3', 'Reset-Link: unbekannte vs. bekannte Adresse', 'kein Unterschied', same ? PASS : FAIL,
+        `unbekannt=${ghost.error ? (ghost.error.code || ghost.error.status) : 'ok'}, bekannt=${known.error ? (known.error.code || known.error.status) : 'ok'}`);
+    }
+  }
+}
+
 // ── S-06b (Paket C, C-5): Zweiter Faktor für alle ───────────────────────────
 // Immer: #33 Codes-Tabelle gesperrt, codes:generate ohne aal2 abgelehnt.
 // Mit ATTACK_TEST_MFA=1: #34–#38. TOTP-Schlüssel, Codes und Wiederherstellungscodes bleiben im
@@ -1077,6 +1116,7 @@ function printResults() {
   await testsS06b(b);
   await testsU4(a, b);   // vor den Rate-Limit-Tests (chat-Zählung)
   await testsU5a(a, b);
+  await testsK(b);       // Paket K W1 (B bekommt sein Passwort ggf. sofort zurück)
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)

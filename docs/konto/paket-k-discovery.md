@@ -25,3 +25,14 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - `monitorRules.ts` existiert (C-2) → neue Log-Codes (`password_change_failed`, `password_changed`, `password_reset_request_failed`, `signout_others_failed`) kommen dort als `infoOnly` hinein.
 - Profil: Einträge heute (U4/C-5-Stand): Profil bearbeiten · Wie es funktioniert · Begleitung · Beta-Feedback/-Fragebogen · Coaching-Vereinbarung · Datenschutzerklärung · Meine Daten herunterladen · Impressum · Abmelden · Konto löschen; darüber die Karten „Zur Lernbasis beitragen“ und „Konto zusätzlich schützen“. „Passwort“ kommt bis W2 direkt über „Datenschutzerklärung“ (Handoff 3.5).
 - Kein Analyse-/Tracking-/Fehlerdienst im Frontend gefunden (Vorgriff auf Frage 7).
+
+## W1 – Bauhinweise (20.11.2026)
+
+- Entscheidungen K-1 … K-8 nach Empfehlung, D-2 freigegeben. Konzept-Datei fehlt weiterhin → Texte aus dem Handoff, schlichtes Layout.
+- Neue Dateien: `src/lib/passwordPolicy.js`, `src/lib/passwordRecovery.js` (liest das URL-Fragment beim Laden, bevor der Supabase-Client es verarbeitet; Merker in `sessionStorage`; in `main.jsx` als erster Import), `src/components/auth/PasswordField.jsx`, `src/components/auth/ForgotPasswordForm.jsx`, `src/screens/account/PasswordChangeScreen.jsx` (`/profil/passwort`), `src/screens/account/PasswordResetScreen.jsx` (`/passwort-neu`). Abweichung: Screens liegen unter `src/screens/account/` statt direkt in `src/screens/` (Ordnerstruktur der App).
+- Login: „Passwort vergessen?“ unter dem Passwortfeld (Modus `forgot`), Platzhalter „Dein Passwort“ statt „Mindestens 8 Zeichen“.
+- D-2: `Step4Auth` und `InvitedSetPassword` prüfen 12 Zeichen mit deutschen Texten; Fehler beim ersten Passwort einer Einladung werden als Code geloggt (`invite_password_failed`, D-3) und deutsch angezeigt.
+- Profil: Eintrag „Passwort“ direkt über „Datenschutzerklärung“.
+- `mapAuthError`: `invalid_credentials`, `reauthentication_needed`, `reauthentication_not_valid` und Codes mit „current_password“ → „Das aktuelle Passwort stimmt nicht.“ Den tatsächlichen Code beim Test mit Testkonto A notieren.
+- Log-Codes (Frontend, `monitorRules.ts` infoOnly, origin client): `password_changed`, `password_reset_done`, `password_change_failed`, `password_reset_failed`, `invite_password_failed`, `password_reset_request_failed`, `signout_others_failed`.
+- Angriffstest K1–K3 (`testsK`): B bekommt sein Passwort sofort zurück, falls K1/K2 wider Erwarten durchgehen. K3 schickt pro Lauf eine echte Reset-Mail an Testkonto B.
