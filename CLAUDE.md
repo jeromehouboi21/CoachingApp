@@ -14,7 +14,7 @@
 | Frontend | React 18 + Vite · Tailwind CSS v3 · React Router v6 |
 | State | Zustand (noch nicht aktiv) · lokale Hook-States |
 | Backend | Supabase (Auth + PostgreSQL + Edge Functions) |
-| KI | Anthropic Claude API · `claude-sonnet-4-5` (Streaming) · `claude-haiku-4-5-20251001` (Post-Processing) |
+| KI | Anthropic Claude API · `claude-sonnet-5-5` (Streaming, seit 19.11.2026, `thinking: between_tools`, effort `medium`) · `claude-haiku-4-5-20251001` (Post-Processing) · IDs nur in `_shared/models.ts` |
 | Hosting | Vercel · Domain: `app.friedensstifter.coach` |
 | PWA | `vite-plugin-pwa` (Workbox) |
 

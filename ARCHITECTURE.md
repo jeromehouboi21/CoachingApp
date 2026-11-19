@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`)
 
 ---
 
@@ -31,7 +31,7 @@
 | Frontend | React 18 + Vite · Tailwind CSS v3 · React Router v6 |
 | State | Lokale Hook-States (kein globaler Store) · `zustand` ist als Dependency installiert, aber aktuell ungenutzt |
 | Backend | Supabase (Auth + PostgreSQL + Edge Functions) |
-| KI | Anthropic Claude API · `claude-sonnet-4-5` (Streaming, Haupt-Coach) · `claude-haiku-4-5-20251001` (Post-Processing, Klassifikation) |
+| KI | Anthropic Claude API · `claude-sonnet-5-5` (Streaming, Haupt-Coach, seit 19.11.2026) · `claude-haiku-4-5-20251001` (Post-Processing, Klassifikation) · Modell-IDs nur in `_shared/models.ts` |
 | Hosting | Vercel · Domain: `app.friedensstifter.coach` |
 | PWA | `vite-plugin-pwa` (Workbox) |
 | Logging | `app_logs`-Tabelle (serverseitig) + Browser-Console (clientseitig) |
@@ -144,6 +144,7 @@ CoachingApp/
 ├── supabase/
 │   ├── functions/
 │   │   ├── _shared/
+│   │   │   ├── models.ts                ← Einzige Stelle für Modell-IDs + Request-Defaults, extractText, ensureEndsWithUser (T0)
 │   │   │   ├── monitorRules.ts          ← Regeln, Schwellen, Lebenszeichen für security-monitor (Log-Codes = Schnittstelle)
 │   │   │   ├── mailer.ts                ← SMTP über One.com Port 465 (denomailer@1.6.0), nur Fehlercodes
 │   │   │   ├── cors.ts                  ← corsHeaders(methods) für alle Functions (inkl. x-region, S-09)
@@ -745,6 +746,8 @@ Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client,
 
 **Verlauf und Speicherung (S-12):** Im Gesprächsmodus lädt `chat` den Verlauf aus der DB (bis 400 Zeilen, ans Modell die letzten 60; gleiche Rollen hintereinander werden zusammengeführt). Ein mitgeschicktes `messages[]` wird ignoriert (`body_messages_ignored`). Die Nutzer-Nachricht wird **nach** `consume_session` per Upsert auf `(conversation_id, client_message_id)` gespeichert — eine Wiederholung legt nichts doppelt an; ist sie schon beantwortet, kommt die gespeicherte Antwort zurück (`meta.replayed`). Die Antwort bekommt vorab eine ID, wird per `EdgeRuntime.waitUntil` auch nach einem Client-Abbruch zu Ende generiert und gespeichert (D-7, `metadata: { model, client_aborted, stop_reason, stream_failed }`; Fehler → `assistant_insert_failed`). `start: 'first' | 'standard'` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`), ohne Modellaufruf und ohne `consume_session`. Krisen-Events bekommen die `message_id` der Nutzer-Nachricht.
 
+**Modellaufruf (T0, seit 19.11.2026):** `COACH_MODEL` mit `COACH_REQUEST_DEFAULTS`, Verlauf durch `ensureEndsWithUser`. Nach dem Stream liest `finalMessage()` Nutzung und Stop-Grund: `coach_usage` (`conversationId`, `mode`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `stopReason`), bei `max_tokens` → `coach_response_truncated`, bei anderen unerwarteten Stop-Gründen (z. B. `refusal`) → `coach_response_unexpected_stop` (beide `infoOnly` in `monitorRules.ts`). Kosten je Gespräch: `supabase/diagnostics/coach-usage.sql`.
+
 **Altes Format:** `messages[]` ohne `message`/`start` (Gesprächsmodus) bzw. Extraktion ohne `conversationId` → `409 client_outdated` (seit Welle 2b, `LEGACY_FORMAT_ALLOWED = false`; geloggt als `legacy_format`). Howto ist nicht betroffen. Welle 2b wurde vorgezogen: Die Aktivitätsprüfung vom 19.11.2026 zeigte keine echten Nutzer seit 02.09.2026, alle `legacy_format`-Aufrufe stammten aus dem Angriffstest.
 
 `memory`, `coachFile`, `briefing`, `ragContext`, `supervisionNote` im Body werden **ignoriert** (S-12). `wellnessCheck` (Score 1–10, Texte gekürzt) und `entryContext` (Quelle aus fester Liste, Texte gekürzt) werden geprüft übernommen – sie steuern nur den eigenen Prompt.
@@ -966,10 +969,11 @@ createLogger(source: string, requestId?: string, userId?: string)
 
 ---
 
-### `_shared/rag.ts`, `_shared/rateLimit.ts`, `_shared/learning.ts`
+### `_shared/models.ts`, `_shared/rag.ts`, `_shared/rateLimit.ts`, `_shared/learning.ts`
 
 | Modul | Zweck |
 |---|---|
+| `models.ts` | **Einzige Stelle für Modell-IDs** (`COACH_MODEL` = `claude-sonnet-5-5`, `HAIKU_MODEL`). `COACH_REQUEST_DEFAULTS`: `thinking: { type: 'between_tools' }` (kein Vorab-Denken; `disabled` gibt auf 5.5 einen 400) + `output_config.effort: 'medium'` (konstant, darf sich im Gespräch nicht ändern). `COACH_MAX_TOKENS` 560 / `COACH_CRISIS_MAX_TOKENS` 980 (neuer Tokenizer, × 1,4). `extractText()` liest Antworten nach Blocktyp statt `content[0]` (leer → `empty_text_response`). `ensureEndsWithUser()` hängt einen nicht gespeicherten Nutzer-Turn an, wenn der Verlauf auf `assistant` endet (Sonnet 5.5 kennt kein Prefill; geloggt als `synthetic_user_turn_added`). |
 | `rag.ts` | `generateEmbedding()` (OpenAI `text-embedding-3-small`, Timeout 2,5 s, Fehlergrund nur als Code) und `findSimilarExperiences()` (`match_experiences`). Nur serverseitig — Treffer verlassen den Server nicht. |
 | `rateLimit.ts` | Grenzwerte (`RATE_LIMITS`), `enforceRateLimit()` (RPC `consume_rate_limits`, fail-open/-closed wählbar), `rateLimitResponse()` (429 + `Retry-After`). |
 | `learning.ts` | Prüfschritt `reviewLearningEntry()` für alles Nutzerübergreifende (Lernbasis, Supervision): Regex-Vorfilter (`contact`, `instruction`) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`). Das JSON wird aus der Antwort herausgelöst (robust gegen Text drumherum); technische Fehler → `review_api_failed` / `review_parse_failed`; immer fail-closed. `makeHaikuCaller()` als Adapter. |

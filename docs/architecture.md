@@ -78,7 +78,7 @@ Nutzer schreibt Nachricht
     │       ├── buildSystemPrompt():
     │       │       BASE + Briefing + Coach-Akte + Resonanzkarte + RAG + Wellness
     │       └── Anthropic API stream
-    │               └── claude-sonnet-4-5 (Streaming)
+    │               └── claude-sonnet-5-5 (Streaming)
     │
     └── [Frontend] SSE-Stream empfangen
             ├── Token für Token in UI einblenden
