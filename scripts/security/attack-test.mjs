@@ -85,12 +85,25 @@ async function signIn(who, creds) {
 }
 
 /** Zählt Zeilen per HEAD-Request – es werden nie Zeileninhalte übertragen. */
+// Netzwerkaussetzer (kein Code, kein HTTP-Status) werden bis zu zweimal wiederholt. Bleibt es
+// dabei, wird der Fehler als 'network' markiert — Aufrufer werten das NICHT als "kein Zugriff".
 async function countRows(client, table, applyFilter) {
-  let q = client.from(table).select('*', { count: 'exact', head: true });
-  if (applyFilter) q = applyFilter(q);
-  const { count, error, status } = await q;
-  if (error && !error.code && !error.status) error.status = status;
-  return { count: count ?? 0, error, status };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let q = client.from(table).select('*', { count: 'exact', head: true });
+    if (applyFilter) q = applyFilter(q);
+    const { count, error, status } = await q;
+    if (error && !error.code && !error.status) error.status = status;
+    const isNetwork = error && !error.code && (!error.status || error.status === 0);
+    if (!isNetwork) return { count: count ?? 0, error, status };
+    if (attempt === 2) { error.code = 'network'; return { count: count ?? 0, error, status, network: true }; }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+
+/** PASS-Logik für Lesetests: Rechte-Fehler = kein Zugriff (PASS), Netzwerkfehler = FAIL (nicht verdecken). */
+function noAccessOrZero(r) {
+  if (r.network) return FAIL;
+  return r.error || r.count === 0 ? PASS : FAIL;
 }
 
 function errCode(error) {
@@ -181,7 +194,7 @@ async function testsAsB(a, b) {
   for (const t of OWNED_TABLES) {
     const foreign = await countRows(b.client, t.name, q => q.or(`${t.owner}.neq.${b.userId},${t.owner}.is.null`));
     if (foreign.error) {
-      record(1, `select ${t.name} (fremde Zeilen)`, 'nur eigene', PASS, `kein Zugriff (${errCode(foreign.error)})`);
+      record(1, `select ${t.name} (fremde Zeilen)`, 'nur eigene', foreign.network ? FAIL : PASS, `kein Zugriff (${errCode(foreign.error)})`);
     } else {
       const own = await countRows(b.client, t.name, q => q.eq(t.owner, b.userId));
       record(1, `select ${t.name} (fremde Zeilen)`, 'nur eigene', foreign.count === 0 ? PASS : FAIL,
@@ -190,12 +203,12 @@ async function testsAsB(a, b) {
 
     const byA = await countRows(b.client, t.name, q => q.eq(t.owner, a.userId));
     record(2, `select ${t.name} where ${t.owner}=A`, '0 Zeilen',
-      byA.error || byA.count === 0 ? PASS : FAIL, byA.error ? errCode(byA.error) : `zeilen=${byA.count}`);
+      noAccessOrZero(byA), byA.error ? errCode(byA.error) : `zeilen=${byA.count}`);
 
     if (t.conv) {
       const byConv = await countRows(b.client, t.name, q => q.eq(t.conv, a.conv.id));
       record(2, `select ${t.name} where ${t.conv}=A's`, '0 Zeilen',
-        byConv.error || byConv.count === 0 ? PASS : FAIL, byConv.error ? errCode(byConv.error) : `zeilen=${byConv.count}`);
+        noAccessOrZero(byConv), byConv.error ? errCode(byConv.error) : `zeilen=${byConv.count}`);
     }
   }
 
@@ -205,17 +218,17 @@ async function testsAsB(a, b) {
       : undefined;
     const foreign = await countRows(b.client, 'messages', filter);
     record(1, 'select messages (fremde Zeilen)', 'nur eigene',
-      foreign.error || foreign.count === 0 ? PASS : FAIL,
+      noAccessOrZero(foreign),
       foreign.error ? errCode(foreign.error) : `fremd=${foreign.count}`);
     const byConv = await countRows(b.client, 'messages', q => q.eq('conversation_id', a.conv.id));
     record(2, "select messages where conversation_id=A's", '0 Zeilen',
-      byConv.error || byConv.count === 0 ? PASS : FAIL, byConv.error ? errCode(byConv.error) : `zeilen=${byConv.count}`);
+      noAccessOrZero(byConv), byConv.error ? errCode(byConv.error) : `zeilen=${byConv.count}`);
   }
 
   for (const name of INTERNAL_TABLES) {
     const r = await countRows(b.client, name);
     record(1, `select ${name} (intern)`, '0 / Fehler',
-      r.error || r.count === 0 ? PASS : FAIL, r.error ? errCode(r.error) : `zeilen=${r.count}`);
+      noAccessOrZero(r), r.error ? errCode(r.error) : `zeilen=${r.count}`);
   }
 
   {
@@ -384,7 +397,7 @@ async function testsAnonymous() {
   for (const name of ALL_TABLE_NAMES) {
     const r = await countRows(anon, name);
     record(13, `anon select ${name}`, '0 / Fehler',
-      r.error || r.count === 0 ? PASS : FAIL, r.error ? errCode(r.error) : `zeilen=${r.count}`);
+      noAccessOrZero(r), r.error ? errCode(r.error) : `zeilen=${r.count}`);
   }
 
   {
