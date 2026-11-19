@@ -67,7 +67,7 @@ export const SECURITY_MEASURES = [
     text: 'Zu viele Anfragen in kurzer Zeit werden gebremst. Das erschwert automatisierte Angriffe.',
     evidence: 'Rate-Limits je Nutzer (Migration 029, supabase/functions/_shared/rateLimit.ts); Angriffstest #16/#17; Rate-Limits von Supabase Auth' },
   { id: 'S-06b', group: 'zugang', status: 'live',
-    text: 'Du kannst dein Konto zusätzlich mit einem zweiten Faktor schützen.',
+    text: 'Du kannst dein Konto zusätzlich mit einem zweiten Faktor schützen, und ich empfehle dir das. Dann fragt die App nach der Anmeldung zusätzlich nach einem Code aus einer Authenticator-App, zum Beispiel auf deinem Handy. Selbst wenn jemand dein Passwort herausfindet, kommt er ohne diesen Code (oder einen deiner Wiederherstellungscodes) nicht in dein Konto. Einrichten kannst du ihn im Profil unter „Konto & Sicherheit“.',
     evidence: 'Profil → „Konto zusätzlich schützen“; durchgesetzt in App, Functions und Datenbank (Migration 037, Paket C-5); Angriffstest #33–#38' },
   { id: 'K W1', group: 'zugang', status: 'live',
     text: 'Wenn dein Passwort geändert wird, bekommst du eine Mail.',
