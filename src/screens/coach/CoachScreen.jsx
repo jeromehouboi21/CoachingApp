@@ -123,11 +123,16 @@ export function CoachScreen() {
   // Kappungshinweis gilt nur für das Gespräch, in dem er ausgelöst wurde
   useEffect(() => { setCapReached(false) }, [conversationId])
 
-  // Übergangstext 1: vor dem letzten Kennenlern-Gespräch, einmal pro Gerät (E-U4-9)
-  const showTrialHint = !!user && isLastTrialStart(access) && !seenOnce(TRIAL_LAST_HINT_KEY, user.id)
-  useEffect(() => {
-    if (showTrialHint && mode === 'entry') markSeen(TRIAL_LAST_HINT_KEY, user.id)
-  }, [showTrialHint, mode]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Übergangstext 1: vor dem letzten Kennenlern-Gespräch, einmal pro Gerät (E-U4-9).
+  // Sichtbar im Einstieg UND oben in einem frisch begonnenen Gespräch (auch über „Neues Gespräch“),
+  // bis die erste Nachricht dieses Gesprächs gesendet wird – erst dann gilt er als gesehen.
+  const [trialHintSeen, setTrialHintSeen] = useState(false)
+  const showTrialHint = !!user && !trialHintSeen && isLastTrialStart(access) && !seenOnce(TRIAL_LAST_HINT_KEY, user.id)
+  const acknowledgeTrialHint = () => {
+    if (!showTrialHint) return
+    markSeen(TRIAL_LAST_HINT_KEY, user.id)
+    setTrialHintSeen(true)
+  }
 
   // Neues Gespräch nur, wenn ein Start möglich ist – sonst Ruhemodus-Hinweis (Übergangstext 3)
   const startNewOrRest = (isFirst = false) => {
@@ -262,6 +267,7 @@ export function CoachScreen() {
       return
     }
     setShowQuickReplies(false)
+    if (!conversationHasOwnMessage(messages)) acknowledgeTrialHint()
     await sendMessage(content, inputMode)
     if (!alreadyCounted) { refreshProfile(); refreshAccess() } // Phase nach dem ersten Senden aktualisieren
     updateStreak(profile, updateProfile)
@@ -498,6 +504,12 @@ export function CoachScreen() {
 
       {/* Chat Area */}
       <div className="flex-1 overflow-y-auto px-5 py-5 flex flex-col gap-3">
+        {/* Übergangstext 1 (U4) in einem neuen, noch nicht begonnenen Gespräch */}
+        {showTrialHint && !conversationHasOwnMessage(messages) && (
+          <p className="text-[13px] text-ink-2 leading-relaxed bg-surface-2 rounded-xl px-4 py-3">
+            Das ist dein {access?.starts_limit === 3 ? 'drittes' : 'letztes'} Gespräch zum Kennenlernen. Danach bleibt alles, was du hier erkannt hast, für dich sichtbar. Für neue Gespräche gibt es die Begleitung.
+          </p>
+        )}
         {messages.map((msg) => {
           const { cleanText, naming } = msg.role === 'assistant'
             ? extractVoiceNaming(msg.content)
