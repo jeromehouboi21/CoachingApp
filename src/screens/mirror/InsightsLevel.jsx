@@ -3,6 +3,7 @@ import { Pin, Trash2, BookOpen } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { LoadingDots, LoadError, formatDay } from './shared'
+import { SuggestionActions } from '../../components/insights/SuggestionActions'
 
 const logger = createLogger('InsightsLevel')
 
@@ -21,7 +22,7 @@ const CATEGORY_LABELS = {
   ziel: 'Vorhaben',
 }
 
-function InsightCard({ insight, busy, onPin, onDelete }) {
+function InsightCard({ insight, busy, onPin, onDelete, onSuggestionDone }) {
   return (
     <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 shadow-sm">
       <div className="flex items-start justify-between mb-3">
@@ -50,6 +51,10 @@ function InsightCard({ insight, busy, onPin, onDelete }) {
       </div>
       <p className="text-[15px] text-ink leading-[1.6] mb-2">{insight.content}</p>
       <p className="text-[11px] text-ink-3">Vom {formatDay(insight.created_at)}</p>
+      {/* U3: automatisch entstanden, noch nicht bestätigt → dezenter Vorschlag */}
+      {insight.source === 'auto' && (
+        <SuggestionActions insight={insight} question="Vorschlag – stimmt das?" onDone={(r) => onSuggestionDone(insight, r)} />
+      )}
     </div>
   )
 }
@@ -128,6 +133,14 @@ export function InsightsLevel({ userId }) {
     setBusyId(null)
   }
 
+  const handleSuggestionDone = (insight, result) => {
+    if (result.action === 'removed') {
+      setInsights(prev => prev.filter(i => i.id !== insight.id))
+    } else {
+      setInsights(prev => prev.map(i => i.id === insight.id ? { ...i, source: 'user', content: result.content ?? i.content } : i))
+    }
+  }
+
   const filtered = filter === 'all' ? insights : insights.filter(i => i.category === filter)
 
   return (
@@ -169,6 +182,7 @@ export function InsightsLevel({ userId }) {
               busy={busyId === insight.id}
               onPin={handlePin}
               onDelete={handleDelete}
+              onSuggestionDone={handleSuggestionDone}
             />
           ))}
         </div>

@@ -43,6 +43,10 @@ export const RULES: Rule[] = [
   { id: 'coach_response_truncated', codes: ['coach_response_truncated'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Coach-Antwort abgeschnitten (max_tokens)' },
   { id: 'coach_response_unexpected_stop', codes: ['coach_response_unexpected_stop'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Coach-Antwort mit unerwartetem Ende (z. B. refusal)' },
   { id: 'empty_text_response',     codes: ['empty_text_response'],     windowMin: 10080, threshold: 0, infoOnly: true, label: 'Modellantwort ohne Text' },
+  // Gesprächseinstieg U3:
+  { id: 'resume_started',          codes: ['resume_started'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Gespräch weitergeführt (Einstieg)' },
+  { id: 'resume_rejected',         codes: ['resume_rejected'],         windowMin: 10080, threshold: 0, infoOnly: true, label: 'Weiterführen abgelehnt (kein eigener Beitrag)' },
+  { id: 'display_title_invalid',   codes: ['display_title_invalid'],   windowMin: 10080, threshold: 0, infoOnly: true, label: 'Kurztitel unbrauchbar' },
 ];
 
 // Lebenszeichen: Alarm, wenn ein erwarteter Eintrag AUSBLEIBT (stilles Scheitern von Cron-Jobs).

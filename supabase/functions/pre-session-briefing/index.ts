@@ -1,9 +1,9 @@
 // supabase/functions/pre-session-briefing/index.ts
 // Aufgerufen wenn ein Nutzer den Coach Screen öffnet.
-// Gibt nur die Eckdaten zurück, die das Frontend für die Entscheidung über die
-// Wiederkehr-Begrüßung braucht. Akte, Profil, Resonanzkarte und Gesprächsinhalte
-// (Zusammenfassung, offener Faden) lädt chat selbst (Security S-12) und gehen
-// nicht an den Client.
+// Gibt nur Eckdaten zurück: für die Eröffnung (Erstgespräch ja/nein) und seit U3 für den
+// Gesprächseinstieg (die letzten 3 Gespräche mit neutralem Titel, ohne Inhalte) und die
+// 2-Stunden-Regel. Akte, Profil, Resonanzkarte und Gesprächsinhalte (Zusammenfassung,
+// offener Faden) lädt chat selbst (Security S-12) und gehen nicht an den Client.
 // Sicherheitsmuster v2: Identität nur aus dem JWT, alle Abfragen mit user.id.
 
 import { createLogger, describeError } from '../_shared/logger.ts';
@@ -11,6 +11,10 @@ import { HttpError, requireUser, errorResponse, jsonResponse } from '../_shared/
 import { corsHeaders } from '../_shared/cors.ts';
 
 const CORS_HEADERS = corsHeaders('POST, OPTIONS');
+
+// Vom Client gesetzte Platzhalter (useChat) – kein echter Titel, Anzeige dann „Gespräch vom …“
+const PLACEHOLDER_TITLES = new Set(['Neues Gespräch', 'Gespräch', 'Wellness-Check']);
+const RECENT_LIMIT = 3;
 
 Deno.serve(async (req) => {
   // CORS preflight — MUSS als erstes stehen
@@ -38,8 +42,51 @@ Deno.serve(async (req) => {
       throw new HttpError(500, 'briefing_failed');
     }
 
+    // U3: Einstieg. Kandidaten = eigene Gespräche mit Aktivität, neueste zuerst. „Mit eigener
+    // Nachricht“ prüfen wir je Kandidat (head-count), damit leere Pool-Eröffnungen nicht erscheinen.
+    const { data: candidates, error: candError } = await supabase
+      .from('conversations')
+      .select('id, title, updated_at, summary, open_thread, open_thread_intensity')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(12);
+    if (candError) {
+      logger.error('recent conversations fetch failed', { code: candError.code });
+      throw new HttpError(500, 'briefing_failed');
+    }
+    const withUserMessage: typeof candidates = [];
+    for (const c of candidates ?? []) {
+      const { count: userCount, error: countError } = await supabase
+        .from('messages').select('id', { count: 'exact', head: true })
+        .eq('conversation_id', c.id).eq('role', 'user');
+      if (countError) {
+        logger.error('recent conversation count failed', { code: countError.code });
+        throw new HttpError(500, 'briefing_failed');
+      }
+      if ((userCount ?? 0) > 0) withUserMessage.push(c);
+      if (withUserMessage.length >= RECENT_LIMIT + 1) break;
+    }
+    const latest = withUserMessage[0] ?? null;
+    const latestActiveConversation = latest ? { id: latest.id, lastMessageAt: latest.updated_at } : null;
+    // Nur Gespräche, die schon nachbearbeitet sind (summary), kommen in die Weitermachen-Liste.
+    const recent = withUserMessage
+      .filter((c) => c.summary)
+      .slice(0, RECENT_LIMIT)
+      .map((c) => {
+        const moving = c.open_thread_intensity === 'high';
+        const realTitle = typeof c.title === 'string' && c.title.trim() && !PLACEHOLDER_TITLES.has(c.title.trim())
+          ? c.title.trim() : null;
+        return {
+          id: c.id,
+          title: moving ? null : realTitle,   // bei hoher Intensität kein Thema (UX-Konzept 4.2a)
+          lastActivityAt: c.updated_at,
+          hasOpenThread: !!c.open_thread,
+          moving,
+        };
+      });
+
     if (!lastConv) {
-      return jsonResponse({ briefing: null }, CORS_HEADERS);
+      return jsonResponse({ briefing: null, recent, latestActiveConversation }, CORS_HEADERS);
     }
 
     // 2. Gesprächsanzahl gesamt
@@ -60,8 +107,8 @@ Deno.serve(async (req) => {
         : null,
     };
 
-    logger.info('Briefing built', { conversationCount: count ?? 0, hasOpenThread: !!lastConv.open_thread });
-    return jsonResponse({ briefing }, CORS_HEADERS);
+    logger.info('Briefing built', { conversationCount: count ?? 0, hasOpenThread: !!lastConv.open_thread, recentCount: recent.length });
+    return jsonResponse({ briefing, recent, latestActiveConversation }, CORS_HEADERS);
 
   } catch (error: unknown) {
     if (error instanceof HttpError) {

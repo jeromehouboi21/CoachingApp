@@ -424,9 +424,13 @@ FAKTEN:
 - Coach: Jerome Houboi, zertifizierter Systemischer Coach (Paracelsus-Schulen, 160 Unterrichtsstunden, Mönchengladbach)
 - Website: www.friedensstifter.coach
 - Datenschutz: Keine Weitergabe, keine Werbung, kein KI-Training mit Nutzerdaten
-- Werkzeuge: KI-Coach (Gespräch), Wie geht's dir? (Skala 1–10), Mein Spiegel (Erkenntnisse + Akte), Verstehen (Muster-Bibliothek), Innere Stimmen (Premium, benannte wiederkehrende Anteile)
-- Reflexionssträhne: zählt, an wie vielen Tagen in Folge reflektiert wurde
-- Kosten: Free (20 Gespräche/Monat, Skala unbegrenzt, bis zu 10 Erkenntnisse im Spiegel), Premium (unbegrenzt, Preis noch offen)
+- Aufbau: drei Bereiche unten in der App
+  · Heute: Ankommen – Tagesimpuls, „Wie geht's dir?“ (Skala 1–10) und, verdeckt zum Antippen, was aus dem letzten Gespräch entstanden ist
+  · Gespräch: mit dem Begleiter sprechen – ein früheres Gespräch weitermachen oder etwas Neues mitbringen; alle Gespräche im Verlauf
+  · Spiegel: Erkenntnisse (eigene Sätze), Muster (was sich wiederholt, eigene innere Stimmen, „Kennst du das?“ mit fünf häufigen Mustern) und Entwicklung (Zeitachse, Stärken, Alltag)
+- Profil über den Kreis mit dem Anfangsbuchstaben oben rechts; dort u. a. Reflexionstage (an wie vielen Tagen insgesamt ein Gespräch begonnen wurde)
+- Alles, was über den Menschen entsteht, ist im Spiegel vollständig sichtbar – ohne Grenze
+- Kosten: Free (20 Gespräche/Monat, Skala unbegrenzt, Spiegel vollständig), Premium (unbegrenzt, Preis noch offen)
 - Systemisches Coaching: Ansatz, der durch Fragen Muster sichtbar macht — nicht durch Ratschläge
 
 MODUS 1 — INFORMATIV (Standard):
@@ -492,6 +496,44 @@ interface PreSessionBriefing {
   openThread?: OpenThread | null;
 }
 
+// U3: Fortsetzen eines bestehenden Gesprächs, Coach spricht zuerst (start: 'resume').
+// Daten stammen aus DIESEM Gespräch, nicht aus dem letzten anderen (anders als BLOCK 1).
+interface ResumeContext {
+  lastMessageLabel: string;       // relativ: heute, gestern, vor 3 Tagen …
+  summary: string | null;         // conversations.summary (falls schon nachbearbeitet)
+  openThread: string | null;      // conversations.open_thread
+  intensity: 'low' | 'medium' | 'high' | null;
+}
+
+function buildResumeBlock(r: ResumeContext): string {
+  let block = `
+
+--- FORTSETZUNG DIESES GESPRÄCHS ---
+Der Mensch hat dieses Gespräch bewusst wieder geöffnet, um weiterzumachen. Der Verlauf oben ist dieses Gespräch.
+Letzte Nachricht: ${r.lastMessageLabel}`;
+  if (r.summary) block += `
+Worum es ging: ${r.summary}`;
+  if (r.openThread) block += `
+Offen geblieben: ${r.openThread}`;
+  block += `
+
+DEINE ERSTE NACHRICHT JETZT:
+- Kurz anknüpfen: ein Halbsatz mit Zeitbezug (z. B. „Vor drei Tagen ging es um …“).
+- Höchstens eine Frage, die auf heute zielt.
+- Ein Ausweg zum Schluss, z. B. „Oder bringst du heute etwas anderes mit?“
+- Keine Bewertung: kein „Schön, dass du weitermachst“, kein „Das war wichtig“.
+- Zwei bis drei kurze Sätze, keine Zusammenfassung des ganzen Gesprächs.`;
+  if (r.intensity === 'high') {
+    block += `
+- WICHTIG: Dieses Gespräch hat den Menschen sichtbar bewegt. Nenne das Thema NICHT.
+  Sprich nur vom Gespräch selbst (z. B. „Vor drei Tagen hatten wir ein Gespräch, das dich bewegt hat.“)
+  und lass den Menschen entscheiden, ob er es wieder aufnimmt.`;
+  }
+  block += `
+--- ENDE FORTSETZUNG ---`;
+  return block;
+}
+
 interface EntryContext {
   source: 'pattern' | 'tagesimpuls' | 'verstehen' | 'spiegel' | 'direct';
   topic?: string;
@@ -545,7 +587,7 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice): string {
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice, resume?: ResumeContext): string {
   let prompt = BASE_SYSTEM_PROMPT + '\n\n' + SYSTEMIC_WITNESSING_BLOCK;
 
   // Nur für den Turn, in dem der Rhythmus greift, zusätzlich anhängen.
@@ -564,7 +606,10 @@ function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisi
 
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
   // Nur vorhanden wenn ein vorheriges Gespräch existiert.
-  if (briefing && briefing.conversationCount > 1) {
+  // U3: Beim Fortsetzen ersetzt der Block FORTSETZUNG das Briefing über das letzte andere Gespräch.
+  if (resume) {
+    prompt += buildResumeBlock(resume);
+  } else if (briefing && briefing.conversationCount > 1) {
     let briefingText = `\n\n--- PRE-SESSION-BRIEFING ---
 Dies ist Gespräch Nr. ${briefing.conversationCount} mit diesem Menschen.
 Letztes Gespräch: ${briefing.lastConversationDate}
@@ -1059,7 +1104,9 @@ const OPENING_MESSAGES = [
 ];
 const FIRST_OPENING_MESSAGE = 'Schön, dass du da bist. Was beschäftigt dich gerade — gibt es etwas, das du schon länger mit dir trägst?';
 
-const START_VARIANTS = ['first', 'standard', 'wellness', 'briefing', 'entry'] as const;
+// 'briefing' bleibt serverseitig erhalten, das Frontend nutzt seit U3 'resume' (Einstieg) statt der
+// automatischen Wiederkehr-Begrüßung.
+const START_VARIANTS = ['first', 'standard', 'wellness', 'briefing', 'entry', 'resume'] as const;
 type StartVariant = typeof START_VARIANTS[number];
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
@@ -1297,6 +1344,34 @@ Deno.serve(async (req) => {
       }
     }
 
+    // U3: Fortsetzen mit Coach-Eröffnung – nur auf einem Gespräch mit mindestens einer eigenen Nachricht.
+    //     Eigentum ist oben (assertConversationOwner) geprüft. Keine neue Konversation.
+    let resumeContext: ResumeContext | undefined;
+    if (start === 'resume') {
+      const lastUser = [...history].reverse().find((m) => m.role === 'user');
+      if (!lastUser || !convId) {
+        logger.warn('resume_rejected', { conversationId: convId, reason: 'no_user_message' });
+        throw new HttpError(400, 'invalid_start');
+      }
+      const { data: conv, error: convError } = await admin.from('conversations')
+        .select('summary, open_thread, open_thread_intensity')
+        .eq('id', convId).eq('user_id', user.id).maybeSingle();
+      if (convError) {
+        logger.error('resume_context_failed', { conversationId: convId, code: convError.code });
+        throw new HttpError(500, 'resume_failed');
+      }
+      const lastAt = history[history.length - 1]?.created_at;
+      const daysSince = lastAt ? Math.max(0, Math.floor((Date.now() - new Date(lastAt).getTime()) / 86400000)) : 0;
+      const intensity = conv?.open_thread_intensity;
+      resumeContext = {
+        lastMessageLabel: relativeDateLabel(daysSince),
+        summary: conv?.summary ?? null,
+        openThread: conv?.open_thread ?? null,
+        intensity: intensity === 'low' || intensity === 'medium' || intensity === 'high' ? intensity : null,
+      };
+      logger.info('resume_started', { conversationId: convId, daysSince, hasOpenThread: !!conv?.open_thread, intensity: resumeContext.intensity });
+    }
+
     // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat.
     const assistantTurnCount = history.filter((m) => m.role === 'assistant').length;
 
@@ -1386,7 +1461,7 @@ Deno.serve(async (req) => {
     // Alle 4 Antworten (ab der 3.) aktiv ein Wirkmechanismus-Angebot einstreuen.
     const OFFER_INTERVAL = 4;
     const offerMechanism =
-      isCoaching && assistantTurnCount >= 3 && assistantTurnCount % OFFER_INTERVAL === 0;
+      isCoaching && !resumeContext && assistantTurnCount >= 3 && assistantTurnCount % OFFER_INTERVAL === 0;
     if (offerMechanism) {
       logger.info('Mechanism-offer cadence triggered', { requestId: safeRequestId, assistantTurnCount });
     }
@@ -1397,7 +1472,8 @@ Deno.serve(async (req) => {
     let introduceVoice: InnerVoice | undefined;
     let namingVoice: InnerVoice | undefined;
 
-    if (isCoaching && !acuteDistress && !crisisDetected) {
+    // Beim Fortsetzen (U3) nur anknüpfen – keine Stimmen-Einführung in der Eröffnungsnachricht.
+    if (isCoaching && !acuteDistress && !crisisDetected && !resumeContext) {
       const { data: candidateVoice } = await userClient
         .from('inner_voices')
         .select('*')
@@ -1446,7 +1522,10 @@ Deno.serve(async (req) => {
       ? CRISIS_RESPONSE_BLOCK
       : isHowto
         ? HOWTO_SYSTEM_PROMPT
-        : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
+        : resumeContext
+          // Fortsetzen: kein Wellness-/Entry-Kontext, kein Briefing über ein anderes Gespräch
+          ? buildSystemPrompt(memory, ragContext, supervisionNote, undefined, undefined, coachFile, undefined, offerMechanism, introduceVoice, namingVoice, resumeContext)
+          : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
 
     if (wellnessCheck && isCoaching) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';

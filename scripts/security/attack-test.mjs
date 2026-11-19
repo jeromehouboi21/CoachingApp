@@ -327,6 +327,16 @@ async function testsAsB(a, b) {
       `HTTP ${r.status}${r.isStream ? ' (Stream, abgebrochen)' : ''}`);
   }
 
+  // 8b (U3): Weitermachen (start: 'resume') mit A's conversationId
+  {
+    const r = await callFunction('chat', {
+      token: b.token,
+      body: { conversationId: a.conv.id, start: 'resume', requestId: 'sectest' },
+    });
+    record('8b', "chat start=resume mit A's conversationId", 'HTTP 403', r.status === 403 ? PASS : FAIL,
+      `HTTP ${r.status}${r.isStream ? ' (Stream, abgebrochen)' : ''}`);
+  }
+
   // 9: pre-session-briefing enthält keine Kennungen aus A's Daten
   {
     const r = await callFunction('pre-session-briefing', { token: b.token, body: {} });
@@ -341,6 +351,12 @@ async function testsAsB(a, b) {
         .filter(k => text.includes(`"${k}"`));
       record(9, 'pre-session-briefing ohne Akte/Resonanzkarte (S-12)', 'nur Eckdaten',
         forbidden.length === 0 ? PASS : FAIL, forbidden.length ? `Felder: ${forbidden.join(', ')}` : 'ok');
+      // U3: Einstiegsliste nur mit erlaubten Feldern (kein Inhalt, kein offener-Faden-Text)
+      const allowedRecent = new Set(['id', 'title', 'lastActivityAt', 'hasOpenThread', 'moving'])
+      const recent = Array.isArray(r.json?.recent) ? r.json.recent : []
+      const extraKeys = [...new Set(recent.flatMap(x => Object.keys(x ?? {}).filter(k => !allowedRecent.has(k))))]
+      record('9b', 'pre-session-briefing recent ohne Inhalte (U3)', 'nur id/title/Zeit/Merkmale',
+        extraKeys.length === 0 ? PASS : FAIL, extraKeys.length ? `Felder: ${extraKeys.join(', ')}` : `ok (${recent.length})`);
     }
   }
 

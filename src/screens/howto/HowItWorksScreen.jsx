@@ -130,27 +130,27 @@ export function HowItWorksScreen() {
           <div>
             <h2 className="text-[16px] font-medium text-ink mb-2">Was kannst du hier tun?</h2>
             <p className="text-[14px] text-ink-2 leading-[1.7]">
-              Du bringst ein Thema — groß oder klein. Etwas, das dich beschäftigt, nervt, blockiert oder einfach nicht loslässt. Der Coach stellt dir Fragen. Nicht um dich zu analysieren. Sondern damit du selbst klarer siehst, was wirklich los ist. Daneben gibt es ein paar weitere Werkzeuge, die dir helfen, das Gesehene festzuhalten und wiederzuerkennen.
+              Du bringst ein Thema — groß oder klein. Etwas, das dich beschäftigt, nervt, blockiert oder einfach nicht loslässt. Der Coach stellt dir Fragen. Nicht um dich zu analysieren. Sondern damit du selbst klarer siehst, was wirklich los ist. Was du dabei erkennst, hält die App fest, damit es nicht verloren geht.
             </p>
           </div>
 
-          {/* Block 1b — Werkzeugkasten (Textliste, bewusst nicht klickbar) */}
+          {/* Block 1b — Aufbau der App (seit U3, Textliste, bewusst nicht klickbar) */}
           <div>
-            <h2 className="text-[16px] font-medium text-ink mb-2">Dein Werkzeugkasten</h2>
+            <h2 className="text-[16px] font-medium text-ink mb-2">So ist die App aufgebaut</h2>
             <ul className="flex flex-col gap-3">
               <li className="text-[14px] text-ink-2 leading-[1.6]">
-                <span className="text-ink font-medium">Wie geht's dir?</span> — Eine Skala von 1 bis 10, schnell erfasst, bevor ein Gespräch beginnt.
+                <span className="text-ink font-medium">Heute</span> — Ankommen: ein Tagesimpuls, „Wie geht's dir?“ auf einer Skala von 1 bis 10 und, verdeckt zum Antippen, was aus deinem letzten Gespräch entstanden ist.
               </li>
               <li className="text-[14px] text-ink-2 leading-[1.6]">
-                <span className="text-ink font-medium">Mein Spiegel</span> — Deine Erkenntnisse aus den Gesprächen, an einem Ort gesammelt. Plus eine Akte, die zeigt, welche Themen bei dir wiederkehren.
+                <span className="text-ink font-medium">Gespräch</span> — Du machst an einem früheren Gespräch weiter oder bringst etwas Neues mit. Alle Gespräche findest du im Verlauf.
               </li>
               <li className="text-[14px] text-ink-2 leading-[1.6]">
-                <span className="text-ink font-medium">Verstehen</span> — Eine Bibliothek häufiger Muster. Taucht eines davon auch bei dir auf, markiert die App es als „aus deinen Gesprächen".
-              </li>
-              <li className="text-[14px] text-ink-2 leading-[1.6]">
-                <span className="text-ink font-medium">Innere Stimmen</span> <span className="text-ink-3">(Premium)</span> — Wiederkehrende innere Anteile, die du mit der Zeit selbst benennen kannst.
+                <span className="text-ink font-medium">Spiegel</span> — Deine Erkenntnisse in deinen Worten, die Muster, die sich wiederholen (auch innere Stimmen, die du selbst benennst), und deine Entwicklung über die Zeit. Alles, was über dich entsteht, kannst du hier sehen.
               </li>
             </ul>
+            <p className="text-[14px] text-ink-2 leading-[1.7] mt-3">
+              Das greift ineinander: ankommen, sprechen, erkennen, im Alltag ausprobieren – und dann wieder ankommen. Die App schlägt den nächsten Schritt vor. Ob du ihn gehst, entscheidest du.
+            </p>
           </div>
 
           {/* Block 2 — Jerome */}

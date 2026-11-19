@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Plus, History } from 'lucide-react'
+import { Plus, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useChat } from '../../hooks/useChat'
 import { useMemory } from '../../hooks/useMemory'
@@ -11,6 +11,8 @@ import { TypingIndicator } from '../../components/coach/TypingIndicator'
 import { ChatInput } from '../../components/coach/ChatInput'
 import { QuickReplies } from '../../components/coach/QuickReplies'
 import { ConversationEndModal } from '../../components/coach/ConversationEndModal'
+import { ConversationEntry } from '../../components/coach/ConversationEntry'
+import { createConfirmedInsight } from '../../lib/insightActions'
 import { Badge } from '../../components/ui/Badge'
 import { ProfileButton } from '../../components/layout/ProfileButton'
 import { supabase } from '../../lib/supabase'
@@ -80,19 +82,8 @@ function VoiceNamingChips({ naming, onChoose }) {
   )
 }
 
-// Prüft ob Wiederkehr-Begrüßung angezeigt werden soll (alle 5 Bedingungen aus Spec 7.3)
-function shouldShowReturnGreeting(briefing, profile) {
-  if (!briefing?.openThread) return false
-  if (briefing.conversationCount <= 1) return false
-  if (briefing.daysSince < 2) return false
-  if (profile?.last_return_greeting_at) {
-    const daysSinceGreeting = Math.floor(
-      (Date.now() - new Date(profile.last_return_greeting_at).getTime()) / 86400000
-    )
-    if (daysSinceGreeting < 5) return false
-  }
-  return true
-}
+// Ein Gespräch gilt als „läuft noch“, wenn die letzte Nachricht jünger als 2 Stunden ist (UX-Konzept 4.2a).
+const RUNNING_WINDOW_MS = 2 * 60 * 60 * 1000
 
 export function CoachScreen() {
   const { user, session, profile, updateProfile, refreshProfile } = useAuth()
@@ -102,7 +93,7 @@ export function CoachScreen() {
   const { memory, updateMemory } = useMemory(user?.id)
   // Sitzungen zählt der Server (consume_session in der chat-Function). Bei 429
   // zeigt der Screen das Limit-Modal und lädt das Profil neu.
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, retryMessage, extractMemoryAndInsight, loadConversation, isConversationCounted } = useChat(user?.id, session, {
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startEntryContextConversation, sendMessage, retryMessage, extractMemoryAndInsight, loadConversation, resumeWithOpening, isConversationCounted } = useChat(user?.id, session, {
     onSessionLimit: () => { setShowLimitModal(true); refreshProfile() },
   })
   const bottomRef = useRef(null)
@@ -114,6 +105,10 @@ export function CoachScreen() {
   const [showQuickReplies, setShowQuickReplies] = useState(true)
   const [showLimitModal, setShowLimitModal] = useState(false)
   const [endModal, setEndModal] = useState(null) // { content, category }
+  // U3: Einstieg vor dem Chat. mode: 'loading' | 'entry' | 'chat'
+  const [mode, setMode] = useState('loading')
+  const [entryData, setEntryData] = useState({ recent: [], hasHistory: false })
+  const [entryBusy, setEntryBusy] = useState(false)
   // "Innere Stimmen" Phase 2: bereits beantwortete Namensgebungs-Angebote
   // ausblenden, auch wenn dieselbe Nachricht erneut gerendert wird.
   const [handledVoiceIds, setHandledVoiceIds] = useState(new Set())
@@ -127,6 +122,24 @@ export function CoachScreen() {
   const sessionsLeft = profile?.session_limit == null
     ? Infinity
     : profile.session_limit - (profile?.sessions_used_this_month || 0)
+
+  // Eckdaten für den Einstieg. Ergebnis: { briefing, recent, latestActiveConversation } oder null.
+  const fetchEntryData = useCallback(async () => {
+    const accessToken = session?.access_token ?? null
+    if (!accessToken) return null
+    const response = await fetch(functionUrl('pre-session-briefing'), {
+      method: 'POST',
+      headers: functionHeaders(accessToken),
+      body: JSON.stringify({}),
+    })
+    if (!response.ok) {
+      logger.warn('entry_data_failed', { status: response.status })
+      return null
+    }
+    const data = await response.json()
+    setEntryData({ recent: Array.isArray(data?.recent) ? data.recent : [], hasHistory: !!data?.latestActiveConversation })
+    return data
+  }, [session])
 
   useEffect(() => {
     if (!user || !profile) return
@@ -148,6 +161,7 @@ export function CoachScreen() {
     // Zählt nicht als neue Session (serverseitig über session_counted_at abgedeckt).
     if (resumeId) {
       logger.info('Resuming conversation from history', { conversationId: resumeId })
+      setMode('chat')
       setShowQuickReplies(false)
       loadConversation(resumeId).then(ok => {
         if (!ok) {
@@ -162,50 +176,42 @@ export function CoachScreen() {
     // VARIANTE 3: Wellness-Check (höchste Priorität unter den automatischen Eröffnungen)
     if (wc) {
       logger.info('WellnessCheck received from navigation', { score: wc.score, hasContext: !!wc.context })
+      setMode('chat')
       startWellnessConversation(wc).then(() => refreshProfile())
       return
     }
 
-    // Briefing laden und Eröffnungs-Variante entscheiden
+    // Eckdaten laden (pre-session-briefing, ohne Inhalte) und entscheiden: Entry-Kontext,
+    // Erstgespräch, laufendes Gespräch (< 2 h) oder Einstieg (U3, UX-Konzept 4.2a).
     const loadAndStart = async () => {
       try {
-        const accessToken = session?.access_token ?? null
-        if (!accessToken) { startNewConversation(); return }
+        const data = await fetchEntryData()
+        const latest = data?.latestActiveConversation ?? null
 
-        const response = await fetch(
-          functionUrl('pre-session-briefing'),
-          {
-            method: 'POST',
-            headers: functionHeaders(accessToken),
-            body: JSON.stringify({}),
-          }
-        )
-        const data = response.ok ? await response.json() : null
-        const briefing = data?.briefing ?? null
-        const isFirstEver = !briefing || briefing.conversationCount === 0
-
-        // VARIANTE 4: Entry-Kontext (Priorität über Wiederkehr-Begrüßung)
         if (entryCtx && entryCtx.source !== 'direct') {
           logger.info('Entry context start', { source: entryCtx.source })
+          setMode('chat')
           await startEntryContextConversation(entryCtx)
           refreshProfile()
-        // VARIANTE 1: Wiederkehr-Begrüßung mit offenem Faden
-        } else if (briefing && shouldShowReturnGreeting(briefing, profile)) {
-          logger.info('Return greeting triggered', { intensity: briefing.openThread?.intensity })
-          await startBriefingConversation()
-          refreshProfile()
-          // last_return_greeting_at aktualisieren (fire-and-forget)
-          supabase
-            .from('profiles')
-            .update({ last_return_greeting_at: new Date().toISOString() })
-            .eq('id', user.id)
-            .then(() => logger.debug('last_return_greeting_at updated'))
-        } else {
-          // VARIANTE 2: Normaler Start
-          logger.debug('Standard entry', { isFirstEver, hasOpenThread: !!briefing?.openThread })
-          startNewConversation(isFirstEver)
+          return
         }
+        if (!data || !latest) {
+          // Noch kein Gespräch mit eigener Nachricht → Erstgespräch, kein Einstieg
+          setMode('chat')
+          startNewConversation(!!data && !latest)
+          return
+        }
+        if (Date.now() - new Date(latest.lastMessageAt).getTime() < RUNNING_WINDOW_MS) {
+          logger.info('Running conversation reopened', { conversationId: latest.id })
+          setMode('chat')
+          setShowQuickReplies(false)
+          const ok = await loadConversation(latest.id)
+          if (!ok) { setMode('entry') }
+          return
+        }
+        setMode('entry')
       } catch {
+        setMode('chat')
         startNewConversation()
       }
     }
@@ -310,6 +316,32 @@ export function CoachScreen() {
     }
   }, [runPostConversation])
 
+  // Einstieg: Weitermachen → Coach knüpft an DIESES Gespräch an (start 'resume'), keine neue Konversation
+  const handleEntryResume = async (convId) => {
+    setEntryBusy(true)
+    setShowQuickReplies(false)
+    setMode('chat')
+    const ok = await resumeWithOpening(convId)
+    setEntryBusy(false)
+    if (!ok) {
+      logger.warn('Resume from entry failed', { conversationId: convId })
+      setMode('entry')
+    }
+  }
+
+  const handleEntryNew = () => {
+    setMode('chat')
+    setShowQuickReplies(true)
+    startNewConversation(false)
+  }
+
+  // „←“ im Chat: zurück zum Einstieg. Nachbearbeitung wie beim Verlassen des Screens.
+  const handleBackToEntry = async () => {
+    runPostConversation(messagesRef.current, conversationIdRef.current)
+    setMode('entry')
+    try { await fetchEntryData() } catch { /* Liste bleibt wie zuletzt */ }
+  }
+
   const handleNewConversation = async () => {
     // Gedächtnis extrahieren bevor neues Gespräch startet
     if (messages.length >= 3) {
@@ -345,22 +377,14 @@ export function CoachScreen() {
     setShowQuickReplies(true)
   }
 
-  const handleInsightConfirm = async (insight) => {
-    if (user) {
-      await supabase.from('insights').insert({
-        user_id: user.id,
-        conversation_id: conversationId,
-        content: insight.content,
-        category: insight.category,
-        source: 'auto',
-      })
-    }
-    setEndModal(null)
-    startNewConversation()
-    setShowQuickReplies(true)
-  }
+  // Abschluss (U3, 4.2c): bestätigte Erkenntnis gehört dem Nutzer (source 'user'); danach optional ein Vorhaben.
+  const handleInsightSave = (insight) =>
+    createConfirmedInsight({ userId: user?.id, conversationId, content: insight.content, category: insight.category })
 
-  const handleInsightSkip = () => {
+  const handlePlanSave = (text) =>
+    createConfirmedInsight({ userId: user?.id, conversationId, content: text, category: 'ziel' })
+
+  const handleEndModalClose = () => {
     setEndModal(null)
     startNewConversation()
     setShowQuickReplies(true)
@@ -384,14 +408,42 @@ export function CoachScreen() {
     }
   }
 
+  // U3: Einstieg statt sofortigem Neustart
+  if (mode === 'entry') {
+    return (
+      <div className="min-h-screen bg-bg">
+        <ConversationEntry
+          recent={entryData.recent}
+          busy={entryBusy}
+          onResume={handleEntryResume}
+          onNew={handleEntryNew}
+          onWellness={() => navigate('/wellness')}
+          onAll={() => navigate('/coach/verlauf')}
+        />
+        {showLimitModal && <LimitModal profile={profile} navigate={navigate} onClose={() => setShowLimitModal(false)} />}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-screen bg-bg">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-surface border-b border-[var(--color-border)] px-5 pt-12 pb-4">
         <div className="flex items-start justify-between">
-          <div className="min-w-0">
+          <div className="min-w-0 flex items-start gap-1">
+            {entryData.hasHistory && (
+              <button
+                onClick={handleBackToEntry}
+                aria-label="Zurück zum Einstieg"
+                className="-ml-2 mt-1 p-1 text-ink-3 hover:text-ink-2 flex-none"
+              >
+                <ChevronLeft size={22} />
+              </button>
+            )}
+            <div className="min-w-0">
             <h1 className="font-display text-[24px] text-ink">Dein Begleiter</h1>
             <p className="text-[13px] text-ink-3">Fragen, die dich anders denken lassen</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-none">
             <button
@@ -411,15 +463,6 @@ export function CoachScreen() {
             <span className="text-[12px] text-ink-3">Bereit für dich</span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Verlauf in Zeile 2, damit oben rechts Platz für den Avatar ist (U1, 390 px) */}
-            <button
-              onClick={() => navigate('/coach/verlauf')}
-              aria-label="Gesprächsverlauf öffnen"
-              className="flex items-center gap-1 text-[12px] text-ink-2 px-2 py-1 rounded-full border border-[var(--color-border)] hover:bg-accent-light hover:text-accent transition-all"
-            >
-              <History size={13} />
-              Verlauf
-            </button>
             {profile?.plan === 'premium' ? (
               <Badge variant="premium">Premium</Badge>
             ) : (
@@ -489,25 +532,30 @@ export function CoachScreen() {
       {endModal && (
         <ConversationEndModal
           suggestion={endModal}
-          onConfirm={handleInsightConfirm}
-          onSkip={handleInsightSkip}
+          onSave={handleInsightSave}
+          onSavePlan={handlePlanSave}
+          onClose={handleEndModalClose}
         />
       )}
 
       {/* Limit Modal */}
-      {showLimitModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
-          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
-            <h3 className="font-display text-[22px] text-ink mb-2">Alle {profile?.session_limit ?? 20} Gespräche für diesen Monat genutzt</h3>
-            <p className="text-[14px] text-ink-2 mb-5">Upgrade auf Premium für unbegrenzte Gespräche — oder buche ein persönliches Gespräch mit Jerome.</p>
-            <div className="flex flex-col gap-3">
-              <button onClick={() => navigate('/premium')} className="w-full bg-accent text-white py-3 rounded-full font-medium">Premium entdecken</button>
-              <a href="https://www.friedensstifter.coach/contact/" className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium text-center">Mit Jerome sprechen</a>
-              <button onClick={() => setShowLimitModal(false)} className="text-[13px] text-ink-3 text-center">Schließen</button>
-            </div>
-          </div>
+      {showLimitModal && <LimitModal profile={profile} navigate={navigate} onClose={() => setShowLimitModal(false)} />}
+    </div>
+  )
+}
+
+function LimitModal({ profile, navigate, onClose }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+      <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
+        <h3 className="font-display text-[22px] text-ink mb-2">Alle {profile?.session_limit ?? 20} Gespräche für diesen Monat genutzt</h3>
+        <p className="text-[14px] text-ink-2 mb-5">Upgrade auf Premium für unbegrenzte Gespräche — oder buche ein persönliches Gespräch mit Jerome.</p>
+        <div className="flex flex-col gap-3">
+          <button onClick={() => navigate('/premium')} className="w-full bg-accent text-white py-3 rounded-full font-medium">Premium entdecken</button>
+          <a href="https://www.friedensstifter.coach/contact/" className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium text-center">Mit Jerome sprechen</a>
+          <button onClick={onClose} className="text-[13px] text-ink-3 text-center">Schließen</button>
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -84,14 +84,16 @@ export function useChat(userId, session, options = {}) {
   const [conversationId, setConversationId] = useState(null)
 
   // Gemeinsamer Ablauf für Eröffnungen, bei denen der Coach sofort antwortet
-  // (Wellness-Check, Wiederkehr-Begrüßung, Entry-Kontext). Die Antwort speichert der Server.
-  const startStreamedOpening = useCallback(async ({ variant, title, extra = {}, errorLabel }) => {
-    setMessages([])
-    setConversationId(null)
+  // (Wellness-Check, Entry-Kontext, seit U3 Weitermachen). Die Antwort speichert der Server.
+  // existing: { convId, messages } → bestehendes Gespräch fortsetzen, KEINE neue Konversation (U3).
+  const startStreamedOpening = useCallback(async ({ variant, title, extra = {}, errorLabel, existing = null }) => {
+    const base = existing?.messages ?? []
+    setMessages(base)
+    setConversationId(existing?.convId ?? null)
     pendingConvRef.current = null
 
-    let convId = null
-    if (userId) {
+    let convId = existing?.convId ?? null
+    if (userId && !existing) {
       const { data: conv, error } = await supabase
         .from('conversations')
         .insert({ user_id: userId, title })
@@ -108,14 +110,14 @@ export function useChat(userId, session, options = {}) {
 
     setIsLoading(true)
     const localId = `opening-${Date.now()}`
-    setMessages([{ role: 'assistant', content: '', id: localId }])
+    setMessages([...base, { role: 'assistant', content: '', id: localId }])
     const requestId = generateRequestId()
 
     try {
       const accessToken = session?.access_token ?? null
       if (!accessToken) {
         logger.error('No access token available — aborting opening', { requestId, start: variant })
-        setMessages([{ role: 'assistant', content: SESSION_EXPIRED_MESSAGE, isError: true, id: Date.now() }])
+        setMessages([...base, { role: 'assistant', content: SESSION_EXPIRED_MESSAGE, isError: true, id: Date.now() }])
         return
       }
 
@@ -126,18 +128,18 @@ export function useChat(userId, session, options = {}) {
       const rateLimited = await readRateLimit(response)
       if (rateLimited) {
         logger.warn('Rate limit reached (server)', { requestId, retryAfter: rateLimited.retryAfter })
-        setMessages([{ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
+        setMessages([...base, { role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
         return
       }
       if (response.status === 429) {
         logger.warn('Session limit reached (server)', { requestId })
-        setMessages([])
+        setMessages(base)
         onSessionLimitRef.current?.()
         return
       }
       if (await isClientOutdated(response)) {
         logger.warn('client_outdated', { requestId })
-        setMessages([outdatedBubble()])
+        setMessages([...base, outdatedBubble()])
         return
       }
       if (!response.ok) {
@@ -157,7 +159,7 @@ export function useChat(userId, session, options = {}) {
             firstToken = false
           }
           fullContent += text
-          setMessages([{ role: 'assistant', content: fullContent, id: localId, serverId }])
+          setMessages([...base, { role: 'assistant', content: fullContent, id: localId, serverId }])
         },
       })
 
@@ -165,7 +167,7 @@ export function useChat(userId, session, options = {}) {
       else logger.info('Stream completed', { requestId, duration_ms: Date.now() - streamStart })
     } catch (err) {
       logger.error(errorLabel, err instanceof Error ? err : new Error(String(err)))
-      setMessages([{ role: 'assistant', content: HICCUP_MESSAGE, isError: true, id: Date.now() }])
+      setMessages([...base, { role: 'assistant', content: HICCUP_MESSAGE, isError: true, id: Date.now() }])
     } finally {
       setIsLoading(false)
     }
@@ -194,6 +196,28 @@ export function useChat(userId, session, options = {}) {
       variant: 'entry', title: 'Gespräch', extra: { entryContext }, errorLabel: 'Entry-context start failed',
     })
   }, [startStreamedOpening])
+
+  // Weitermachen aus dem Gesprächseinstieg (U3): Verlauf laden, dann eröffnet der Coach mit einem
+  // kurzen Anknüpfen an DIESES Gespräch (start 'resume'). Keine neue Konversation.
+  const resumeWithOpening = useCallback(async (convId) => {
+    if (!userId || !convId) return false
+    const { data, error } = await supabase
+      .from('messages')
+      .select('id, role, content, created_at, message_type')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true })
+    if (error || !data || data.length === 0) {
+      logger.error('Failed to load conversation for resume', { conversationId: convId, code: error?.code ?? 'empty_result' })
+      return false
+    }
+    countedConvIdsRef.current.add(convId)
+    await startStreamedOpening({
+      variant: 'resume',
+      errorLabel: 'Resume start failed',
+      existing: { convId, messages: data.map(m => ({ role: m.role, content: m.content, id: m.id, messageType: m.message_type })) },
+    })
+    return true
+  }, [userId, startStreamedOpening])
 
   // Lädt ein bestehendes Gespräch aus dem Verlauf und macht es zum aktiven
   // Gespräch, damit es über sendMessage() ganz normal weitergeführt werden kann.
@@ -435,6 +459,7 @@ export function useChat(userId, session, options = {}) {
     retryMessage,
     extractMemoryAndInsight,
     loadConversation,
+    resumeWithOpening,
     setMessages,
     isConversationCounted: (id) => !!id && countedConvIdsRef.current.has(id),
   }

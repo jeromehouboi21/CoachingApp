@@ -25,8 +25,14 @@ Antworte NUR mit validem JSON:
   "breakthrough_moment": null,
   "where_we_left_off": "Wo endete das Gespräch inhaltlich? 1-2 Sätze. Null wenn klar abgeschlossen.",
   "coach_effectiveness": 3,
-  "next_session_rec": "Konkreter Hinweis für das nächste Gespräch. Max. 2-3 Sätze."
+  "next_session_rec": "Konkreter Hinweis für das nächste Gespräch. Max. 2-3 Sätze.",
+  "display_title": "3–5 Wörter, neutral, ohne Namen, ohne Diagnose, z. B. 'Spannung im Team' oder 'Eine Entscheidung'"
 }
+
+WICHTIG für display_title:
+- Der Mensch sieht diesen Titel in seiner Gesprächsliste. Er soll ihn wiedererkennen, ohne dass jemand,
+  der mitliest, etwas Persönliches erfährt.
+- Keine Namen, keine Orte, keine Diagnosen, keine Bewertung, kein Satzzeichen am Ende.
 
 WICHTIG für next_session_rec:
 - Konkret und handlungsleitend, nicht allgemein
@@ -268,6 +274,15 @@ async function runPrompt(anthropic: Anthropic, prompt: string, conversationText:
   }
 }
 
+/** Neutraler Kurztitel für den Gesprächseinstieg (U3). Ungültig → null (title bleibt unverändert). */
+function sanitizeDisplayTitle(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const t = value.replace(/[\r\n]+/g, ' ').replace(/["„“”'‚‘’]/g, '').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+  if (t.length < 2 || t.length > 60) return null;
+  return t;
+}
+
+// deno-lint-ignore no-explicit-any
 function deriveIntensity(notes: any): 'low' | 'medium' | 'high' | null {
   if (!notes?.where_we_left_off) return null;
   if ((notes.emotional_intensity ?? 0) >= 4 && notes.resistance_detected) return 'high';
@@ -450,9 +465,17 @@ Deno.serve(async (req) => {
       });
       if (snError) logger.error('session_notes write failed', { code: snError.code, conversationId });
 
+      const displayTitle = sanitizeDisplayTitle(sessionNotes.display_title);
+      if (!displayTitle) {
+        // Log-Regel: nur Länge, nie den Text
+        logger.warn('display_title_invalid', {
+          conversationId, length: typeof sessionNotes.display_title === 'string' ? sessionNotes.display_title.length : 0,
+        });
+      }
       const { error: convUpdateError } = await supabase
         .from('conversations')
         .update({
+          ...(displayTitle ? { title: displayTitle } : {}),
           summary: sessionNotes.main_topic,
           open_thread: sessionNotes.where_we_left_off ?? null,
           open_thread_intensity: deriveIntensity(sessionNotes),

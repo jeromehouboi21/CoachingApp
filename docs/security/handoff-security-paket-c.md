@@ -37,6 +37,7 @@ Alle Regeln aus Paket A und B gelten weiter (Abschnitt 0 im Handoff B). Neu bzw.
 
 1. **Eine Welle zur Zeit.** Reihenfolge nach Abschnitt 1. Jede Welle startet auf einem eigenen Branch (`security/paket-c-<welle>`) **von aktuellem `main`**, nachdem die vorige gemergt ist.
 2. **Migrationen:** Letzte eingespielte Nummer ist **033**. Paket C nutzt **034** (C-2), **035** (C-3), **036** (C-5). Ist der Ordner beim Start weiter, nimm die nächsten freien Nummern; leg nie eine Migration mit einer niedrigeren Nummer an als eine eingespielte. Die Zuordnung kommt in den Abschlussbericht.
+   > **Hinweis 19.11.2026 (Zielbild, U3):** 035 ist durch `035_u3_insight_surfacing.sql` belegt. Damit wird C-3 voraussichtlich **036** und C-5 **037** (oder die dann nächsten freien Nummern).
 3. **Schutz-Trigger `protect_profile_privileges()`:** Vorlage ist die **Fassung aus Migration 032** (mit den Opt-in-Spalten). Nur die Spaltenliste ändern.
 4. **Feste Versionen** für jeden neuen Import in Edge Functions (`npm:…@x.y.z`, `https://deno.land/x/…@x.y.z`) und für neue devDependencies. Ohne Version zieht jeder Deploy die neueste (Ausfall 19.11.2026).
 5. **Deploy-Lehre aus Paket B** in jedem STOPP: **erst mergen bzw. `main` auschecken, dann** `supabase db push` und `functions deploy`. Nach neuen oder geänderten RPCs im SQL-Editor `notify pgrst, 'reload schema';`. Die Supabase CLI bleibt während Paket C auf 2.95.4 (kein Update mitten im Paket).

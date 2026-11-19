@@ -1,53 +1,18 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Info, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { ProfileButton } from '../../components/layout/ProfileButton'
+import { HiddenInsightCard } from '../../components/today/HiddenInsightCard'
+import { DailyImpulseCard } from '../../components/today/DailyImpulseCard'
+import { relativeLabel } from '../../components/coach/ConversationEntry'
 import { getDailyImpulse } from '../../lib/prompts'
-import { Compass, Scale, Flame, BookOpen, Info, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { createLogger } from '../../lib/logger'
+import { dismissInsight, markSurfaced } from '../../lib/insightActions'
+import { chooseTodayState } from '../../lib/todayState'
 
-const TOOL_CARDS = [
-  {
-    id: 'coach',
-    icon: Compass,
-    iconBg: 'bg-accent-light',
-    iconColor: 'var(--color-accent)',
-    title: 'KI-Coach',
-    desc: 'Systemisches Gespräch',
-    to: '/coach',
-    badge: null,
-  },
-  {
-    id: 'scale',
-    icon: Scale,
-    iconBg: 'bg-coral-light',
-    iconColor: 'var(--color-coral)',
-    title: 'Wie geht\'s dir?',
-    desc: 'Auf einer Skala 1–10',
-    to: '/wellness',
-    badge: null,
-  },
-  {
-    id: 'voices',
-    icon: Flame,
-    iconBg: 'bg-premium-light',
-    iconColor: 'var(--color-premium)',
-    title: 'Innere Stimmen',
-    desc: 'Welche Stimme bremst dich?',
-    to: '/mirror/muster',
-    badge: null,
-  },
-  {
-    id: 'learn',
-    icon: BookOpen,
-    iconBg: 'bg-surface-2',
-    iconColor: 'var(--color-ink-2)',
-    title: 'Verstehen',
-    desc: 'Wie Muster entstehen',
-    to: '/mirror/muster',
-    badge: null,
-  },
-]
+const logger = createLogger('HomeScreen')
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -57,29 +22,43 @@ function getGreeting() {
 }
 
 export function HomeScreen() {
-  const { profile, user } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const impulse = getDailyImpulse()
-  const [conversationCount, setConversationCount] = useState(null)
+  const [today, setToday] = useState(null)   // { state, insight? }
+  const [hidden, setHidden] = useState(false) // Karte per „Heute nicht“ oder Entfernen weggeschoben
 
   useEffect(() => {
     if (!user) return
-    supabase
-      .from('conversations')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .then(({ count }) => setConversationCount(count ?? 0))
+    let cancelled = false
+    Promise.all([
+      supabase.rpc('get_conversation_history'),
+      supabase.from('insights')
+        .select('id, content, category, source, created_at, surfaced_at, confirmed_at, dismissed_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(300),
+    ]).then(([convRes, insRes]) => {
+      if (cancelled) return
+      if (convRes.error || insRes.error) {
+        // Heute bleibt nutzbar (Tagesimpuls), der Fehler wird protokolliert
+        logger.error('today_load_failed', { code: convRes.error?.code ?? insRes.error?.code })
+        setToday({ state: 'C' })
+        return
+      }
+      const choice = chooseTodayState(convRes.data ?? [], insRes.data ?? [])
+      setToday(choice)
+      // Wiederentdecken zählt als gezeigt, sobald die Karte erscheint (auch ohne Antippen)
+      if (choice.state === 'C2') markSurfaced(choice.insight.id)
+    })
+    return () => { cancelled = true }
   }, [user])
 
-  const accountAgeDays = profile?.created_at
-    ? Math.floor((Date.now() - new Date(profile.created_at)) / 86400000)
-    : 0
-  const isNewUser = accountAgeDays < 7 || conversationCount === 0
-  const isExperienced = !isNewUser && conversationCount !== null
+  const talkAboutImpulse = () => navigate('/coach', { state: { entryContext: { source: 'tagesimpuls', impulse } } })
+  const state = hidden && (today?.state === 'B' || today?.state === 'C2') ? 'C' : today?.state
 
   return (
     <div className="px-5 pt-12 pb-6">
-      {/* Header */}
       <div className="flex items-start justify-between mb-8">
         <div>
           <p className="text-[13px] text-ink-3 mb-1">{getGreeting()}</p>
@@ -90,88 +69,113 @@ export function HomeScreen() {
         <ProfileButton />
       </div>
 
-      {/* Wie es funktioniert — Zustand A: neue Nutzer (vor Tagesimpuls) */}
-      {isNewUser && (
-        <div className="bg-surface border-[1.5px] border-[var(--color-accent)] rounded-xl p-5 mb-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Info size={16} color="var(--color-accent)" />
-            <span className="text-[11px] text-accent uppercase tracking-[0.06em] font-medium">Neu hier?</span>
+      {!today && (
+        <div className="flex justify-center py-16">
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-2 h-2 rounded-full bg-accent animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+            ))}
           </div>
-          <h2 className="font-display text-[18px] text-ink mb-1">Erfahre wie die App funktioniert</h2>
-          <p className="text-[13px] text-ink-2 mb-4">
-            Stelle dem Coach deine ersten Fragen — bevor du dein erstes Gespräch beginnst.
-          </p>
+        </div>
+      )}
+
+      {/* A – Neu */}
+      {state === 'A' && (
+        <>
+          <div className="bg-surface border border-[var(--color-border)] rounded-xl p-5 mb-4">
+            <p className="text-[11px] text-accent uppercase tracking-[0.06em] font-medium mb-2">So funktioniert's</p>
+            <p className="text-[14px] text-ink-2 leading-relaxed">
+              Du bringst ein Thema mit. Der Begleiter stellt Fragen. Was du erkennst, sammelt sich im Spiegel.
+            </p>
+          </div>
           <button
-            onClick={() => navigate('/howto')}
-            className="w-full bg-accent text-white text-[13px] font-medium px-4 py-2.5 rounded-full hover:bg-accent-2 transition-colors"
+            onClick={() => navigate('/coach')}
+            className="w-full bg-accent text-white text-[15px] font-medium py-4 rounded-full hover:bg-accent-2 transition-colors mb-4"
           >
-            Wie funktioniert das? →
+            Erstes Gespräch beginnen
+          </button>
+          <WellnessLink onClick={() => navigate('/wellness')} />
+        </>
+      )}
+
+      {/* D – Heute schon gesprochen */}
+      {state === 'D' && (
+        <div className="bg-surface border border-[var(--color-border)] rounded-xl p-5 mb-6">
+          <p className="font-display text-[18px] text-ink leading-[1.4] mb-1">Du warst heute schon im Gespräch.</p>
+          <p className="text-[14px] text-ink-2 mb-4">Lass es ruhig nachwirken.</p>
+          <button onClick={() => navigate('/mirror')} className="text-[13px] text-accent font-medium hover:underline">
+            Was du erkannt hast → Spiegel
           </button>
         </div>
       )}
 
-      {/* Tagesimpuls Card */}
-      <div
-        className="relative bg-accent rounded-xl p-6 mb-8 overflow-hidden cursor-pointer"
-        onClick={() => navigate('/coach', { state: { entryContext: { source: 'tagesimpuls', impulse } } })}
-      >
-        <div className="absolute right-0 top-0 w-32 h-32 rounded-full bg-white opacity-5 translate-x-10 -translate-y-10" />
-        <div className="absolute right-4 bottom-0 w-20 h-20 rounded-full bg-white opacity-5 translate-y-8" />
-        <p className="text-[11px] text-white/70 uppercase tracking-[0.08em] mb-3 relative z-10">✦ Tagesimpuls</p>
-        <p className="font-display text-[20px] text-white leading-[1.35] mb-5 relative z-10">{impulse}</p>
-        <button
-          className="bg-white text-accent text-[13px] font-medium px-4 py-2 rounded-full hover:bg-accent-light transition-colors relative z-10"
-          onClick={e => { e.stopPropagation(); navigate('/coach', { state: { entryContext: { source: 'tagesimpuls', impulse } } }) }}
-        >
-          Darüber sprechen →
-        </button>
-      </div>
+      {/* B – Nachklang */}
+      {state === 'B' && (
+        <>
+          <HiddenInsightCard
+            heading="Aus deinem letzten Gespräch"
+            insight={today.insight}
+            onReveal={() => markSurfaced(today.insight.id)}
+            onDismiss={async () => {
+              const { ok } = await dismissInsight(today.insight.id)
+              if (ok) setHidden(true)
+              return ok
+            }}
+            onSuggestionDone={(r) => { if (r.action === 'removed') setHidden(true) }}
+          />
+          <DailyImpulseCard impulse={impulse} onTalk={talkAboutImpulse} compact />
+        </>
+      )}
 
-      {/* Werkzeugkasten */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[17px] font-medium text-ink">Dein Werkzeugkasten</h2>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {TOOL_CARDS.map(tool => (
-            <div
-              key={tool.id}
-              className={`bg-surface border border-[var(--color-border)] rounded-xl p-4 shadow-sm relative ${tool.to && !tool.soon ? 'cursor-pointer hover:shadow' : 'opacity-70'} transition-all`}
-              onClick={() => tool.to && !tool.soon && navigate(tool.to)}
-            >
-              {tool.badge && (
-                <span className="absolute top-3 right-3 bg-premium-light text-premium text-[10px] font-medium px-2 py-0.5 rounded-full">
-                  {tool.badge}
-                </span>
-              )}
-              {tool.soon && (
-                <span className="absolute top-3 right-3 bg-surface-2 text-ink-3 text-[10px] font-medium px-2 py-0.5 rounded-full">
-                  Bald
-                </span>
-              )}
-              <div className={`w-10 h-10 ${tool.iconBg} rounded-lg flex items-center justify-center mb-3`}>
-                <tool.icon size={18} color={tool.iconColor} />
-              </div>
-              <p className="text-[14px] font-medium text-ink mb-0.5">{tool.title}</p>
-              <p className="text-[12px] text-ink-3">{tool.desc}</p>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* C2 – Wiederentdecken */}
+      {state === 'C2' && (
+        <>
+          <HiddenInsightCard
+            heading={`${capitalize(relativeLabel(today.insight.created_at))} hast du etwas erkannt.`}
+            insight={today.insight}
+            onSuggestionDone={(r) => { if (r.action === 'removed') setHidden(true) }}
+          />
+          <WellnessLink onClick={() => navigate('/wellness')} />
+          <TalkLink onClick={() => navigate('/coach')} />
+        </>
+      )}
 
-      {/* Reflexionssträhne entfernt (U1): Strähnen erzeugen Druck. Reflexionstage stehen im Profil. */}
+      {/* C – Ruhe */}
+      {state === 'C' && (
+        <>
+          <DailyImpulseCard impulse={impulse} onTalk={talkAboutImpulse} />
+          <WellnessLink onClick={() => navigate('/wellness')} />
+          <TalkLink onClick={() => navigate('/coach')} />
+        </>
+      )}
 
-      {/* Wie es funktioniert — Zustand B: erfahrene Nutzer */}
-      {isExperienced && (
-        <button
-          onClick={() => navigate('/howto')}
-          className="w-full flex items-center gap-2 mt-5 text-left"
-        >
+      {today && (
+        <button onClick={() => navigate('/howto')} className="w-full flex items-center gap-2 mt-8 text-left">
           <Info size={14} color="var(--color-ink-3)" />
           <span className="flex-1 text-[13px] text-ink-3">Wie funktioniert die App?</span>
           <ChevronRight size={12} color="var(--color-ink-3)" />
         </button>
       )}
     </div>
+  )
+}
+
+function capitalize(s) {
+  return s ? s[0].toUpperCase() + s.slice(1) : s
+}
+
+function WellnessLink({ onClick }) {
+  return (
+    <button onClick={onClick} className="block text-[14px] text-ink-2 hover:underline mb-2">
+      Erst mal ankommen → Wie geht's dir?
+    </button>
+  )
+}
+
+function TalkLink({ onClick }) {
+  return (
+    <button onClick={onClick} className="block text-[14px] text-ink-2 hover:underline">
+      Ins Gespräch →
+    </button>
   )
 }
