@@ -204,6 +204,9 @@ content         TEXT
 category        TEXT CHECK ('muster' | 'stärke' | 'erkenntnis' | 'ziel')
 source          TEXT CHECK ('auto' | 'user')
 is_pinned       BOOLEAN DEFAULT FALSE
+surfaced_at     TIMESTAMPTZ  -- U3: auf Heute angezeigt
+confirmed_at    TIMESTAMPTZ  -- U3: vom Nutzer bestätigt/angepasst (source → 'user')
+dismissed_at    TIMESTAMPTZ  -- U3: „Heute nicht“
 created_at / updated_at TIMESTAMPTZ
 ```
 
@@ -256,7 +259,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | Function | Trigger | Zweck |
 |---|---|---|
 | `chat` | Jede Chat-Nachricht | Anthropic API Proxy, Streaming, buildSystemPrompt |
-| `pre-session-briefing` | CoachScreen Mount | Nur Eckdaten für die Wiederkehr-Begrüßung (`daysSince`, `conversationCount`, `openThread.intensity`) – keine Akte, keine Inhalte (S-12) |
+| `pre-session-briefing` | CoachScreen Mount / Einstieg | Nur Eckdaten (`daysSince`, `conversationCount`, `openThread.intensity`) + seit U3 `recent` (3 Gespräche: id, Kurztitel, Zeit, offen/bewegt) und `latestActiveConversation` – keine Akte, keine Inhalte (S-12) |
 | `post-conversation` | Nach Gespräch (fire-and-forget) | RAG-Eintrag, Selbstreflexion, open_thread, pattern_references |
 | `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
@@ -267,7 +270,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 
 ### `chat` — System-Prompt Aufbau
 
-**Nachrichten schreibt nur der Server (S-12, Paket B Welle 2a):** Gesprächsmodus `{ conversationId, message: { clientMessageId, content, inputMode } }` bzw. Eröffnung `{ conversationId, start: 'first'|'standard'|'wellness'|'briefing'|'entry' }`. `chat` lädt den Verlauf aus der DB, speichert die Nutzer-Nachricht idempotent (nach `consume_session`) und die Antwort per `EdgeRuntime.waitUntil` auch nach Client-Abbruch. `first`/`standard` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`!), ohne Modellaufruf und ohne Zählung. Altes Format (`messages[]`) → `409 client_outdated` (seit Welle 2b, geloggt als `legacy_format`). `authenticated` hat auf `messages` nur noch SELECT (Migration 031).
+**Nachrichten schreibt nur der Server (S-12, Paket B Welle 2a):** Gesprächsmodus `{ conversationId, message: { clientMessageId, content, inputMode } }` bzw. Eröffnung `{ conversationId, start: 'first'|'standard'|'wellness'|'briefing'|'entry'|'resume' }` (`resume` seit U3: Coach knüpft an **dieses** bestehende Gespräch an, Block FORTSETZUNG, keine neue Konversation; `briefing` nutzt das Frontend nicht mehr). `chat` lädt den Verlauf aus der DB, speichert die Nutzer-Nachricht idempotent (nach `consume_session`) und die Antwort per `EdgeRuntime.waitUntil` auch nach Client-Abbruch. `first`/`standard` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`!), ohne Modellaufruf und ohne Zählung. Altes Format (`messages[]`) → `409 client_outdated` (seit Welle 2b, geloggt als `legacy_format`). `authenticated` hat auf `messages` nur noch SELECT (Migration 031).
 
 **Kontext lädt `chat` selbst (S-12):** Akte, Profil, Resonanzkarte, Briefing, Legacy-Gedächtnis, RAG und Supervision kommen aus der DB (`loadCoachContext`). Entsprechende Body-Felder werden ignoriert; vom Client kommen nur `messages`, `conversationId`, `wellnessCheck` und `entryContext` (typ- und längengeprüft). RAG läuft einmal pro Gespräch beim ersten Nutzer-Input (`_shared/rag.ts`) und wird in `conversation_context` gespeichert (kein Client-Zugriff).
 
@@ -275,7 +278,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 
 ```
 BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennung)
-  + BLOCK 1: Briefing       (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch)
+  + BLOCK 1: Briefing       (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch; bei start 'resume' stattdessen FORTSETZUNG aus diesem Gespräch)
   + BLOCK 2: Coach-Akte     (coach_file_entries + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte  (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext    (Anonyme Erfahrungen)
@@ -319,32 +322,38 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennun
 | Hook | Zuständigkeit |
 |---|---|
 | `useAuth` | User, Session, Profile · signUp/signIn/signOut/updateProfile |
-| `useChat` | Gesprächs-State · Streaming · startNewConversation / startWellnessConversation / startBriefingConversation / sendMessage / extractMemoryAndInsight |
+| `useChat` | Gesprächs-State · Streaming · startNewConversation / startWellnessConversation / startEntryContextConversation / resumeWithOpening / loadConversation / sendMessage / extractMemoryAndInsight |
 | `useMemory` | user_memory lesen & schreiben (Legacy-Fallback) |
 | `useStreak` | Streak-Berechnung |
 | `useVoiceInput` | Web Speech API (de-DE) |
 
-### useChat — 3 Start-Funktionen
+### useChat — Start-Funktionen
 
 ```
 startNewConversation(isFirstEver)          → Pool-Text sofort anzeigen, Server speichert (start first/standard)
 startWellnessConversation(wc)              → start 'wellness' — Coach antwortet sofort auf Wellness-Score
-startBriefingConversation()                → start 'briefing' — Coach antwortet auf offenen Faden (lädt der Server)
 startEntryContextConversation(entryContext) → start 'entry'
+resumeWithOpening(conversationId)          → U3: Verlauf laden + start 'resume', KEINE neue Konversation
+loadConversation(conversationId)           → Verlauf laden ohne Coach-Nachricht (Verlauf, laufendes Gespräch)
+startBriefingConversation()                → start 'briefing' — seit U3 vom Frontend nicht mehr genutzt
 ```
 
 Beim `sendMessage` werden mitgeschickt: `conversationId`, `message: { clientMessageId, content, inputMode }`, `requestId` – sonst nichts. Gescheitertes Senden → Nachricht `status: 'failed'`, „Nicht gesendet – nochmal versuchen“ (`retryMessage`, gleiche `clientMessageId`). `post-conversation` bekommt nur `{ conversationId }`, die Extraktion `{ mode: 'extract', conversationId }`.
 
-### CoachScreen — Eröffnungslogik (3 Varianten)
+### CoachScreen — Eröffnungslogik (seit U3)
 
 ```
 Mount:
+  0. resumeConversationId (Verlauf) → loadConversation()
   1. Wellness-Check aus Navigation state? → startWellnessConversation()
-  2. pre-session-briefing laden
-     a. Offener Faden + ≥2 Tage alt + ≥5 Tage seit letzter Begrüßung?
-        → startBriefingConversation() + last_return_greeting_at setzen
-     b. Sonst → startNewConversation(isFirstEver)
+  2. pre-session-briefing laden (recent, latestActiveConversation)
+     a. Entry-Kontext? → startEntryContextConversation()
+     b. Noch kein Gespräch mit eigener Nachricht? → startNewConversation(true)
+     c. Jüngstes Gespräch < 2 h? → loadConversation(latest)
+     d. Sonst → Einstieg: Weitermachen (resumeWithOpening) · Etwas Neues · Wie geht's dir?
 ```
+
+**Heute (`/home`, seit U3):** Zustände A Neu → D heute schon gesprochen → B Nachklang (verdeckt) → C2 Wiederentdecken (max. 1×/Woche) → C Ruhe, Logik in `src/lib/todayState.js`. Schreibaktionen an Erkenntnissen nur über `src/lib/insightActions.js` (Write mit `.select('id')` bestätigt). Abschluss-Modal: bestätigte Erkenntnis `source: 'user'`, danach optional ein Vorhaben (`ziel`).
 
 ### src/lib/prompts.js — wichtige Exporte
 
@@ -511,6 +520,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `032_s13_learning_base.sql` | profiles.learning_opt_in(+_updated_at/_version) · experience_patterns.source_user_id/review_status · RPC set_learning_opt_in · match_experiences nur approved · Bestand gelöscht (D-2) |
 | `033_s15_cascade_and_retention.sql` | invited_by SET NULL · user_feedback/coach_reflections CASCADE · raw_reflections geleert, protocol_text · apply_retention + Cron apply-retention · inactive_accounts_report |
 | `034_s22_security_monitoring.sql` | app_logs.origin (Trigger, server/client) · security_alerts · RPC security_log_counts (nur service_role) · Cron security-monitor + purge-security-alerts |
+| `035_u3_insight_surfacing.sql` | insights.surfaced_at · confirmed_at · dismissed_at + Index (user_id, created_at) · Zielbild U3 (Paket C rückt auf 036/037) |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.
 

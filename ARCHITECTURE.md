@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035)
 
 ---
 
@@ -158,7 +158,7 @@ CoachingApp/
 │   │   │   ├── index.ts                 ← Claude API Proxy + System-Prompt-Builder + Limit-/Krisen-Check
 │   │   │   └── crisisDetection.ts       ← Leichte Klassifikation auf akute Suizidalität
 │   │   ├── post-conversation/index.ts   ← Post-Processing (7+ parallele/sequentielle Prompts)
-│   │   ├── pre-session-briefing/index.ts← Eckdaten für die Wiederkehr-Begrüßung
+│   │   ├── pre-session-briefing/index.ts← Eckdaten für Eröffnung und Gesprächseinstieg (ohne Inhalte)
 │   │   ├── validate-invite-code/index.ts← Invite-Code-Einlösung (Selbstregistrierung)
 │   │   ├── admin-users/index.ts         ← Admin: Nutzerliste + Beta-/Limit-Verwaltung
 │   │   ├── admin-feedback/index.ts      ← Admin: Feedback-Liste inkl. Name/E-Mail
@@ -202,7 +202,8 @@ CoachingApp/
 │   │   ├── 031_s12_revoke_client_message_insert.sql ← Client darf messages nicht mehr schreiben (Welle 2b)
 │   │   ├── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
 │   │   ├── 033_s15_cascade_and_retention.sql ← Löschregeln, apply_retention, inactive_accounts_report
-│   │   └── 034_s22_security_monitoring.sql ← app_logs.origin, security_alerts, security_log_counts, Cron security-monitor
+│   │   ├── 034_s22_security_monitoring.sql ← app_logs.origin, security_alerts, security_log_counts, Cron security-monitor
+│   │   └── 035_u3_insight_surfacing.sql ← insights.surfaced_at/confirmed_at/dismissed_at (Heute)
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -297,16 +298,20 @@ function AdminRoute({ children }) {
 
 ### 4.1 Screens
 
-#### HomeScreen (`/home`)
+#### HomeScreen (`/home`, „Heute“) – seit U3
 
-**Rolle:** Zentrales Dashboard. Startpunkt der meisten Nutzer-Sessions.
+**Rolle:** Ein Screen, ein nächster Schritt. Heute ist öffentlicher Raum: **keine Gesprächsthemen im Klartext**, Erkenntnisse nur verdeckt.
 
-**Inhalt:**
-- Begrüßung + `ProfileButton` oben rechts (seit U1; Strähnen-Leiste entfernt)
-- Tägliche Impulsfrage (rotierend, Index = Tagesindex % 14, aus `prompts.js`)
-- 4 Tool-Kacheln (`TOOL_CARDS`): KI-Coach · Wie geht's dir? · Innere Stimmen · Verstehen (beide → `/mirror/muster`, seit U2 ohne „PRO“). Das Raster entfällt mit U3.
+**Zustand** aus vorhandenen Daten (`src/lib/todayState.js`, reine Funktion; Daten: `get_conversation_history` + eigene `insights`), Reihenfolge A → D → B → C2 → C:
+- **A – Neu:** kein Gespräch mit ≥ 3 Nachrichten → „So funktioniert's“ · [Erstes Gespräch beginnen] · „Erst mal ankommen → Wie geht's dir?“
+- **D – Heute schon gesprochen:** Gespräch mit ≥ 3 Nachrichten, letzte Aktivität heute → „Du warst heute schon im Gespräch. Lass es ruhig nachwirken.“ · „Was du erkannt hast → Spiegel“
+- **B – Nachklang:** Erkenntnis der letzten 7 Tage ohne `dismissed_at`, entweder noch nicht bestätigter Vorschlag (`source='auto'`, `confirmed_at IS NULL`) oder Vorhaben (`ziel`, Vorrang) → `HiddenInsightCard` (verdeckt, „Antippen zum Anzeigen“ setzt `surfaced_at`; bei `auto` „Stimmt das so?“ Ja/Anpassen/Entfernen; „Heute nicht“ → `dismissed_at`) + Tagesimpuls als Nebenkarte
+- **C2 – Wiederentdecken:** Erkenntnis älter als 14 Tage, `surfaced_at IS NULL`, höchstens einmal pro Kalenderwoche (eine frühere Wiederentdeckung = `surfaced_at` > 14 Tage nach `created_at`); `surfaced_at` wird beim Anzeigen gesetzt
+- **C – Ruhe:** Tagesimpuls (`DailyImpulseCard`) · „Erst mal ankommen → Wie geht's dir?“ · „Ins Gespräch →“
+- Dauerhaft: Erklärzeile unter verdeckten Karten („Verdeckt, damit niemand mitliest …“), Link „Wie funktioniert die App?“
+- Ladefehler → Zustand C + `today_load_failed`
 
-**Navigiert zu:** `/coach`, `/wellness`, `/mirror/muster`
+**Navigiert zu:** `/coach` (mit Entry-Kontext `tagesimpuls`), `/wellness`, `/mirror`, `/howto`
 
 ---
 
@@ -314,31 +319,27 @@ function AdminRoute({ children }) {
 
 **Rolle:** Haupt-Chat-Interface — das Herzstück der App.
 
-**Eröffnungslogik beim Mount (Prioritätsreihenfolge, `VARIANTE 0` sticht alle anderen):**
+**Eröffnungslogik beim Mount (seit U3, Konzept 4.2a):**
 
 ```
-0. resumeConversationId aus Navigation state (von HistoryScreen "Gespräch fortsetzen")?
-   → loadConversation(id) — lädt komplette Historie, KEIN countSession()
-     Fallback bei Fehler: startNewConversation()
-
-3. Wellness-Check aus Navigation state (state.wellnessCheck)?
-   → startWellnessConversation()
-
-   pre-session-briefing laden:
-   4. Entry-Kontext (Tagesimpuls auf Home, Verstehen-Übersicht, Musterseite, „Aus Gesprächen“)?
-      → startEntryContextConversation()
-   1. Offener Faden + ≥2 Tage alt + ≥5 Tage seit letzter Begrüßung?
-      → startBriefingConversation() + last_return_greeting_at aktualisieren
-   2. Sonst
-      → startNewConversation(isFirstEver)
+0. resumeConversationId aus Navigation state (Verlauf „Gespräch fortsetzen“)?
+   → loadConversation(id) — Verlauf, keine Coach-Nachricht, zählt nicht neu
+3. Wellness-Check aus Navigation state? → startWellnessConversation()
+   pre-session-briefing laden (briefing, recent, latestActiveConversation):
+4. Entry-Kontext (Tagesimpuls, Muster)? → startEntryContextConversation()
+   Noch kein Gespräch mit eigener Nachricht? → startNewConversation(true)  (Erstgespräch, kein Einstieg)
+   Letzte Nachricht im jüngsten Gespräch < 2 h? → loadConversation(latest)  (läuft noch)
+   Sonst → Einstieg (ConversationEntry)
 ```
 
-**Header:** Zeile 1 „Neues Gespräch“ + `ProfileButton`; Zeile 2 Status, Knopf „Verlauf“ (→ `/coach/verlauf`) und Plan-Anzeige (seit U1, damit bei 390 px nichts umbricht).
+**Einstieg (`ConversationEntry`):** bis zu 3 Gespräche zum Weitermachen (Kurztitel; bei `moving` „Ein Gespräch, das dich bewegt hat“; ohne Kurztitel heute „Gespräch um HH:MM“, sonst „Gespräch vom <Datum>“; „· da war noch etwas offen“) · „Alle Gespräche →“ `/coach/verlauf` · [Etwas Neues mitbringen] (Pool) · „Erst mal ankommen → Wie geht's dir?“. **Weitermachen** → `resumeWithOpening(id)`: Coach knüpft an **dieses** Gespräch an (`start: 'resume'`), **keine neue Konversation**. Die frühere automatische Wiederkehr-Begrüßung (`start: 'briefing'`, `last_return_greeting_at`) nutzt das Frontend nicht mehr.
+
+**Header:** Zeile 1 „←“ (zurück zum Einstieg, nur wenn es frühere Gespräche gibt; stößt `post-conversation` an) · Titel · „Neues Gespräch“ · `ProfileButton`; Zeile 2 Status und Plan-Anzeige.
 
 **„Neues Gespräch"-Button:**
 1. `runPostConversation()` → fire-and-forget zur `post-conversation` Edge Function
 2. `extractMemoryAndInsight()` → Legacy-Gedächtnis aktualisieren
-3. Wenn `suggested_insight` vorhanden → `ConversationEndModal` zeigen
+3. Wenn `suggested_insight` vorhanden → `ConversationEndModal`: Schritt 1 „Was nimmst du heute mit?“ (Ja/Anpassen → `createConfirmedInsight`, `source: 'user'`, `confirmed_at`; Fehler sichtbar), Schritt 2 „Magst du etwas ausprobieren?“ (optional → `category: 'ziel'`)
 4. `startNewConversation()` + `showQuickReplies = true`
 
 **Post-Conversation-Auslösung (nicht nur der Button!):** vier unabhängige Trigger-Pfade rufen dieselbe `runPostConversation()`-Kernfunktion auf — `visibilitychange` (Tab in Hintergrund), `pagehide` (Tab schließen/Reload), Unmount-Cleanup (SPA-Navigation weg vom Coach) und der explizite Button-Klick. Eine `processedRef`-Map (`conversationId → Nachrichtenzahl beim letzten Anstoß`) verhindert Doppel-Aufrufe für denselben Stand, stößt aber erneut an, sobald das Gespräch gewachsen ist (vorher blockierte ein früher Tab-Wechsel jede spätere Nachbearbeitung). Die Edge Function hat zusätzlich einen serverseitigen Idempotenz-Guard über `post_processed_message_count` und liest den Verlauf selbst aus der DB.
@@ -569,8 +570,9 @@ Exports:
 
   startNewConversation(isFirstEver)
   startWellnessConversation(wellnessCheck)
-  startBriefingConversation()
+  startBriefingConversation()          — vom Frontend seit U3 nicht mehr genutzt
   startEntryContextConversation(entryContext)
+  resumeWithOpening(conversationId)    — U3: Verlauf laden + start 'resume' (Coach knüpft an), keine neue Konversation
   sendMessage(content, inputMode)
   retryMessage(msg)                    — erneutes Senden einer gescheiterten Nachricht (gleiche clientMessageId)
   extractMemoryAndInsight()            — { mode: 'extract', conversationId }, der Server liest das Gespräch
@@ -592,7 +594,7 @@ Exports:
 7. Fehler **vor** dem Meta-Chunk (Netz, 5xx, Rate-Limit, Monatslimit): Nachricht `status: 'failed'` → „Nicht gesendet – nochmal versuchen“ (`retryMessage`, idempotent). Fehler **nach** dem Meta-Chunk: Platzhalter zeigt den Aussetzer-Text, der Server speichert die Antwort trotzdem zu Ende.
 8. `409 client_outdated` (nur alte, gecachte App-Versionen kennen das alte Format; die neue zeigt): Hinweis „Es gibt eine neue Version der App. Tipp hier, um sie zu laden.“ → `location.reload()`
 
-**Eröffnungen:** `startWellnessConversation`/`startBriefingConversation`/`startEntryContextConversation` laufen über `startStreamedOpening` → `{ conversationId, start: 'wellness' | 'briefing' | 'entry', wellnessCheck?, entryContext? }`. `startNewConversation` zeigt den Pool-Text sofort an und lässt ihn vom Server speichern (`start: 'first' | 'standard'`, `openingIndex`; ohne Modellaufruf, zählt **nicht** als Gespräch).
+**Eröffnungen:** `startWellnessConversation`/`startBriefingConversation`/`startEntryContextConversation`/`resumeWithOpening` laufen über `startStreamedOpening` → `{ conversationId, start: 'wellness' | 'briefing' | 'entry' | 'resume', wellnessCheck?, entryContext? }`. Mit `existing: { convId, messages }` (nur `resume`) wird **keine** Konversation angelegt; die Coach-Nachricht wird an den geladenen Verlauf angehängt. `startNewConversation` zeigt den Pool-Text sofort an und lässt ihn vom Server speichern (`start: 'first' | 'standard'`, `openingIndex`; ohne Modellaufruf, zählt **nicht** als Gespräch).
 
 ---
 
@@ -749,6 +751,10 @@ Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client,
 
 **Verlauf und Speicherung (S-12):** Im Gesprächsmodus lädt `chat` den Verlauf aus der DB (bis 400 Zeilen, ans Modell die letzten 60; gleiche Rollen hintereinander werden zusammengeführt). Ein mitgeschicktes `messages[]` wird ignoriert (`body_messages_ignored`). Die Nutzer-Nachricht wird **nach** `consume_session` per Upsert auf `(conversation_id, client_message_id)` gespeichert — eine Wiederholung legt nichts doppelt an; ist sie schon beantwortet, kommt die gespeicherte Antwort zurück (`meta.replayed`). Die Antwort bekommt vorab eine ID, wird per `EdgeRuntime.waitUntil` auch nach einem Client-Abbruch zu Ende generiert und gespeichert (D-7, `metadata: { model, client_aborted, stop_reason, stream_failed }`; Fehler → `assistant_insert_failed`). `start: 'first' | 'standard'` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`), ohne Modellaufruf und ohne `consume_session`. Krisen-Events bekommen die `message_id` der Nutzer-Nachricht.
 
+**Start `resume` (U3):** nur auf einem eigenen Gespräch mit mindestens einer Nutzer-Nachricht (sonst `400 invalid_start`, Log `resume_rejected`). Statt BLOCK 1 (Briefing über das letzte *andere* Gespräch) setzt `buildSystemPrompt` den Block **FORTSETZUNG** aus diesem Gespräch (`summary`, `open_thread`, relative Zeit der letzten Nachricht): kurz anknüpfen, höchstens eine Frage, Ausweg, keine Bewertung; bei `open_thread_intensity = 'high'` ohne Thema. Kein Wellness-/Entry-Kontext, kein Wirkmechanismus-Angebot, keine Stimmen-Einführung in dieser Eröffnung. `consume_session` läuft wie bei jeder Eröffnung (idempotent). Log `resume_started`.
+
+**Howto-Fakten (`HOWTO_SYSTEM_PROMPT`, seit U3):** Aufbau Heute · Gespräch · Spiegel (Erkenntnisse · Muster · Entwicklung), Reflexionstage im Profil, Spiegel ohne Grenze.
+
 **Modellaufruf (T0, seit 19.11.2026):** `COACH_MODEL` mit `COACH_REQUEST_DEFAULTS`, Verlauf durch `ensureEndsWithUser`. Nach dem Stream liest `finalMessage()` Nutzung und Stop-Grund: `coach_usage` (`conversationId`, `mode`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `stopReason`), bei `max_tokens` → `coach_response_truncated`, bei anderen unerwarteten Stop-Gründen (z. B. `refusal`) → `coach_response_unexpected_stop` (beide `infoOnly` in `monitorRules.ts`). Kosten je Gespräch: `supabase/diagnostics/coach-usage.sql`.
 
 **Altes Format:** `messages[]` ohne `message`/`start` (Gesprächsmodus) bzw. Extraktion ohne `conversationId` → `409 client_outdated` (seit Welle 2b, `LEGACY_FORMAT_ALLOWED = false`; geloggt als `legacy_format`). Howto ist nicht betroffen. Welle 2b wurde vorgezogen: Die Aktivitätsprüfung vom 19.11.2026 zeigte keine echten Nutzer seit 02.09.2026, alle `legacy_format`-Aufrufe stammten aus dem Angriffstest.
@@ -828,7 +834,7 @@ Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst au
 | Schritt | Prompt | Schreibt in |
 |---|---|---|
 | 1 | Kontext laden | coach_file_entries, coachee_profile, resonance_map, Gesprächsanzahl |
-| 2 | SESSION_NOTES_PROMPT | session_notes (Werte per `clampScore()` auf 1–5 geklammert) + conversations.summary/open_thread |
+| 2 | SESSION_NOTES_PROMPT | session_notes (Werte per `clampScore()` auf 1–5 geklammert) + conversations.summary/open_thread + **`display_title` → `conversations.title`** (U3: Thema/Situation in Alltagssprache, 2–5 Wörter, keine Gegenüberstellungen, keine Wert-/Fachwörter; ungültig → `display_title_invalid`, Titel bleibt) |
 | 3 | FILE_UPDATE_PROMPT | coach_file_entries (add/update/resolve), inkl. `linked_value` (Wert/Glaubenssatz hinter dem Muster) |
 | **4b** | VOICE_CLUSTER_PROMPT | inner_voices — prüft erst gegen bestehende (auch unbenannte) Stimmen, sonst neuer Kandidat; Rollback der Stimmen-Zeile bei fehlgeschlagener Verknüpfung |
 | 5 | PROFILE_UPDATE_PROMPT | coachee_profile (upsert) |
@@ -844,24 +850,20 @@ Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst au
 
 ---
 
-### `pre-session-briefing` — Wiederkehr-Briefing
+### `pre-session-briefing` — Eckdaten für Eröffnung und Einstieg
 
-**Aufgerufen von:** `CoachScreen` beim Mount, vor dem Gesprächsstart.
+**Aufgerufen von:** `CoachScreen` beim Mount und bei „←“ zurück zum Einstieg.
 
 **Gibt zurück:**
 ```json
 {
-  "briefing": {
-    "daysSince": 3,
-    "conversationCount": 12,
-    "openThread": { "intensity": "low|medium|high" }
-  }
+  "briefing": { "daysSince": 3, "conversationCount": 12, "openThread": { "intensity": "low|medium|high" } },
+  "recent": [ { "id": "uuid", "title": "Spannung im Team", "lastActivityAt": "…", "hasOpenThread": true, "moving": false } ],
+  "latestActiveConversation": { "id": "uuid", "lastMessageAt": "…" }
 }
 ```
 
-Seit S-12 keine Akte, Resonanzkarte, Zusammenfassung oder Faden-Text mehr – das lädt `chat` selbst.
-
-Das Frontend-Check `shouldShowReturnGreeting()` prüft 5 Bedingungen: `openThread` vorhanden · `conversationCount > 1` · `daysSince >= 2` · ≥5 Tage seit `last_return_greeting_at` · kein Wellness-Check/Entry-Kontext/Resume in Navigation state.
+`recent` (U3): bis zu 3 eigene, nachbearbeitete (`summary`) Gespräche mit mindestens einer Nutzer-Nachricht, neueste zuerst (durchsucht werden höchstens die 20 jüngsten). Platzhalter-Titel → `null`; bei `open_thread_intensity = 'high'` → `moving: true`, `title: null`. `latestActiveConversation` = jüngstes Gespräch mit eigener Nachricht (2-Stunden-Regel). Keine Akte, Resonanzkarte, Zusammenfassung oder Faden-Text (S-12; Angriffstest #9/#9b).
 
 ---
 
@@ -1162,8 +1164,11 @@ user_id         UUID → profiles
 conversation_id UUID → conversations (nullable)
 content         TEXT
 category        TEXT ('muster' | 'stärke' | 'erkenntnis' | 'ziel')
-source          TEXT ('auto' | 'user')
+source          TEXT ('auto' | 'user')   -- 'user' nach Bestätigung/Anpassung (U3)
 is_pinned       BOOLEAN DEFAULT false
+surfaced_at     TIMESTAMPTZ  -- U3: auf Heute angezeigt (Nachklang aufgedeckt / Wiederentdecken gezeigt)
+confirmed_at    TIMESTAMPTZ  -- U3: vom Nutzer bestätigt oder angepasst
+dismissed_at    TIMESTAMPTZ  -- U3: „Heute nicht“
 ```
 
 **`coach_reflections`** — KI-Selbstreflexion (Frist 12 Monate)
@@ -1351,22 +1356,25 @@ startWellnessConversation(wellnessCheck) → chat { conversationId, start: 'well
   → Coach antwortet direkt aus Wellness-Block im System-Prompt; der Server speichert die Antwort
 ```
 
-### Wiederkehr-Begrüßungs-Flow
+### Gesprächseinstieg & Weitermachen (seit U3, ersetzt die Wiederkehr-Begrüßung)
 
 ```
 CoachScreen mount (kein Resume, kein Wellness-Check)
   ↓
-fetch pre-session-briefing
+fetch pre-session-briefing (recent, latestActiveConversation)
   ↓
-Entry-Kontext vorhanden? → startEntryContextConversation() (VARIANTE 4)
-shouldShowReturnGreeting() = true? → startBriefingConversation() + last_return_greeting_at (VARIANTE 1)
-sonst → startNewConversation(isFirstEver) (VARIANTE 2)
+Entry-Kontext? → startEntryContextConversation()
+kein Gespräch mit eigener Nachricht? → startNewConversation(true)
+jüngstes Gespräch < 2 h? → loadConversation(latest)
+sonst → Einstieg
+  Weitermachen → resumeWithOpening(id) → chat start 'resume' (Block FORTSETZUNG, keine neue Konversation)
+  Etwas Neues  → startNewConversation()
 ```
 
 ### Gesprächsverlauf & Fortsetzen-Flow
 
 ```
-ProfileScreen → "Gesprächsverlauf" ODER CoachScreen-Header-Icon → /verlauf
+Einstieg „Alle Gespräche →“ → /coach/verlauf
   ↓
 HistoryScreen: RPC get_conversation_history()
   ↓
