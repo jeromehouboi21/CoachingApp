@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`)
 
 ---
 
@@ -310,7 +310,7 @@ function AdminRoute({ children }) {
    → startWellnessConversation()
 
    pre-session-briefing laden:
-   4. Entry-Kontext (z.B. aus Verstehen-Modul/Tagesimpuls/Spiegel)?
+   4. Entry-Kontext (Tagesimpuls auf Home, Verstehen-Übersicht, Musterseite, „Aus Gesprächen“)?
       → startEntryContextConversation()
    1. Offener Faden + ≥2 Tage alt + ≥5 Tage seit letzter Begrüßung?
       → startBriefingConversation() + last_return_greeting_at aktualisieren
@@ -326,11 +326,13 @@ function AdminRoute({ children }) {
 3. Wenn `suggested_insight` vorhanden → `ConversationEndModal` zeigen
 4. `startNewConversation()` + `showQuickReplies = true`
 
-**Post-Conversation-Auslösung (nicht nur der Button!):** vier unabhängige Trigger-Pfade rufen dieselbe `runPostConversation()`-Kernfunktion auf — `visibilitychange` (Tab in Hintergrund), `pagehide` (Tab schließen/Reload), Unmount-Cleanup (SPA-Navigation weg vom Coach) und der explizite Button-Klick. Ein `processedRef`-Set verhindert clientseitige Doppel-Aufrufe pro `conversationId`; die Edge Function selbst hat zusätzlich einen serverseitigen Idempotenz-Guard über `post_processed_message_count`.
+**Post-Conversation-Auslösung (nicht nur der Button!):** vier unabhängige Trigger-Pfade rufen dieselbe `runPostConversation()`-Kernfunktion auf — `visibilitychange` (Tab in Hintergrund), `pagehide` (Tab schließen/Reload), Unmount-Cleanup (SPA-Navigation weg vom Coach) und der explizite Button-Klick. Eine `processedRef`-Map (`conversationId → Nachrichtenzahl beim letzten Anstoß`) verhindert Doppel-Aufrufe für denselben Stand, stößt aber erneut an, sobald das Gespräch gewachsen ist (vorher blockierte ein früher Tab-Wechsel jede spätere Nachbearbeitung). Die Edge Function hat zusätzlich einen serverseitigen Idempotenz-Guard über `post_processed_message_count` und liest den Verlauf selbst aus der DB.
 
 **Session-Limit:** Nur `plan === 'premium'` ist unbegrenzt. `'tester'` zählt wie jeder unbezahlte Account und wird durch `profile.session_limit` begrenzt (individuell pro Nutzer im Admin-Bereich setzbar, `null` = unbegrenzt). Durchsetzung passiert **zweifach**: clientseitig in `handleSend()` (UX, zeigt Limit-Modal) und serverseitig in `chat/index.ts` (harte Grenze, 429 bei Überschreitung — ein direkter Funktionsaufruf am Frontend vorbei wird ebenfalls blockiert).
 
 **Krisenfall-Rendering:** Nachrichten mit `messageType === 'crisis_response'` werden als `CrisisResponseCard` statt als `ChatBubble` gerendert (siehe [Krisenfall-Flow](#krisenfall-flow)).
+
+**Gescheitertes Senden (S-12):** Eigene Nachrichten mit `status === 'failed'` zeigen darunter „Nicht gesendet – nochmal versuchen“ → `retryMessage(msg)` (gleiche `clientMessageId`, der Server legt nichts doppelt an). Eine Bubble mit `action === 'reload'` („Es gibt eine neue Version der App …“) lädt die Seite neu. Rate-Limit-Hinweise erscheinen als Coach-Bubble inkl. Telefonseelsorge (`src/lib/rateLimit.js`).
 
 **"Innere Stimmen"-Namensgebung:** Enthält eine Nachricht den `<<VOICE_NAMING_CHOICE ...>>`-Steuerblock, wird er aus dem sichtbaren Text entfernt und stattdessen als Chip-Auswahl (`VoiceNamingChips`) gerendert — Auswahl schreibt direkt in `inner_voices` und wird als normale Folgenachricht weitergeführt.
 
@@ -383,7 +385,18 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 
 **Tab "Nutzer":** Liste aller Profile inkl. E-Mail (aus `auth.admin.listUsers()`), Beta-Tester-Toggle, individuelles Gesprächslimit, Einladungs-Historie ("Eingeladen am ... — noch nicht angenommen" falls `last_sign_in_at IS NULL`). Formular "+ Per E-Mail einladen" ruft `admin-invite-user` auf.
 
-**Tab "Feedback":** Alle `user_feedback`-Einträge inkl. Name/E-Mail, sortiert nach Datum.
+**Tab "Feedback":** oben Abschnitt **„Supervision“** (letzte 26 Wochen, aufklappbar: Empfehlung + geprüftes Protokoll, aus `admin-feedback`), darunter alle `user_feedback`-Einträge inkl. Name/E-Mail, sortiert nach Datum.
+
+**Zugang (S-06):** nur über `AdminRoute` mit zweitem Faktor (`AdminMfaScreen`). Link „Zweites Gerät für den Admin-Code hinzufügen“, solange weniger als zwei Faktoren eingerichtet sind. Ladefehler werden angezeigt (kein stilles Scheitern); `403 mfa_required` → Code-Abfrage. Info-Zeile „N Konten seit über 24 Monaten ohne Anmeldung“ (`inactiveCount`, S-15 — nur Anzahl, keine Löschaktion).
+
+---
+
+#### ProfileScreen (`/profile`)
+
+**Rolle:** Konto, Einstellungen, Rechtliches.
+
+- **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
+- Einstellungsliste: Profil bearbeiten, Gesprächsverlauf, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
 
 ---
 
@@ -436,7 +449,7 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 | 2 | Step2Question | Bereichswahl (Arbeit, Beziehung, Inneres, etc.) |
 | 3 | Step3Reveal | Systemisches Coaching erklären (hier darf der Begriff fallen) |
 | 3b | Step3bAgreement | Coaching-Vereinbarung — Zustimmung (nutzt `CoachingAgreementContent`) |
-| 4 | Step4Auth | E-Mail + Passwort / Magic Link / Login |
+| 4 | Step4Auth | E-Mail + Passwort (Registrierung mit Einwilligung) / Login; Magic Link nur für bestehende Konten (`shouldCreateUser: false`) |
 
 ---
 
@@ -486,6 +499,10 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 - Eigenständige Card statt Chat-Bubble (voller Breite, kein Sprechblasen-Layout, warmer `accent-light`-Ton statt Alarmfarben)
 - `linkify()` erkennt Telefonnummern/URL im Fließtext per Regex und macht sie zu echten `tel:`/`https:`-Links (kein starres Parsen der Modell-Ausgabe); zweite Linie `safeHref()` lässt nur `tel:` und `https:` zu (S-08). Kein `dangerouslySetInnerHTML` im ganzen Frontend.
 
+#### Profil-Komponenten (`src/components/profile/`)
+
+**LearningConsentCard:** Opt-in zur Lernbasis (S-13), Texte wörtlich nach Lösungsdesign Paket B 5.3, Version `LEARNING_CONSENT_VERSION` aus `src/lib/consent.js`.
+
 #### Legal-Komponenten (`src/components/legal/`)
 
 **CoachingAgreementContent:** reiner Vertragstext (4 Abschnitte + Jerome-Signatur), wird sowohl im Onboarding als auch im Rückblick-Screen gerendert.
@@ -505,11 +522,12 @@ Exports:
   profile         — profiles-Zeile aus DB (select('*') — inkl. is_admin, session_limit, etc.)
   loading         — Boolean (initiales Session-Laden)
 
-  signUp(email, password, displayName)
+  signUp(email, password, displayName, meta)  — meta (Einwilligung, Vereinbarung, Onboarding) landet über handle_new_user im Profil
   signIn(email, password)
-  sendMagicLink(email)
+  sendMagicLink(email)                — nur bestehende Konten (shouldCreateUser: false)
   signOut()
   updateProfile(updates)
+  refreshProfile()                    — Profil neu laden (z. B. nach Opt-in oder Einlösen eines Codes)
   checkConsent(profileData)           → 'missing' | 'outdated' | 'valid'
   checkCoachingAgreement(profileData) → 'missing' | 'outdated' | 'valid'
 ```
@@ -517,7 +535,7 @@ Exports:
 **Besonderheiten:**
 - Session wird beim Mount aus Supabase wiederhergestellt (`onAuthStateChange`)
 - Pending Invite Code: Wenn ein Code in `localStorage` liegt (gesetzt im Onboarding), wird er nach E-Mail-Verifikation automatisch eingelöst
-- Consent-Versioning: `consent_version = '1.0'`, `coaching_agreement_version = '1.0'`
+- Consent-Versioning: `consent_version = '1.0'`, `coaching_agreement_version = '1.0'`, Lernbasis `learning_opt_in_version = '1.0'` (Konstanten in `src/lib/consent.js`)
 - `profile` enthält seit v3.x auch Admin-/Beta-/Invite-Felder — keine eigenen Hook-Exporte dafür nötig, da `select('*')` bereits alles lädt
 
 ---
@@ -641,6 +659,18 @@ Zentrale Datei für alle UI-nahen Texte und Konfigurationen.
 
 ---
 
+#### `src/lib/rateLimit.js`
+
+`readRateLimit(response)` erkennt `429 { error: 'rate_limited', retryAfter }` (abgegrenzt vom Monatslimit), `rateLimitMessage(retryAfter)` liefert den Hinweistext (Minuten- bzw. Tageslimit, immer mit Telefonseelsorge).
+
+---
+
+#### `src/lib/consent.js`
+
+Versionen der Zustimmungstexte: `CONSENT_VERSION`, `COACHING_AGREEMENT_VERSION`, `LEARNING_CONSENT_VERSION`. Bei inhaltlicher Änderung eines Textes die Version erhöhen.
+
+---
+
 #### `src/lib/logger.ts`
 
 Frontend-Logger. Schreibt auf die Browser-Console und **zusätzlich** für `info`/`warn`/`error` in die `app_logs`-Tabelle — **nur wenn eingeloggt** (`setLoggerUserId()` gesetzt), sonst nur Console. Scheitert der Insert, kommt einmalig ein `console.warn` (ohne Endlosschleife).
@@ -662,7 +692,7 @@ logger.error(msg, data)   // Console + DB (mit stack_trace)
 
 ## 5. Backend — Supabase Edge Functions
 
-Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. `admin-invite-user` nutzt zusätzlich optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`), `supervision` das Secret `CRON_SECRET`.
+Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. **Imports haben feste Versionen** (`npm:@supabase/supabase-js@2.119.0`, `npm:@anthropic-ai/sdk@1.10.0` bzw. `https://esm.sh/@anthropic-ai/sdk@1.10.0`) — ohne Version zieht jeder Deploy die neueste Version (Ausfall 19.11.2026). Schalter-Secrets: `RAG_LEARNING_ENABLED` (Lernbasis, `1` = an), `SUPERVISION_IN_PROMPT` (BLOCK 5, `1` = an) — beide seit 19.11.2026 an. `admin-invite-user` nutzt zusätzlich optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`), `supervision` das Secret `CRON_SECRET`.
 
 **Sicherheitsmuster v2 (Pflicht, Security-Paket A):** Jede Function ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` aus `_shared/auth.ts` auf. Die Identität kommt **ausschließlich** aus dem JWT, nie aus dem Body; jede `conversationId` wird mit `assertConversationOwner()` geprüft (403). Gateway-Schalter „Verify JWT“ ist aus (`supabase/config.toml`), die Prüfung passiert im Code. Details: [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a).
 
@@ -775,7 +805,7 @@ Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst au
 | 3 | FILE_UPDATE_PROMPT | coach_file_entries (add/update/resolve), inkl. `linked_value` (Wert/Glaubenssatz hinter dem Muster) |
 | **4b** | VOICE_CLUSTER_PROMPT | inner_voices — prüft erst gegen bestehende (auch unbenannte) Stimmen, sonst neuer Kandidat; Rollback der Stimmen-Zeile bei fehlgeschlagener Verknüpfung |
 | 5 | PROFILE_UPDATE_PROMPT | coachee_profile (upsert) |
-| 6 | ANONYMOUS_SUMMARY_PROMPT | experience_patterns (S-13: nur mit Secret `RAG_LEARNING_ENABLED=1`, `profiles.learning_opt_in` **und** bestandenem Prüfschritt `reviewLearningEntry`; mit `source_user_id`, `review_status = approved`; ohne Embedding kein Eintrag) + pattern_references + insights |
+| 6 | ANONYMOUS_SUMMARY_PROMPT | experience_patterns (S-13: nur mit Secret `RAG_LEARNING_ENABLED=1`, `profiles.learning_opt_in` **und** bestandenem Prüfschritt `reviewLearningEntry`; mit `source_user_id`, `review_status = approved`; ohne Embedding kein Eintrag; Log-Codes `learning_disabled`, `learning_no_optin`, `learning_no_summary`, `learning_rejected` (Gründe als Text), `learning_embedding_failed`, `learning_entry_saved`) + pattern_references + insights |
 | 7 | REFLECTION_PROMPT | coach_reflections (inkl. Kapazität-vs-Widerstand-Check, Optimierungs-/Schuld-Framing-Check) |
 | 8 | RESONANCE_UPDATE_PROMPT (ab 3. Gespräch) | resonance_map (upsert) |
 
@@ -893,6 +923,16 @@ createLogger(source: string, requestId?: string, userId?: string)
 | `requireInternalCaller(req)` | service_role-Bearer oder `x-cron-secret` (401) |
 | `readJsonBody(req, maxBytes)` / `validateMessages()` | Größenlimits (413), JSON-Fehler ohne Inhalt (400) |
 | `errorResponse()` / `jsonResponse()` | einheitliche Antworten `{ error: <code> }` ohne Fehlertexte |
+
+---
+
+### `_shared/rag.ts`, `_shared/rateLimit.ts`, `_shared/learning.ts`
+
+| Modul | Zweck |
+|---|---|
+| `rag.ts` | `generateEmbedding()` (OpenAI `text-embedding-3-small`, Timeout 2,5 s, Fehlergrund nur als Code) und `findSimilarExperiences()` (`match_experiences`). Nur serverseitig — Treffer verlassen den Server nicht. |
+| `rateLimit.ts` | Grenzwerte (`RATE_LIMITS`), `enforceRateLimit()` (RPC `consume_rate_limits`, fail-open/-closed wählbar), `rateLimitResponse()` (429 + `Retry-After`). |
+| `learning.ts` | Prüfschritt `reviewLearningEntry()` für alles Nutzerübergreifende (Lernbasis, Supervision): Regex-Vorfilter (`contact`, `instruction`) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`). Das JSON wird aus der Antwort herausgelöst (robust gegen Text drumherum); technische Fehler → `review_api_failed` / `review_parse_failed`; immer fail-closed. `makeHaikuCaller()` als Adapter. |
 
 ---
 
@@ -1285,7 +1325,7 @@ Vier unabhängige Trigger-Pfade rufen dieselbe Kernfunktion:
   - pagehide (Tab schließen/Reload)
   - Unmount-Cleanup (SPA-Navigation weg vom Coach)
   ↓
-messages.length >= 3 UND noch nicht für diesen conversationId verarbeitet (processedRef)?
+messages.length >= 3 UND seit dem letzten Anstoß gewachsen (processedRef: conversationId → Nachrichtenzahl)?
   → runPostConversation(messages, conversationId)  [fire-and-forget, keepalive: true]
     → POST /functions/v1/post-conversation { conversationId }  (Verlauf liest der Server aus der DB)
       → serverseitiger Idempotenz-Guard (post_processed_message_count)
@@ -1436,7 +1476,9 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 
 **Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
 
-**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, `post-conversation` ignoriert `messages`) und Rate-Limits. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+
+**Löschtest:** `npm run security:deletion-test` (`scripts/security/deletion-test.mjs`, frisches Testkonto C in `.env.security.local`) erzeugt Daten über die normalen Wege, löscht das Konto und prüft den Login; `supabase/security/deletion-check.sql` zählt danach die Reste je Tabelle (Erwartung überall 0; Stand 19.11.2026: 31 Prüfpunkte, alle 0).
 
 ### Browser-Schutz (S-08)
 
@@ -1488,13 +1530,15 @@ SITE_URL=                    # optional, Fallback: https://app.friedensstifter.c
 CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als 'cron_secret'
 ```
 
-`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der zwei Testkonten für `npm run security:test`.
+`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der Testkonten A und B für `npm run security:test` und eines frischen Kontos C für `npm run security:deletion-test` (Vorlage `.env.security.example`).
 
 ### Deployment
 
 - **Frontend:** Vercel (Auto-Deploy aus `main`-Branch)
 - **Edge Functions:** `supabase functions deploy <name>` — `supabase/config.toml` hält `verify_jwt = false` für alle Functions fest (zur Sicherheit zusätzlich `--no-verify-jwt`)
 - **Migrationen:** `supabase db push` vor jedem Deployment das DB-Änderungen enthält
+- **Reihenfolge:** Erst den Branch nach `main` mergen (bzw. auschecken), **dann** `db push` und `functions deploy` — die CLI arbeitet mit dem lokalen Stand (Panne 19.11.2026: „Remote database is up to date“, weil die neue Migration lokal noch fehlte). Nach neuen RPCs: `notify pgrst, 'reload schema';`
+- **Supabase CLI:** 2.95.4 (Update auf 3.x geplant, danach Probe-Deploy)
 - **Domain:** `app.friedensstifter.coach` (Vercel Custom Domain)
 
 **Auth-Mails:** eigener SMTP-Absender `hallo@friedensstifter.coach` über One.com (SPF/DKIM/DMARC gesetzt). Die deutschen Vorlagen (Einladung, Registrierung, Magic Link, Passwort-Reset) liegen als Quelle in `supabase/templates/` und werden **manuell** ins Dashboard (Authentication → Emails → Templates) kopiert.
@@ -1503,8 +1547,10 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
-3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`
+3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`, `backfill-embeddings` — bei Änderungen an `_shared/*` alle, die das Modul importieren
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
 5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller` und Eintrag in `supabase/config.toml`; Log-Regel beachten
 6. Neue externe Dienste/Origins: in die CSP (`vercel.json`) aufnehmen
 7. Nachrichten schreibt nur der Server — kein `supabase.from('messages').insert` im Frontend
+8. Änderungen an Tabellen mit Personenbezug oder an der Löschlogik: Löschtest (`npm run security:deletion-test` + `deletion-check.sql`) → überall 0
+9. Texte über Datenverarbeitung (Datenschutzerklärung, Opt-in) mit dem tatsächlichen Stand abgleichen — offen laut Abschlussbericht Paket B: OpenAI-Embeddings, Lernbasis, Fristen
