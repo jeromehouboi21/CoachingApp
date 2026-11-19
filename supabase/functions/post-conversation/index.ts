@@ -5,6 +5,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
+import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
@@ -655,34 +656,51 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 6. Anonymes Muster + RAG-Eintrag speichern
-    // Lernbasis-Schalter (S-13, Entscheidung D-1: pausiert). Nicht gesetzt = aus.
-    // pattern_references und insights (persönlich) laufen unverändert weiter.
+    // 6. Lernbasis (S-13): nur mit Schalter, Opt-in des Nutzers und bestandener Prüfung.
+    //    pattern_references und insights (persönlich, nur für den Nutzer selbst) laufen unverändert weiter.
     const learningEnabled = (Deno.env.get('RAG_LEARNING_ENABLED') ?? '').trim() === '1';
     if (!learningEnabled) {
       logger.info('learning_disabled', { conversationId });
     } else if (anonSummary.context && anonSummary.pattern) {
-      let embedding: number[] | null = null;
-      if (openaiKey) {
-        const textToEmbed = [anonSummary.context, anonSummary.pattern, anonSummary.what_helped]
-          .filter(Boolean).join(' — ');
-        embedding = await generateEmbedding(textToEmbed, openaiKey);
-      }
-
-      const patternRow: any = {
-        context: anonSummary.context,
-        pattern: anonSummary.pattern,
-        resistance: anonSummary.resistance ?? null,
-        what_helped: anonSummary.what_helped ?? null,
-        what_blocked: anonSummary.what_blocked ?? null,
-        outcome: anonSummary.outcome ?? 'unknown',
-      };
-      if (embedding) patternRow.embedding = JSON.stringify(embedding);
-      const { error: patternError } = await supabase.from('experience_patterns').insert(patternRow);
-      if (patternError) {
-        logger.error('experience_patterns insert failed', { code: patternError.code, conversationId });
+      const { data: optInRow, error: optInError } = await supabase
+        .from('profiles').select('learning_opt_in').eq('id', userId).maybeSingle();
+      if (optInError) {
+        logger.error('learning_optin_check_failed', { code: optInError.code, conversationId });
+      } else if (!optInRow?.learning_opt_in) {
+        logger.info('learning_no_optin', { conversationId });
       } else {
-        logger.info('experience_patterns entry saved', { conversationId, hasEmbedding: !!embedding });
+        const entryFields = {
+          context: String(anonSummary.context).slice(0, 300),
+          pattern: String(anonSummary.pattern).slice(0, 600),
+          resistance: anonSummary.resistance ? String(anonSummary.resistance).slice(0, 600) : null,
+          what_helped: anonSummary.what_helped ? String(anonSummary.what_helped).slice(0, 600) : null,
+          what_blocked: anonSummary.what_blocked ? String(anonSummary.what_blocked).slice(0, 600) : null,
+          outcome: ['breakthrough', 'stuck', 'partial', 'unknown'].includes(anonSummary.outcome) ? anonSummary.outcome : 'unknown',
+        };
+        const entryText = [entryFields.context, entryFields.pattern, entryFields.resistance, entryFields.what_helped, entryFields.what_blocked]
+          .filter(Boolean).join('\n');
+        const review = await reviewLearningEntry(entryText, makeHaikuCaller(anthropic));
+        if (!review.approved) {
+          logger.info('learning_rejected', { conversationId, reasons: review.reasons });   // nur Codes
+        } else {
+          const embedding = openaiKey
+            ? await generateEmbedding([entryFields.context, entryFields.pattern, entryFields.what_helped].filter(Boolean).join(' — '), openaiKey)
+            : null;
+          if (!embedding) {
+            // Ohne Vektor wäre der Eintrag unauffindbar → nichts speichern
+            logger.warn('learning_embedding_failed', { conversationId, hasKey: !!openaiKey });
+          } else {
+            const { error: patternError } = await supabase.from('experience_patterns').insert({
+              ...entryFields,
+              embedding: JSON.stringify(embedding),
+              source_user_id: userId,
+              review_status: 'approved',
+              reviewed_at: new Date().toISOString(),
+            });
+            if (patternError) logger.error('learning_insert_failed', { code: patternError.code, conversationId });
+            else logger.info('learning_entry_saved', { conversationId });
+          }
+        }
       }
     }
 

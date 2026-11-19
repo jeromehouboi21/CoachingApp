@@ -498,6 +498,31 @@ async function testsS12(a, b) {
   }
 }
 
+// ── S-13 (Paket B): Opt-in nur über die RPC ──────────────────────────────────
+// B endet immer ohne Opt-in (erst einschalten, dann zurücknehmen).
+async function testsS13(b) {
+  {
+    const on = await b.client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: '1.0' });
+    const off = await b.client.rpc('set_learning_opt_in', { p_opt_in: false, p_version: null });
+    const ok = !on.error && !off.error && on.data?.opt_in === true && off.data?.opt_in === false
+      && Number.isInteger(off.data?.deleted);
+    record('S13-a', 'rpc set_learning_opt_in ein/aus (als B)', 'ok, deleted = Zahl',
+      ok ? PASS : FAIL, on.error || off.error ? errCode(on.error || off.error) : `deleted=${off.data?.deleted}`);
+  }
+  {
+    const { data, error } = await b.client.from('profiles')
+      .update({ learning_opt_in: true }).eq('id', b.userId).select('id');
+    record('S13-b', 'update profiles.learning_opt_in direkt', '42501',
+      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+  }
+  {
+    const { error } = await b.client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: 'x'.repeat(50) });
+    record('S13-c', 'rpc set_learning_opt_in mit ungültiger Version', 'Fehler',
+      error ? PASS : FAIL, error ? errCode(error) : 'angenommen');
+    if (!error) await b.client.rpc('set_learning_opt_in', { p_opt_in: false, p_version: null });
+  }
+}
+
 async function testsRateLimits(a, b) {
   // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
   // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
@@ -556,6 +581,7 @@ function printResults() {
   await testsAsB(a, b);
   await testsAnonymous();
   await testsS12(a, b);
+  await testsS13(b);
   await testsRateLimits(a, b);
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen

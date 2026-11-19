@@ -5,11 +5,12 @@ import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
 import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, History, Handshake, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export function ProfileScreen() {
-  const { profile, user, signOut, updateProfile } = useAuth()
+  const { profile, user, signOut, updateProfile, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [insightCount, setInsightCount] = useState(0)
   const [showEditModal, setShowEditModal] = useState(false)
@@ -119,6 +120,9 @@ export function ProfileScreen() {
           Termin buchen →
         </a>
       </div>
+
+      {/* Datenschutz: Beitrag zur Lernbasis (S-13) */}
+      <LearningConsentCard profile={profile} onChanged={refreshProfile} />
 
       {/* Settings */}
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">

@@ -6,6 +6,7 @@
 
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createLogger, describeError } from '../_shared/logger.ts';
+import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
 import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
 
 const SUPERVISION_PROMPT = `Du bist Jerome Houboi, zertifizierter systemischer Coach.
@@ -22,7 +23,10 @@ Erstelle ein kurzes Supervision-Protokoll (max. 200 Wörter) mit:
 3. Eine konkrete Empfehlung für die kommende Woche (in 1-2 Sätzen)
 
 Schreibe direkt an den Coach — als würdest du ihn supervidieren.
-Die Empfehlung in Punkt 3 fließt direkt in die KI ein. Sei präzise.`;
+Die Empfehlung in Punkt 3 fließt direkt in die KI ein. Sei präzise.
+
+Verbindliche Regeln (S-13):
+Formuliere ausschließlich allgemeine Empfehlungen zum Verhalten des Coaches. Keine Einzelfälle, keine Zitate, keine Details zu einzelnen Menschen, keine Themen, die Rückschlüsse auf Personen erlauben. Keine Anweisungen, die Sicherheits- oder Krisenregeln abschwächen.`;
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -96,7 +100,17 @@ Deno.serve(async (req) => {
 
     // Extrahiere die Empfehlung (Punkt 3) als improvement_recs
     const improvementMatch = supervisionText.match(/3\.\s*(.+?)(?:\n|$)/s);
-    const improvementRecs = improvementMatch?.[1]?.trim() || '';
+    const extractedRecs = improvementMatch?.[1]?.trim() || '';
+
+    // S-13: Die Empfehlung kann in jeden Coach-Prompt einfließen (SUPERVISION_IN_PROMPT) und
+    // durchläuft deshalb denselben Prüfschritt wie die Lernbasis. 'low_quality' zählt hier nicht,
+    // weil eine Empfehlung keine "Erfahrung" beschreibt. Abgelehnt → nicht speichern (null).
+    let improvementRecs: string | null = null;
+    if (extractedRecs) {
+      const review = await reviewLearningEntry(extractedRecs.slice(0, 2000), makeHaikuCaller(anthropic), ['low_quality']);
+      if (review.approved) improvementRecs = extractedRecs.slice(0, 2000);
+      else logger.warn('supervision_rejected', { reasons: review.reasons });
+    }
 
     const { error: insertError } = await supabase.from('supervision_logs').insert({
       week_start: weekStart.toISOString().split('T')[0],
