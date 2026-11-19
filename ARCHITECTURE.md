@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren)
 
 ---
 
@@ -113,13 +113,17 @@ CoachingApp/
 │       │   ├── Step3bAgreement.jsx      ← Coaching-Vereinbarung, nutzt CoachingAgreementContent
 │       │   └── Step4Auth.jsx
 │       ├── home/
-│       │   └── HomeScreen.jsx           ← Dashboard mit Tool-Kacheln (Coach/Wellness/Stimmen/Verstehen)
+│       │   └── HomeScreen.jsx           ← Dashboard mit Tool-Kacheln (Coach/Wellness/Stimmen/Verstehen → Spiegel)
 │       ├── coach/
 │       │   └── CoachScreen.jsx          ← Haupt-Chat-Interface
 │       ├── mirror/
-│       │   └── MirrorScreen.jsx         ← "Spiegel" — Erkenntnisse + Deine Akte
-│       ├── stimmen/
-│       │   └── StimmenScreen.jsx        ← "Innere Stimmen" (Premium) — benannte + Kandidaten-Stimmen
+│       │   ├── MirrorScreen.jsx         ← "Spiegel" — Kopf + Umschalter Erkenntnisse · Muster · Entwicklung (U2)
+│       │   ├── InsightsLevel.jsx        ← Ebene Erkenntnisse
+│       │   ├── PatternsLevel.jsx        ← Ebene Muster (Stimmen, Akte-Muster, Kandidat, Bibliothek)
+│       │   ├── DevelopmentLevel.jsx     ← Ebene Entwicklung (Zeitachse, Stärken, Reaktionen, Alltag)
+│       │   ├── FileEntrySheet.jsx       ← Sheet für ein Akte-Muster (Verlauf)
+│       │   ├── PatternDetailScreen.jsx  ← /mirror/muster/:key (kein AppShell)
+│       │   └── shared.jsx               ← Ladeanzeige, LoadError, beschreibende Status-Texte
 │       ├── history/
 │       │   └── HistoryScreen.jsx        ← Gesprächsverlauf + Fortsetzen-Funktion
 │       ├── profile/
@@ -131,10 +135,6 @@ CoachingApp/
 │       │   └── WellnessCheckScreen.jsx  ← 1–10 Skala + Context-Chips
 │       ├── howto/
 │       │   └── HowItWorksScreen.jsx     ← FAQ-Chat (ohne AppShell)
-│       ├── verstehen/                   ← Muster-Bibliothek
-│       │   ├── VorstehenScreen.jsx      ← Übersicht + Filter (innerhalb AppShell/BottomNav)
-│       │   ├── MusterDetail.jsx         ← Detailansicht per :key (kein AppShell)
-│       │   └── AusGespraechen.jsx       ← Persönliche Pattern-Referenzen (kein AppShell)
 │       ├── premium/
 │       │   └── PremiumScreen.jsx
 │       └── legal/
@@ -236,18 +236,19 @@ CoachingApp/
 | `/welcome` | WelcomeScreen | **ja** | — | nein |
 | `/home` | HomeScreen | **ja** | — | **ja** |
 | `/coach` | CoachScreen | **ja** | — | **ja** |
-| `/mirror` | MirrorScreen | **ja** | — | **ja** |
+| `/mirror` | MirrorScreen (Ebene Erkenntnisse) | **ja** | — | **ja** |
+| `/mirror/muster` | MirrorScreen (Ebene Muster) | **ja** | — | **ja** |
+| `/mirror/entwicklung` | MirrorScreen (Ebene Entwicklung) | **ja** | — | **ja** |
+| `/mirror/muster/:key` | PatternDetailScreen | **ja** | — | nein |
 | `/profile` | ProfileScreen | **ja** | — | **ja** |
-| `/verstehen` | VorstehenScreen | **ja** | — | **ja** |
-| `/stimmen` | StimmenScreen | **ja** | Premium-Gate *im Screen* (Free sieht Locked-State) | **ja** |
 | `/howto` | HowItWorksScreen | **ja** | — | nein |
 | `/wellness` | WellnessCheckScreen | **ja** | — | nein |
 | `/premium` | PremiumScreen | **ja** | — | nein |
-| `/verstehen/aus-gespraechen` | AusGespraechen | **ja** | — | nein |
-| `/verstehen/:key` | MusterDetail | **ja** | — | nein |
 | `/coach/verlauf` | HistoryScreen | **ja** | — | nein |
 | `/verlauf` | Weiterleitung → `/coach/verlauf` (alte Lesezeichen, U1) | — | — | — |
 | `/` | Weiterleitung → `/home` (angemeldet) bzw. `/landing` | — | — | — |
+| `/verstehen`, `/verstehen/aus-gespraechen`, `/stimmen` | Weiterleitung → `/mirror/muster` (U2) | — | — | — |
+| `/verstehen/:key` | Weiterleitung → `/mirror/muster/:key` (U2) | — | — | — |
 | `/vereinbarung` | CoachingAgreementScreen | **ja** | — | nein |
 | `/admin/users` | AdminUsersScreen | **ja** | `AdminRoute` (`profile.is_admin`) | nein |
 | `/impressum` | ImpressumScreen | nein | — | nein |
@@ -288,7 +289,7 @@ function AdminRoute({ children }) {
 
 ### AppShell
 
-`AppShell` rendert einen `<Outlet>` mit darunter liegendem `<BottomNav>`. Nur `/home`, `/coach`, `/mirror`, `/profile`, `/verstehen`, `/stimmen`, `/feedback` sind davon umschlossen. Die BottomNav zeigt seit U1 drei Tabs (Heute `/home` · Gespräch `/coach` · Spiegel `/mirror`). Das Profil ist kein Tab mehr, sondern über den `ProfileButton` oben rechts in den drei Tab-Screens erreichbar; auf `/profile` ist kein Tab aktiv. Verstehen und Stimmen werden bis U2 über die Home-Kacheln erreicht.
+`AppShell` rendert einen `<Outlet>` mit darunter liegendem `<BottomNav>`. Nur `/home`, `/coach`, `/mirror`, `/mirror/muster`, `/mirror/entwicklung`, `/profile`, `/feedback` sind davon umschlossen. Die BottomNav zeigt seit U1 drei Tabs (Heute `/home` · Gespräch `/coach` · Spiegel `/mirror`). Das Profil ist kein Tab mehr, sondern über den `ProfileButton` oben rechts in den drei Tab-Screens erreichbar; auf `/profile` ist kein Tab aktiv.
 
 ---
 
@@ -303,9 +304,9 @@ function AdminRoute({ children }) {
 **Inhalt:**
 - Begrüßung + `ProfileButton` oben rechts (seit U1; Strähnen-Leiste entfernt)
 - Tägliche Impulsfrage (rotierend, Index = Tagesindex % 14, aus `prompts.js`)
-- 4 Tool-Kacheln (`TOOL_CARDS`): KI-Coach · Wie geht's dir? · Innere Stimmen (PRO-Badge, dauerhaft sichtbar, verlinkt nach `/stimmen`) · Verstehen
+- 4 Tool-Kacheln (`TOOL_CARDS`): KI-Coach · Wie geht's dir? · Innere Stimmen · Verstehen (beide → `/mirror/muster`, seit U2 ohne „PRO“). Das Raster entfällt mit U3.
 
-**Navigiert zu:** `/coach`, `/wellness`, `/stimmen`, `/verstehen`
+**Navigiert zu:** `/coach`, `/wellness`, `/mirror/muster`
 
 ---
 
@@ -352,33 +353,31 @@ function AdminRoute({ children }) {
 
 ---
 
-#### MirrorScreen (`/mirror`)
+#### MirrorScreen (`/mirror`, `/mirror/muster`, `/mirror/entwicklung`) – seit U2
 
-**Rolle:** „Mein Spiegel" — zwei Tabs.
+**Rolle:** „Spiegel“ mit drei Ebenen, jede mit eigener Route (Segment-Umschalter navigiert, Zurück-Taste und Lesezeichen funktionieren). Alle in der AppShell, Tab „Spiegel“ aktiv. **Keine Anzeige-Sperren** (UX-Konzept 5.2: Was über dich entsteht, ist für dich sichtbar). **Wertfrei** (4.3c): eine neutrale Farbe, keine Konfidenz- oder Aktivitätspunkte, kein „Aufgelöst“; `confidence`/`status` steuern nur die Sortierung. Dateien in `src/screens/mirror/`: `MirrorScreen`, `InsightsLevel`, `PatternsLevel`, `DevelopmentLevel`, `FileEntrySheet`, `PatternDetailScreen`, `shared` (Ladeanzeige, `LoadError`, `statusText`, `momentsText`).
 
-**Tab 1 — Erkenntnisse:**
-- Filter: Alle · Muster · Stärken · Erkenntnisse · Ziele
-- InsightCard mit Pin, Delete
-- Kategorie-Farb-Coding (`muster` = accent, `stärke` = grün, `erkenntnis` = premium, `ziel` = coral)
+**Ebene Erkenntnisse** (`/mirror`, `InsightsLevel`):
+- Filter Alle · Erkenntnisse · Stärken · Vorhaben (`ziel` heißt in der Anzeige „Vorhaben“; `muster` nur unter „Alle“)
+- Karte mit Kategorie (eine neutrale Farbe), Anheften, Entfernen. Writes mit `.select('id')` bestätigt; Fehler → Hinweis, UI ändert sich erst nach Erfolg (`insight_pin_failed`, `insight_delete_failed`). Ladefehler → `LoadError` statt Leerzustand.
 
-**Tab 2 — Deine Akte:**
-- Gruppiert `coach_file_entries` nach Muster / Stärken / Kontext (`coachee_profile`) / Wie du reagierst
-- Zeitachse ("Deine Entwicklung") — nur Premium, ab dem 3. Gespräch
-- Free-Nutzer: erste Karte je Sektion offen, Rest gesperrt + Premium-CTA
-- `VerlaufsSheet` (Historie eines Eintrags) wird per `createPortal` direkt in `document.body` gerendert — entkoppelt von `AppShell`/`Outlet`, damit `transform`-tragende Vorfahren die `position: fixed`-Positionierung nicht verschieben können
+**Ebene Muster** (`/mirror/muster`, `PatternsLevel`) – jedes Muster an genau einem Ort:
+1. **Deine Stimmen**: `inner_voices` `status='named'`, „zeigt sich bei: …“ (Akte-Labels mit `voice_id`), „Mit <Name> sprechen“ → `/coach`
+2. **Was sich bei dir zeigt**: Akte-Muster (`coach_file_entries`, `category='pattern'`, „N Momente aus Gesprächen“ = Anzahl `history`, mind. 1, Status beschreibend, „gehört zu: <Stimme>“) → `FileEntrySheet` (Beschreibung, Beispiel, Verlauf; per `createPortal` in `document.body`). Dazu Bibliotheks-Muster mit eigenen `pattern_references` („N Momente“) → Detail
+3. **Kandidat** (eingeführt, unbenannt): „Da ist etwas, das sich wiederholt. Magst du es dir ansehen? Darüber reden →“. Nicht eingeführte Kandidaten bleiben unsichtbar
+4. **Kennst du das?**: übrige Bibliotheks-Muster
+
+Akte-Muster und `pattern_references` sind im Datenmodell nicht verknüpft (kein gemeinsamer Schlüssel); deshalb gibt es das Detail nur für die fünf Bibliotheks-Muster.
+
+**Ebene Entwicklung** (`/mirror/entwicklung`, `DevelopmentLevel`, bisher „Deine Akte“): „Was sich bei dir bewegt · Aus N Gesprächen“ (N = `session_notes`) → **Deine Entwicklung** (Zeitachse aus `session_notes.file_updates`, neueste oben, ein Punkt in Akzentfarbe; Texte: zum ersten Mal bemerkt / neue Beobachtung / seltener in den letzten Gesprächen / zeigt sich gerade kaum) → **Deine Stärken** (ohne ✦) → **Wie du reagierst** (`trigger` + `value`) → **Dein Alltag** (`coachee_profile`).
+
+**Beschreibende Status:** `fading` → „seltener in den letzten Gesprächen“, `resolved` → „zeigt sich gerade kaum“, `active` ohne Zusatz.
 
 ---
 
-#### StimmenScreen (`/stimmen`)
+#### PatternDetailScreen (`/mirror/muster/:key`) – seit U2
 
-**Rolle:** „Innere Stimmen" — Premium-Feature, zeigt wiederkehrende innere Anteile.
-
-- **Benannt** (`status = 'named'`): Karte mit Name, Beschreibung, verknüpften Akte-Einträgen, Aktivitäts-Dots, CTA "Mit [Name] sprechen"
-- **Kandidat, aber schon angesprochen** (`status = 'candidate'`, `introduced_at IS NOT NULL`): dezente Karte mit Referenz-Chips zu Akte-Einträgen
-- **Kandidat, noch nicht angesprochen** (`introduced_at IS NULL`): bleibt **inhaltlich verborgen** — nur ein `pendingCount` fließt in einen Hinweistext ("Da deutet sich schon etwas an"), keine Details, bevor der Coach es im Gespräch selbst anspricht
-- Free-Nutzer sehen einen vollflächigen Locked-State mit Premium-CTA (kein Teilinhalt wie bei "Deine Akte")
-
-Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem Screen) — siehe [Innere-Stimmen-Flow](#innere-stimmen-flow).
+Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks-Keys (`src/lib/patterns.js`). Inhalt: Untertitel · **Deine Momente** (alle eigenen `pattern_references` des Keys, entfällt ohne eigene) · Entstehung in 3 Schritten · Was hilft · „Darüber sprechen →“ (Entry-Kontext `pattern`). Ruft beim Öffnen `updateStreak`.
 
 ---
 
@@ -388,7 +387,7 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 
 - Lädt Liste über RPC `get_conversation_history()` (vermeidet N+1-Queries)
 - Vorschau: `session_notes.main_topic` falls vorhanden, sonst erste Nutzer-Nachricht (gekürzt)
-- Free-Nutzer: nur das neueste Gespräch entsperrt, Rest mit Lock-Overlay + Premium-CTA (analog `AusGespraechen.jsx`)
+- Keine Sperre (seit U2): alle Gespräche lesbar und fortsetzbar; gezählt und begrenzt wird nur serverseitig (`consume_session`)
 - „Gespräch fortsetzen" → `navigate('/coach', { state: { resumeConversationId } })`
 - „Zurück“ → `/coach` (seit U1; vorher Profil)
 
@@ -440,20 +439,16 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 
 ---
 
-#### VorstehenScreen (`/verstehen`)
+#### Verstehen und Innere Stimmen (bis U2 eigene Screens)
 
-**Rolle:** Lernmodul — erklärt systemische Muster ohne Coaching-Sprache. Liegt innerhalb `AppShell` (BottomNav bleibt sichtbar) — die beiden Detail-Screens bewusst nicht.
-
-**Bekannte Muster-Keys:**
+Seit U2 Teil des Spiegels (Ebene Muster und Muster-Detail). `/verstehen`, `/verstehen/aus-gespraechen`, `/stimmen` → Weiterleitung `/mirror/muster`; `/verstehen/:key` → `/mirror/muster/:key`. Die fünf Muster (Keys = `pattern_references.pattern_key`) stehen in `src/lib/patterns.js`:
 - `rueckzug_unter_druck` — Rückzug unter Druck
 - `innerer_kritiker` — Der innere Kritiker
 - `uebernahme_reflex` — Übernahme-Reflex
 - `harmonie_um_jeden_preis` — Harmonie um jeden Preis
 - `perfektionismus_blockade` — Perfektionismus-Blockade
 
-**Unterseiten (kein AppShell, eigener Zurück-Button):**
-- `/verstehen/:key` → MusterDetail (3-Schritt-Entstehungsgeschichte + Coach-Zitat wenn persönlich erkannt)
-- `/verstehen/aus-gespraechen` → AusGespraechen (persönliche `pattern_references` — erste Karte Free, Rest Premium)
+Namensgebung der Stimmen passiert weiterhin **ausschließlich im Chat** — siehe [Innere-Stimmen-Flow](#innere-stimmen-flow).
 
 ---
 
@@ -1433,7 +1428,7 @@ CoachScreen: extractVoiceNaming() trennt Marker vom sichtbaren Text,
 Auswahl → inner_voices.update({ status: 'named'|'dismissed', name, named_at/dismissed_at })
   + Auswahl wird als normale Folgenachricht gesendet (Gespräch geht natürlich weiter)
   ↓
-StimmenScreen (/stimmen) zeigt benannte + bereits angesprochene Kandidaten
+Spiegel → Muster (/mirror/muster) zeigt benannte Stimmen + Hinweis auf bereits angesprochene Kandidaten
 ```
 
 ### Krisenfall-Flow
@@ -1483,11 +1478,8 @@ Folgende Turns: rag_context aus conversation_context
 | Feature | Free | Premium | Tester |
 |---|---|---|---|
 | Coach-Gespräche | `profile.session_limit` (Default 20, individuell setzbar) | Unbegrenzt | wie Free, eigener `session_limit`-Wert (Admin-Bereich, z. B. 300/500) |
-| Mein Spiegel | 10 Erkenntnisse (UI-seitig) | Unbegrenzt + Export | wie Free |
-| Deine Akte | Erste Karte je Sektion offen | Vollständig + Zeitachse | wie Free |
-| Verstehen-Modul | Allgemeine Muster | + Persönliche Gesprächsreferenzen | wie Free |
-| Innere Stimmen | Locked-State (kein Inhalt) | Vollständig | wie Free |
-| Gesprächsverlauf | Nur neuestes Gespräch entsperrt | Vollständig | wie Free |
+| Spiegel (Erkenntnisse, Muster, Entwicklung inkl. Zeitachse, Stimmen, Momente) | vollständig (seit U2, keine Anzeige-Sperren) | vollständig | vollständig |
+| Gesprächsverlauf | vollständig (seit U2) | vollständig | vollständig |
 | Coach-Gedächtnis | Begrenzt | Vollständig | Vollständig |
 
 **Wichtig (Fix, siehe `session_limit` oben):** `isPaidUser` in `CoachScreen`/`HistoryScreen` prüft **nur** `plan === 'premium'` — `'tester'` galt früher fälschlich als unbegrenzt, wodurch individuelle Admin-Limits wirkungslos waren.

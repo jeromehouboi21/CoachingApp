@@ -32,18 +32,18 @@
 /wellness             → WellnessCheckScreen (kein AppShell)
 /premium              → PremiumScreen (kein AppShell)
 
-/verstehen            → VorstehenScreen (kein AppShell)
-/verstehen/aus-gespraechen → AusGespraechen (kein AppShell)
-/verstehen/:key       → MusterDetail (kein AppShell) — key = pattern_key
-
 /home                 → HomeScreen „Heute“ (AppShell + BottomNav)
 /coach                → CoachScreen „Gespräch“ (AppShell + BottomNav)
 /coach/verlauf        → HistoryScreen (kein AppShell, Zurück → /coach)
-/mirror               → MirrorScreen „Spiegel“ (AppShell + BottomNav)
+/mirror               → MirrorScreen „Spiegel“, Ebene Erkenntnisse (AppShell + BottomNav)
+/mirror/muster        → Ebene Muster (Stimmen, Akte-Muster, Bibliothek)
+/mirror/entwicklung   → Ebene Entwicklung (Zeitachse, Stärken, Alltag)
+/mirror/muster/:key   → PatternDetailScreen (kein AppShell) — key = pattern_key
 /profile              → ProfileScreen (AppShell, kein Tab – über den Avatar oben rechts)
 
 /verlauf              → Weiterleitung /coach/verlauf (alte Lesezeichen)
 /                     → Weiterleitung /home bzw. /landing
+/verstehen*, /stimmen → Weiterleitung /mirror/muster(/:key) (seit U2)
 ```
 
 **BottomNav (seit U1):** drei Tabs Heute · Gespräch · Spiegel, ohne Zähler. Profil über `ProfileButton` in den Tab-Headern.
@@ -359,9 +359,9 @@ getDailyImpulse()          // gibt Tagesfrage zurück
 
 ---
 
-## 6. Verstehen-Modul (v2.0)
+## 6. Muster im Spiegel (früher Verstehen-Modul, seit U2)
 
-**5 bekannte Muster-Keys:**
+**5 bekannte Muster-Keys** (`src/lib/patterns.js`, = `pattern_references.pattern_key`):
 ```
 rueckzug_unter_druck     → Rückzug unter Druck
 innerer_kritiker         → Der innere Kritiker
@@ -370,12 +370,10 @@ harmonie_um_jeden_preis  → Harmonie um jeden Preis
 perfektionismus_blockade → Perfektionismus-Blockade
 ```
 
-**Routen:**
-- `/verstehen` → VorstehenScreen (Übersicht, Filter-Tabs, Coach-Banner wenn pattern_references vorhanden)
-- `/verstehen/:key` → MusterDetail (3-Schritt-Entstehungsgeschichte, Coach-Zitat wenn persönlich erkannt)
-- `/verstehen/aus-gespraechen` → AusGespraechen (pattern_references Liste, erste Karte Free / Rest Premium)
+**Ebene Muster** (`/mirror/muster`): Deine Stimmen · Was sich bei dir zeigt (Akte-Muster als Sheet, Bibliotheks-Muster mit eigenen Momenten) · Kandidat · Kennst du das?. Jedes Muster an genau einem Ort, keine Punkte, keine Wertungsfarben.
+**Muster-Detail** (`/mirror/muster/:key`): Untertitel · Deine Momente (alle eigenen `pattern_references`) · Entstehung in 3 Schritten · Was hilft · Darüber sprechen.
 
-**Datenfluss:** Post-Processing extrahiert pattern_references → werden in DB gespeichert → Modul liest sie.
+**Datenfluss:** Post-Processing extrahiert pattern_references → DB → Spiegel liest sie. Akte-Muster (`coach_file_entries`) und `pattern_references` sind nicht verknüpft.
 
 ---
 
@@ -406,10 +404,9 @@ perfektionismus_blockade → Perfektionismus-Blockade
 | Feature | Free | Premium |
 |---|---|---|
 | KI-Coach Gespräche | 20/Monat (`session_limit` Default 20 seit Migration 027) | Unbegrenzt |
-| Mein Spiegel | 10 Erkenntnisse | Unbegrenzt + Export |
-| Verstehen-Modul | Allgemeine Muster | + Persönliche Gesprächsreferenzen |
+| Spiegel (alle Ebenen, Stimmen, Momente) | vollständig (seit U2 keine Anzeige-Sperren) | vollständig |
+| Gesprächsverlauf | vollständig (seit U2) | vollständig |
 | Coach-Gedächtnis | Begrenzt | Vollständig |
-| Innere Stimmen | — | ✓ |
 
 Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** über RPC `consume_session` in der `chat`-Function (idempotent pro Konversation, `conversations.session_counted_at`) · Reset: Cron-Job `reset-monthly-sessions` am 1. des Monats (seit Migration 023) · Limit gilt für alle außer `plan = 'premium'`; Krisenantwort, Howto-FAQ und Gedächtnis-Extraktion sind ausgenommen
 
