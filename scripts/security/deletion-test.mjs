@@ -13,8 +13,29 @@
 // IDs/Status/Codes. Konto C ist danach gelöscht — für jeden Lauf ein neues Konto anlegen.
 
 import { createClient } from '@supabase/supabase-js';
+import { createHmac } from 'node:crypto';
 
 const env = process.env;
+// S-06b: DELETION_TEST_MFA=1 → C richtet vorher einen zweiten Faktor ein (aal2) und erzeugt
+// Wiederherstellungscodes; geprüft wird zusätzlich der Export (Faktoren ohne Geheimnisse).
+const WITH_MFA = ['1', 'true', 'yes'].includes((env.DELETION_TEST_MFA ?? '').trim().toLowerCase());
+
+function base32Decode(s) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const ch of s.replace(/=+$/, '').toUpperCase().replace(/\s/g, '')) bits += alphabet.indexOf(ch).toString(2).padStart(5, '0');
+  const bytes = [];
+  for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+  return Buffer.from(bytes);
+}
+/** RFC 6238 (SHA-1, 6 Stellen, 30 s). Schlüssel und Code werden nie ausgegeben. */
+function totp(secret) {
+  const buf = Buffer.alloc(8);
+  buf.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30000)));
+  const h = createHmac('sha1', base32Decode(secret)).update(buf).digest();
+  const o = h[h.length - 1] & 0x0f;
+  return String((((h[o] & 0x7f) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1_000_000).padStart(6, '0');
+}
 const SUPABASE_URL = (env.SUPABASE_URL ?? '').replace(/\/$/, '');
 const ANON_KEY = env.SUPABASE_ANON_KEY ?? '';
 const C = { email: (env.TEST_C_EMAIL ?? '').trim(), password: env.TEST_C_PASSWORD ?? '' };
@@ -79,9 +100,21 @@ const SYNTHETIC = [
   const client = newClient();
   const { data: login, error: loginError } = await client.auth.signInWithPassword(C);
   if (loginError || !login?.session) abort(`Login für Testkonto C fehlgeschlagen (${loginError?.code ?? 'keine Session'})`);
-  const token = login.session.access_token;
+  let token = login.session.access_token;
   const userId = login.user.id;
   record('Login C', 'ok', PASS);
+
+  // 1b. Optional: zweiter Faktor + Wiederherstellungscodes (danach läuft alles mit aal2)
+  if (WITH_MFA) {
+    const { data: enroll, error: enrollErr } = await client.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'Löschtest' });
+    const { error: verErr } = enroll?.totp?.secret
+      ? await client.auth.mfa.challengeAndVerify({ factorId: enroll.id, code: totp(enroll.totp.secret) })
+      : { error: enrollErr ?? { code: 'no_secret' } };
+    token = (await client.auth.getSession()).data.session?.access_token ?? token;
+    record('Zweiter Faktor einrichten (aal2)', 'ok', verErr ? FAIL : PASS, verErr?.code ?? '');
+    const g = await callFunction('mfa-recovery', token, { action: 'codes:generate' });
+    record('Wiederherstellungscodes erzeugen', '10 Codes', g.status === 200 && g.json?.codes?.length === 10 ? PASS : FAIL, `HTTP ${g.status}`);
+  }
 
   // 2. Opt-in Lernbasis (damit post-conversation einen Lernbasis-Eintrag erzeugen KANN)
   {
@@ -129,9 +162,22 @@ const SYNTHETIC = [
   {
     const { error } = await client.from('user_feedback').insert({
       user_id: userId, conversation_id: conversationIds[0] ?? null,
-      feedback_type: 'general', content: 'Löschtest-Feedback',
+      feedback_type: 'general', content: 'Löschtest-Feedback', consent_given: true,   // seit 036 Pflicht (RLS)
     });
     record('Feedback anlegen', 'ok', error ? FAIL : PASS, error?.code ?? '');
+  }
+
+  // 5b. Mit Faktor: Export enthält Faktoren und Codes-Metadaten, aber keine Geheimnisse
+  if (WITH_MFA) {
+    const r = await callFunction('export-my-data', token, {});
+    const factors = r.json?.konto?.zweite_faktoren ?? [];
+    const codes = r.json?.konto?.mfa_recovery_codes ?? [];
+    const factorKeysOk = factors.every((f) => Object.keys(f).sort().join(',') === 'created_at,factor_type,friendly_name,status');
+    const text = JSON.stringify(r.json ?? {});
+    const ok = r.status === 200 && factors.length >= 1 && factorKeysOk && codes.length === 10
+      && !/"(code_hash|secret|qr_code|uri)":/.test(text);
+    record('Export mit Faktor', 'Faktoren + 10 Codes, ohne Geheimnisse', ok ? PASS : FAIL,
+      `HTTP ${r.status}, faktoren=${factors.length}, codes=${codes.length}`);
   }
 
   // 6. IDs für deletion-check.sql
