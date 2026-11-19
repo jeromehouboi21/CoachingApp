@@ -2,7 +2,7 @@
 // Leichte Klassifikation auf akute Suizid-/Selbstverletzungs-Hinweise in einer
 // einzelnen Nutzernachricht. Siehe konzept-krisenprotokoll-suizidalitaet-v1_1.md, Teil 1.
 
-import Anthropic from 'npm:@anthropic-ai/sdk';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 
 const CRISIS_CLASSIFIER_PROMPT = `Prüfe NUR auf konkrete, akute Hinweise auf
 Suizidgedanken oder Selbstverletzungsabsicht im folgenden Text — nicht auf

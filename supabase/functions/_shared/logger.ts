@@ -9,7 +9,7 @@
 // JSON.parse-Fehlermeldungen enthalten Textausschnitte → nie loggen, nur 'parse_failed'.
 // sanitizeLogData() ist nur das Sicherheitsnetz — die Aufrufstellen bleiben verantwortlich.
 
-import { createClient } from 'npm:@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js@2.119.0';
 
 // EdgeRuntime ist global in Supabase Edge Functions verfügbar, aber nicht Teil
 // der Standard-Deno-Typen — deshalb hier deklariert statt @ts-ignore an jeder

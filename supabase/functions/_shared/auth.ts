@@ -3,7 +3,7 @@
 // Aufrufer ausschließlich aus dem JWT und prüft das Eigentum an jeder Objekt-ID.
 // Body-Felder wie userId werden nie als Identität verwendet.
 
-import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js';
+import { createClient, type SupabaseClient, type User } from 'npm:@supabase/supabase-js@2.119.0';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;

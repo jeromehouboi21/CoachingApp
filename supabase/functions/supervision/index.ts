@@ -4,7 +4,7 @@
 
 // Sicherheitsmuster v2: nur intern aufrufbar (requireInternalCaller).
 
-import Anthropic from 'npm:@anthropic-ai/sdk';
+import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
 import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
