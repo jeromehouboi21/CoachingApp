@@ -71,6 +71,7 @@ consent_given_at                  TIMESTAMPTZ  -- DSGVO Art. 6/7: Zeitstempel Da
 consent_version                   TEXT         -- z.B. '1.0'
 coaching_agreement_accepted_at    TIMESTAMPTZ  -- Zeitstempel Coaching-Vereinbarungs-Zustimmung
 coaching_agreement_version        TEXT         -- z.B. '1.0'
+age_confirmed_at                  TIMESTAMPTZ  -- S-11 (036): 18+ bestätigt (server-only)
 created_at                        TIMESTAMPTZ
 ```
 
@@ -239,9 +240,9 @@ improvement_note     TEXT
 ```
 user_id         UUID
 conversation_id UUID
-feedback_type   TEXT CHECK ('improvement' | 'praise' | 'bug' | 'general')
+feedback_type   TEXT CHECK ('improvement' | 'praise' | 'bug' | 'general' | 'beta')
 content         TEXT
-consent_given   BOOLEAN DEFAULT TRUE
+consent_given   BOOLEAN DEFAULT FALSE  -- seit 036: Insert nur mit true (RLS); feedback_surveys ebenso
 processed       BOOLEAN DEFAULT FALSE
 ```
 
@@ -452,7 +453,7 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 - Fehlerantworten nur als `{ error: <code> }` (`errorResponse`), keine `error.message`-Texte an den Client.
 - Gateway-Schalter „Verify JWT“ bleibt aus — festgeschrieben in `supabase/config.toml` (`verify_jwt = false` je Function). Neue Function → dort eintragen.
 - **RLS:** Jede neue Tabelle bekommt RLS, Policies **nur `to authenticated`** (nie `public`/`anon`) und gezielte GRANTs nach tatsächlicher Frontend-Nutzung. `anon` hat keine Tabellenrechte. Neue SECURITY-DEFINER-Funktionen: `set search_path = ''`, schema-qualifizierte Namen, `revoke … from public, anon`, `grant` nur an die Rolle, die sie braucht.
-- Privilegierte Profilfelder (`is_admin`, `plan`, `session_limit`, `sessions_used_this_month`, `is_beta_tester`, `invited_*`, `consent_ip`) sind per Trigger server-only. Der Client legt keine Profile an (Name über `signUp({ options: { data: { display_name } } })`).
+- Privilegierte Profilfelder (`is_admin`, `plan`, `session_limit`, `sessions_used_this_month`, `is_beta_tester`, `invited_*`, `learning_opt_in*`, `age_confirmed_at`) sind per Trigger server-only (`consent_ip` seit 036 entfernt; 18+ über Signup-Metadaten `age_confirmed` bzw. RPC `confirm_age`). Der Client legt keine Profile an (Name über `signUp({ options: { data: { display_name } } })`).
 
 ### Log-Codes = Schnittstelle zum Monitoring (S-22)
 - Überwachte Codes stehen in `supabase/functions/_shared/monitorRules.ts` (Regel mit Schwelle oder `infoOnly`). **Codes dort nicht umbenennen, ohne die Regel mitzuziehen.** Neue sicherheitsrelevante Ereignisse bekommen einen festen snake_case-Code (`logger.warn('mein_code', { … })`) und einen Eintrag in `monitorRules.ts`.
@@ -521,6 +522,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `033_s15_cascade_and_retention.sql` | invited_by SET NULL · user_feedback/coach_reflections CASCADE · raw_reflections geleert, protocol_text · apply_retention + Cron apply-retention · inactive_accounts_report |
 | `034_s22_security_monitoring.sql` | app_logs.origin (Trigger, server/client) · security_alerts · RPC security_log_counts (nur service_role) · Cron security-monitor + purge-security-alerts |
 | `035_u3_insight_surfacing.sql` | insights.surfaced_at · confirmed_at · dismissed_at + Index (user_id, created_at) · Zielbild U3 (Paket C rückt auf 036/037) |
+| `036_s11_privacy_fixes.sql` | S-11: user_feedback/feedback_surveys nur mit consent_given (RLS) · profiles.age_confirmed_at + RPC confirm_age · Schutz-Trigger/handle_new_user angepasst · consent_ip entfernt · apply_retention + feedback_surveys 24 Monate |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.
 

@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C Welle C-3** (S-11: Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036)
 
 ---
 
@@ -203,7 +203,8 @@ CoachingApp/
 │   │   ├── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
 │   │   ├── 033_s15_cascade_and_retention.sql ← Löschregeln, apply_retention, inactive_accounts_report
 │   │   ├── 034_s22_security_monitoring.sql ← app_logs.origin, security_alerts, security_log_counts, Cron security-monitor
-│   │   └── 035_u3_insight_surfacing.sql ← insights.surfaced_at/confirmed_at/dismissed_at (Heute)
+│   │   ├── 035_u3_insight_surfacing.sql ← insights.surfaced_at/confirmed_at/dismissed_at (Heute)
+│   │   └── 036_s11_privacy_fixes.sql    ← Feedback-Einwilligung (RLS), age_confirmed_at, confirm_age, consent_ip entfernt
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -1009,12 +1010,12 @@ is_beta_tester                    BOOLEAN DEFAULT false      -- v3.x, über Admi
 session_limit                     INTEGER DEFAULT 20         -- v3.x (Default 20 seit Migration 027), null = unbegrenzt, individuell pro Nutzer
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users ON DELETE SET NULL  -- v3.x (seit 033; vorher NO ACTION, blockierte das Löschen des Einladenden)
-consent_ip                        TEXT                        -- v2.7, wird aktuell nicht befüllt
+age_confirmed_at                  TIMESTAMPTZ                 -- S-11 (036): 18+ bestätigt (handle_new_user aus Signup-Metadaten oder RPC confirm_age); consent_ip entfernt
 learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S-13), nur über RPC set_learning_opt_in
 learning_opt_in_updated_at        TIMESTAMPTZ
 learning_opt_in_version           TEXT ("1.0")
 ```
-Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version` und `coaching_agreement_version` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` und (seit 036) `age_confirmed_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version`, `coaching_agreement_version` und (seit 036) `age_confirmed` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. Bestandsnutzer ohne `age_confirmed_at` sehen in der AppShell einmal `AgeConfirmSheet` (RPC `confirm_age`; „Ich bin jünger“ → 116 111 und Löschweg im Profil, kein automatisches Löschen). So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
 
 **`conversations`**
 ```
@@ -1189,7 +1190,7 @@ conversation_id UUID → conversations (nullable)
 feedback_type   TEXT ('improvement' | 'praise' | 'bug' | 'general' | 'beta')
 content         TEXT
 context         TEXT
-consent_given   BOOLEAN DEFAULT true
+consent_given   BOOLEAN DEFAULT false   -- seit 036; Insert nur mit true (Policy user_feedback_insert_own_with_consent)
 processed       BOOLEAN DEFAULT false
 ```
 
@@ -1270,7 +1271,7 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 | `security-monitor` | `7 * * * *` | `security-monitor` per `net.http_post` mit `x-cron-secret` aus Vault (Migration 034) |
 | `purge-security-alerts` | `29 3 * * *` | `security_alerts` älter als 12 Monate löschen (Migration 034) |
 
-**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs` und `user_feedback` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage. Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (Paket D). `security_alerts` 12 Monate (`purge-security-alerts`).
+**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs`, `user_feedback` und (seit 036) `feedback_surveys` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage. Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (Paket D). `security_alerts` 12 Monate (`purge-security-alerts`).
 
 ### RLS-Prinzip (Least Privilege, Migration 025)
 

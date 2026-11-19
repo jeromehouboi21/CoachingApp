@@ -2,9 +2,19 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, Mic } from 'lucide-react'
 import { useVoiceInput } from '../../hooks/useVoiceInput'
 
+// S-11: Hinweis beim ersten Mikrofon-Tipp pro Gerät. Ohne localStorage (privat, blockiert) jedes Mal.
+const VOICE_HINT_KEY = 'fs_voice_hint_v1'
+function voiceHintSeen() {
+  try { return localStorage.getItem(VOICE_HINT_KEY) === '1' } catch { return false }
+}
+function markVoiceHintSeen() {
+  try { localStorage.setItem(VOICE_HINT_KEY, '1') } catch { /* ohne Speicher: Hinweis kommt beim nächsten Mal wieder */ }
+}
+
 export function ChatInput({ onSend, disabled }) {
   const [value, setValue] = useState('')
   const [interimText, setInterimText] = useState('')
+  const [showVoiceHint, setShowVoiceHint] = useState(false)
   const textareaRef = useRef(null)
 
   const handleTranscript = useCallback((text) => {
@@ -35,6 +45,15 @@ export function ChatInput({ onSend, disabled }) {
     setInterimText('')
   }
 
+  // Mikrofon: beim ersten Tipp erst der Hinweis, Aufnahme nur nach ausdrücklichem „Mikrofon starten“
+  const handleMicClick = () => {
+    if (!isListening && !voiceHintSeen()) {
+      setShowVoiceHint(true)
+      return
+    }
+    toggle()
+  }
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -59,12 +78,41 @@ export function ChatInput({ onSend, disabled }) {
         </div>
       )}
 
+      {showVoiceHint && (
+        <div className="px-4 pt-3 pb-1" role="dialog" aria-label="Kurz zur Spracheingabe">
+          <div className="bg-surface-2 rounded-xl p-4">
+            <p className="text-[14px] text-ink font-medium mb-1">Kurz zur Spracheingabe</p>
+            <p className="text-[13px] text-ink-2 leading-relaxed mb-2">
+              Die Spracheingabe nutzt die Spracherkennung deines Browsers. Dafür kann das Gesagte an Google (Chrome) oder Apple (Safari) übertragen und dort in Text umgewandelt werden. Was am Ende im Textfeld steht, siehst du, bevor du es abschickst.
+            </p>
+            <p className="text-[13px] text-ink-2 leading-relaxed mb-3">
+              Wenn du das lieber nicht möchtest, kannst du einfach tippen.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => { markVoiceHintSeen(); setShowVoiceHint(false); toggle() }}
+                className="bg-accent text-white text-[13px] font-medium px-4 py-2 rounded-full"
+              >
+                Verstanden, Mikrofon starten
+              </button>
+              <button
+                onClick={() => { setShowVoiceHint(false); textareaRef.current?.focus() }}
+                className="text-[13px] text-ink-2 px-2 py-2"
+              >
+                Lieber tippen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-end gap-2 p-3">
         {/* Mikrofon-Button */}
         {isSupported && (
           <button
-            onClick={toggle}
+            onClick={handleMicClick}
             disabled={disabled}
+            aria-label={isListening ? 'Spracheingabe beenden' : 'Spracheingabe starten'}
             className={`w-[38px] h-[38px] rounded-full flex items-center justify-center flex-none transition-all disabled:opacity-40 ${
               isListening
                 ? 'bg-accent ring-4 ring-accent/30 animate-pulse'

@@ -28,9 +28,12 @@ export function Step4Auth({ onSuccess, onboardingData }) {
   const [inviteCode, setInviteCode] = useState('')
   const [consentPrivacy, setConsentPrivacy] = useState(false)
   const [consentSensitive, setConsentSensitive] = useState(false)
+  // S-11: Pflicht-Häkchen 18+ (nur Registrierung mit Passwort; Magic Link legt keine Konten an)
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
 
   const handleRegister = async (e) => {
     e.preventDefault()
+    if (!consentPrivacy || !consentSensitive || !ageConfirmed) return   // zweite Linie zum inaktiven Button
     setError('')
     setLoading('register')
     try {
@@ -45,6 +48,7 @@ export function Step4Auth({ onSuccess, onboardingData }) {
         onboarding_data: onboardingData,
         consent_version: '1.0',
         coaching_agreement_version: '1.0',
+        age_confirmed: ageConfirmed,   // handle_new_user setzt daraus age_confirmed_at (Migration 036)
       })
       const userId = data.user?.id
       const accessToken = data.session?.access_token
@@ -221,6 +225,18 @@ export function Step4Auth({ onSuccess, onboardingData }) {
                   Ich stimme ausdrücklich der Verarbeitung meiner Gesprächsinhalte zu, die Informationen zu meinem emotionalen Erleben enthalten können (Art. 9 Abs. 2 lit. a DS-GVO).
                 </span>
               </label>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={ageConfirmed}
+                  onChange={e => setAgeConfirmed(e.target.checked)}
+                  className="mt-0.5 flex-shrink-0 accent-[var(--color-accent)]"
+                />
+                <span className="text-[13px] text-ink-2 leading-snug">
+                  <span className="text-ink font-medium">Ich bin mindestens 18 Jahre alt.</span>{' '}
+                  Friedensstifter ist für Erwachsene gedacht. Wenn du jünger bist und gerade jemanden zum Reden brauchst, ist die Nummer gegen Kummer für dich da: <span className="text-ink font-medium">116 111</span>, kostenlos und anonym.
+                </span>
+              </label>
             </div>
           )}
 
@@ -229,7 +245,7 @@ export function Step4Auth({ onSuccess, onboardingData }) {
             type="submit"
             variant="primary"
             className="w-full py-4 text-base"
-            disabled={!!loading || (mode === 'register' && (!consentPrivacy || !consentSensitive))}
+            disabled={!!loading || (mode === 'register' && (!consentPrivacy || !consentSensitive || !ageConfirmed))}
           >
             {loading ? 'Lädt…' : mode === 'register' ? 'Loslegen — kostenlos' : 'Einloggen'}
           </Button>

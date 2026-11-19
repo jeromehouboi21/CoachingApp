@@ -1,7 +1,7 @@
 # Notfallplan Friedensstifter
 
 > **Ausgedruckt oder offline griffbereit halten.** Im Ernstfall sind App, Laptop oder Konten vielleicht nicht erreichbar.
-> Stand: 19.11.2026 (Entwurf, Security-Paket C, Welle C-2) · **Freigabe durch Jerome:** ☐ am ________
+> Stand: 19.11.2026 (Security-Paket C, Welle C-2) · **Freigabe durch Jerome:** ☑ am 19.11.2026
 > Verantwortlich und einzige handelnde Person: Jerome (Betreiber und Verantwortlicher im Sinne der DSGVO).
 
 ## 0. Erst einmal

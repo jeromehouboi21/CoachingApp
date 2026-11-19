@@ -587,6 +587,35 @@ async function testsS15(b) {
 }
 
 // ── S-22 (Paket C): Monitoring nur intern bzw. für Admins ───────────────────
+// S-11 (Paket C, C-3): Feedback nur mit Einwilligung, Altersbestätigung server-only
+async function testsS11(b) {
+  {
+    const { error } = await b.client.from('user_feedback').insert({
+      user_id: b.userId, feedback_type: 'beta', content: 'sectest ohne Einwilligung', consent_given: false,
+    });
+    record('S11-a', 'insert user_feedback ohne Einwilligung', 'Fehler (RLS)',
+      error ? PASS : FAIL, error ? errCode(error) : 'eingefügt');
+  }
+  {
+    const { error } = await b.client.from('feedback_surveys').insert({
+      user_id: b.userId, answers: {}, consent_given: false,
+    });
+    record('S11-b', 'insert feedback_surveys ohne Einwilligung', 'Fehler (RLS)',
+      error ? PASS : FAIL, error ? errCode(error) : 'eingefügt');
+  }
+  {
+    const { data, error } = await b.client.from('profiles')
+      .update({ age_confirmed_at: new Date().toISOString() }).eq('id', b.userId).select('id');
+    record('S11-c', 'update profiles.age_confirmed_at direkt', '42501',
+      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+  }
+  {
+    const { error } = await b.client.rpc('confirm_age');
+    record('S11-d', 'rpc confirm_age (als B, eigene Zeile)', 'ok',
+      !error ? PASS : FAIL, error ? errCode(error) : 'ok');
+  }
+}
+
 async function testsS22(b) {
   {
     const r = await callFunction('security-monitor', { body: {} });            // ohne Secret/Token
@@ -714,6 +743,7 @@ function printResults() {
   await testsS12(a, b);
   await testsS13(b);
   await testsS15(b);
+  await testsS11(b);
   await testsHeaders();
   await testsS22(b);
   await testsRateLimits(a, b);

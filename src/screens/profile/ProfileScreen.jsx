@@ -33,6 +33,10 @@ export function ProfileScreen() {
   const [deleteError, setDeleteError] = useState('')
   const [betaFeedback, setBetaFeedback] = useState('')
   const [betaSent, setBetaSent] = useState(false)
+  // S-11: Feedback nur mit ausdrücklicher Einwilligung; Fehler sichtbar, kein Erfolg ohne Erfolg
+  const [betaConsent, setBetaConsent] = useState(false)
+  const [betaError, setBetaError] = useState(false)
+  const [betaBusy, setBetaBusy] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -152,7 +156,7 @@ export function ProfileScreen() {
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
-          ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setShowBetaModal(true) } }] : []),
+          ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setBetaConsent(false); setBetaError(false); setShowBetaModal(true) } }] : []),
           ...(profile?.plan === 'tester' || profile?.plan === 'premium' ? [{ icon: ClipboardList, label: 'Beta-Fragebogen ausfüllen', action: () => navigate('/feedback') }] : []),
           { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },
           { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
@@ -298,23 +302,45 @@ export function ProfileScreen() {
                   rows={5}
                   className="w-full border border-[var(--color-border)] rounded-xl px-4 py-3 text-[15px] text-ink bg-bg mb-4 focus:outline-none focus:border-[var(--color-accent)] transition-colors resize-none"
                 />
+                <label className="flex items-start gap-3 cursor-pointer mb-4">
+                  <input
+                    type="checkbox"
+                    checked={betaConsent}
+                    onChange={e => setBetaConsent(e.target.checked)}
+                    className="mt-0.5 flex-shrink-0 accent-[var(--color-accent)]"
+                  />
+                  <span className="text-[13px] text-ink-2 leading-snug">
+                    <span className="text-ink font-medium">Ich bin einverstanden, dass Jerome mein Feedback liest und damit die App verbessert.</span>{' '}
+                    Dein Feedback wird mit deinem Namen gespeichert und nach 24 Monaten gelöscht.
+                  </span>
+                </label>
+                {betaError && (
+                  <p role="alert" className="text-[13px] text-ink-2 bg-surface-2 rounded-lg px-4 py-3 mb-3">
+                    Dein Feedback ließ sich gerade nicht senden. Versuch es bitte noch einmal.
+                  </p>
+                )}
                 <div className="flex flex-col gap-3">
                   <button
                     onClick={async () => {
-                      if (!betaFeedback.trim() || !user) return
+                      if (!betaFeedback.trim() || !user || !betaConsent) return
+                      setBetaBusy(true)
+                      setBetaError(false)
+                      // Kein .select(): authenticated hat auf user_feedback nur INSERT (Migration 025)
                       const { error } = await supabase.from('user_feedback').insert({
                         user_id: user.id,
                         feedback_type: 'beta',
                         content: betaFeedback.trim(),
                         consent_given: true,
                       })
+                      setBetaBusy(false)
                       if (error) {
-                        console.error('Feedback insert failed:', error.message)
+                        logger.error('feedback_insert_failed', { code: error.code })
+                        setBetaError(true)
                         return
                       }
                       setBetaSent(true)
                     }}
-                    disabled={!betaFeedback.trim()}
+                    disabled={!betaFeedback.trim() || !betaConsent || betaBusy}
                     className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors disabled:opacity-40"
                   >
                     Feedback senden

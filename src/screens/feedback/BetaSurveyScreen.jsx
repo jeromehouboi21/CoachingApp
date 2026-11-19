@@ -2,8 +2,11 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { createLogger } from '../../lib/logger'
 import { Button } from '../../components/ui/Button'
 import { SURVEY_SECTIONS, SCALE_LABELS } from '../../config/betaSurvey'
+
+const logger = createLogger('BetaSurveyScreen')
 
 export function BetaSurveyScreen() {
   const navigate = useNavigate()
@@ -21,6 +24,8 @@ export function BetaSurveyScreen() {
 
   const [answers, setAnswers] = useState({})   // { key: { rating?, text? } }
   const [status, setStatus] = useState('idle') // 'idle' | 'saving' | 'success' | 'error'
+  // S-11: Fragebogen enthält Freitext → nur mit ausdrücklicher Einwilligung (Migration 036)
+  const [consent, setConsent] = useState(false)
 
   const setRating = (key, rating) =>
     setAnswers(a => ({ ...a, [key]: { ...a[key], rating } }))
@@ -29,6 +34,7 @@ export function BetaSurveyScreen() {
 
   async function handleSubmit() {
     if (!user?.id) { setStatus('error'); return }
+    if (!consent) return
     setStatus('saving')
 
     // Guard: nur 1..5 als rating durchlassen; leere Texte verwerfen — der
@@ -51,11 +57,12 @@ export function BetaSurveyScreen() {
       overall_recommend: clean.overall_recommend?.rating ?? null,
       answers: clean,
       app_version: import.meta.env?.VITE_APP_VERSION ?? null,
+      consent_given: true,
     }
 
     const { error } = await supabase.from('feedback_surveys').insert(row)
     if (error) {
-      console.error('[beta-survey] insert failed:', error.message)
+      logger.error('survey_insert_failed', { code: error.code })
       setStatus('error')
       return
     }
@@ -133,6 +140,19 @@ export function BetaSurveyScreen() {
         </section>
       ))}
 
+      <label className="flex items-start gap-3 cursor-pointer mb-4">
+        <input
+          type="checkbox"
+          checked={consent}
+          onChange={e => setConsent(e.target.checked)}
+          className="mt-0.5 flex-shrink-0 accent-[var(--color-accent)]"
+        />
+        <span className="text-[13px] text-ink-2 leading-snug">
+          <span className="text-ink font-medium">Ich bin einverstanden, dass Jerome mein Feedback liest und damit die App verbessert.</span>{' '}
+          Dein Feedback wird mit deinem Namen gespeichert und nach 24 Monaten gelöscht.
+        </span>
+      </label>
+
       {status === 'error' && (
         <p className="text-[13px] text-coral mb-3">
           Das Speichern hat nicht geklappt. Versuch es bitte gleich noch einmal.
@@ -142,7 +162,7 @@ export function BetaSurveyScreen() {
       <Button
         variant="primary"
         onClick={handleSubmit}
-        disabled={status === 'saving'}
+        disabled={status === 'saving' || !consent}
         className="w-full"
       >
         {status === 'saving' ? 'Wird gespeichert…' : 'Feedback absenden'}
