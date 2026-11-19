@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
-import { Avatar } from '../../components/ui/Avatar'
-import { Card } from '../../components/ui/Card'
-import { Badge } from '../../components/ui/Badge'
+import { ProfileButton } from '../../components/layout/ProfileButton'
 import { getDailyImpulse } from '../../lib/prompts'
 import { Compass, Scale, Flame, BookOpen, Info, ChevronRight } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -62,8 +60,6 @@ export function HomeScreen() {
   const { profile, user } = useAuth()
   const navigate = useNavigate()
   const impulse = getDailyImpulse()
-  const name = profile?.display_name || user?.email?.split('@')[0] || 'Du'
-  const streak = profile?.streak_count || 0
   const [conversationCount, setConversationCount] = useState(null)
 
   useEffect(() => {
@@ -91,9 +87,7 @@ export function HomeScreen() {
             Was bewegt dich <em>heute?</em>
           </h1>
         </div>
-        <button onClick={() => navigate('/profile')}>
-          <Avatar name={name} size="md" />
-        </button>
+        <ProfileButton />
       </div>
 
       {/* Wie es funktioniert — Zustand A: neue Nutzer (vor Tagesimpuls) */}
@@ -165,24 +159,9 @@ export function HomeScreen() {
         </div>
       </div>
 
-      {/* Streak Bar */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 flex items-center gap-3">
-        <span className="text-2xl">🔥</span>
-        <div className="flex-1">
-          <p className="text-[13px] text-ink-3">Deine Reflexionssträhne</p>
-          <p className="text-[18px] font-medium text-ink">{streak} {streak === 1 ? 'Tag' : 'Tage'}</p>
-        </div>
-        <div className="flex gap-1">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <span
-              key={i}
-              className={`w-2 h-2 rounded-full ${i < streak % 7 ? 'bg-accent' : 'bg-surface-2'}`}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Reflexionssträhne entfernt (U1): Strähnen erzeugen Druck. Reflexionstage stehen im Profil. */}
 
-      {/* Wie es funktioniert — Zustand B: erfahrene Nutzer (nach Streak) */}
+      {/* Wie es funktioniert — Zustand B: erfahrene Nutzer */}
       {isExperienced && (
         <button
           onClick={() => navigate('/howto')}

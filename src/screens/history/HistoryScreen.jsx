@@ -51,7 +51,7 @@ export function HistoryScreen() {
       {/* Header */}
       <div className="px-5 pt-12 pb-6">
         <button
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate('/coach')}
           className="flex items-center gap-1 text-ink-3 text-[13px] mb-6"
         >
           <ChevronLeft size={16} />

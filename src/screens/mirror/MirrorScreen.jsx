@@ -4,6 +4,7 @@ import { Pin, Trash2, BookOpen, Lock, ChevronRight, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import { ProfileButton } from '../../components/layout/ProfileButton'
 
 // ─── Tab 1: Erkenntnisse ────────────────────────────────────────────────────
 
@@ -512,9 +513,12 @@ export function MirrorScreen() {
   return (
     <div className="px-5 pt-12 pb-6">
       {/* Header */}
-      <div className="mb-5">
-        <h1 className="font-display text-[24px] text-ink">Mein Spiegel</h1>
-        <p className="text-[13px] text-ink-3 mt-0.5">Was du über dich verstanden hast</p>
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-[24px] text-ink">Spiegel</h1>
+          <p className="text-[13px] text-ink-3 mt-0.5">Was du über dich verstanden hast</p>
+        </div>
+        <ProfileButton />
       </div>
 
       {/* Tab-Navigation */}

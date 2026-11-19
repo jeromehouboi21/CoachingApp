@@ -3,16 +3,27 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, History, Handshake, ClipboardList } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
+import { createLogger } from '../../lib/logger'
+
+const logger = createLogger('ProfileScreen')
+
+// Lokaler Kalendertag (YYYY-MM-DD) – Reflexionstage zählen Tage, nicht Gespräche.
+function localDayKey(iso) {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+}
 
 
 export function ProfileScreen() {
   const { profile, user, signOut, updateProfile, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const [insightCount, setInsightCount] = useState(0)
+  // U1, E-U1-5: Gespräche gesamt + Reflexionstage (Tage mit begonnenem Gespräch, gesamt). null = nicht ladbar
+  const [stats, setStats] = useState({ conversations: 0, reflectionDays: 0 })
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState('')
   const [showBetaModal, setShowBetaModal] = useState(false)
@@ -30,6 +41,21 @@ export function ProfileScreen() {
       .select('id', { count: 'exact' })
       .eq('user_id', user.id)
       .then(({ count }) => setInsightCount(count || 0))
+    // Dieselbe Quelle wie der Gesprächsverlauf: nur Gespräche mit eigener Nachricht
+    supabase
+      .rpc('get_conversation_history')
+      .then(({ data, error }) => {
+        if (error) {
+          logger.error('conversation_stats_failed', { code: error.code })
+          setStats(null)
+          return
+        }
+        const rows = data ?? []
+        setStats({
+          conversations: rows.length,
+          reflectionDays: new Set(rows.map((r) => localDayKey(r.created_at))).size,
+        })
+      })
   }, [user])
   const name = profile?.display_name || user?.email?.split('@')[0] || 'Unbekannt'
 
@@ -80,16 +106,16 @@ export function ProfileScreen() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-8">
         <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
-          <p className="text-[24px] font-display text-ink">{profile?.streak_count || 0}</p>
-          <p className="text-[12px] text-ink-3">Tage Streak</p>
-        </div>
-        <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
-          <p className="text-[24px] font-display text-ink">{profile?.sessions_used_this_month || 0}</p>
+          <p className="text-[24px] font-display text-ink">{stats ? stats.conversations : '–'}</p>
           <p className="text-[12px] text-ink-3">Gespräche</p>
         </div>
         <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
           <p className="text-[24px] font-display text-ink">{insightCount}</p>
           <p className="text-[12px] text-ink-3">Erkenntnisse</p>
+        </div>
+        <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 text-center">
+          <p className="text-[24px] font-display text-ink">{stats ? stats.reflectionDays : '–'}</p>
+          <p className="text-[12px] text-ink-3">Reflexionstage</p>
         </div>
       </div>
 
@@ -124,7 +150,6 @@ export function ProfileScreen() {
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         {[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
-          { icon: History, label: 'Gesprächsverlauf', action: () => navigate('/verlauf') },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           ...(profile?.plan !== 'tester' ? [{ icon: CreditCard, label: 'Plan & Abonnement', action: () => navigate('/premium') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setShowBetaModal(true) } }] : []),

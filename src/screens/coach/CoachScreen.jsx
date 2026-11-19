@@ -12,6 +12,7 @@ import { ChatInput } from '../../components/coach/ChatInput'
 import { QuickReplies } from '../../components/coach/QuickReplies'
 import { ConversationEndModal } from '../../components/coach/ConversationEndModal'
 import { Badge } from '../../components/ui/Badge'
+import { ProfileButton } from '../../components/layout/ProfileButton'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { functionHeaders, functionUrl } from '../../lib/functions'
@@ -388,19 +389,11 @@ export function CoachScreen() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-surface border-b border-[var(--color-border)] px-5 pt-12 pb-4">
         <div className="flex items-start justify-between">
-          <div>
+          <div className="min-w-0">
             <h1 className="font-display text-[24px] text-ink">Dein Begleiter</h1>
             <p className="text-[13px] text-ink-3">Fragen, die dich anders denken lassen</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/verlauf')}
-              aria-label="Gesprächsverlauf öffnen"
-              title="Gesprächsverlauf"
-              className="flex items-center justify-center w-8 h-8 rounded-full border border-[var(--color-border)] text-ink-2 hover:bg-accent-light hover:text-accent transition-all"
-            >
-              <History size={15} />
-            </button>
+          <div className="flex items-center gap-2 flex-none">
             <button
               onClick={handleNewConversation}
               disabled={isLoading}
@@ -409,6 +402,7 @@ export function CoachScreen() {
               <Plus size={14} />
               Neues Gespräch
             </button>
+            <ProfileButton />
           </div>
         </div>
         <div className="flex items-center justify-between mt-2">
@@ -416,13 +410,24 @@ export function CoachScreen() {
             <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
             <span className="text-[12px] text-ink-3">Bereit für dich</span>
           </div>
-          {profile?.plan === 'premium' ? (
-            <Badge variant="premium">Premium</Badge>
-          ) : (
-            <Badge variant="free">
-              {profile?.session_limit == null ? 'Unbegrenzt' : `${sessionsLeft} von ${profile.session_limit} frei`}
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Verlauf in Zeile 2, damit oben rechts Platz für den Avatar ist (U1, 390 px) */}
+            <button
+              onClick={() => navigate('/coach/verlauf')}
+              aria-label="Gesprächsverlauf öffnen"
+              className="flex items-center gap-1 text-[12px] text-ink-2 px-2 py-1 rounded-full border border-[var(--color-border)] hover:bg-accent-light hover:text-accent transition-all"
+            >
+              <History size={13} />
+              Verlauf
+            </button>
+            {profile?.plan === 'premium' ? (
+              <Badge variant="premium">Premium</Badge>
+            ) : (
+              <Badge variant="free">
+                {profile?.session_limit == null ? 'Unbegrenzt' : `${sessionsLeft} von ${profile.session_limit} frei`}
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 

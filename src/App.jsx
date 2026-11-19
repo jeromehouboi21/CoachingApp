@@ -84,13 +84,18 @@ export default function App() {
       <Route path="/verstehen/aus-gespraechen" element={<ProtectedRoute><AusGespraechen /></ProtectedRoute>} />
       <Route path="/verstehen/:key" element={<ProtectedRoute><MusterDetail /></ProtectedRoute>} />
 
-      {/* Gesprächsverlauf: eigenes Vollbild-Layout wie Verstehen-Detailscreens, kein BottomNav */}
-      <Route path="/verlauf" element={<ProtectedRoute><HistoryScreen /></ProtectedRoute>} />
+      {/* Gesprächsverlauf: gehört zum Gespräch (U1), eigenes Vollbild-Layout ohne BottomNav.
+          /verlauf bleibt als Weiterleitung für alte Lesezeichen. */}
+      <Route path="/coach/verlauf" element={<ProtectedRoute><HistoryScreen /></ProtectedRoute>} />
+      <Route path="/verlauf" element={<Navigate to="/coach/verlauf" replace />} />
 
       {/* Coaching-Vereinbarung: nachträglicher Rückblick inkl. Zustimmungsdatum, nur eingeloggt sinnvoll */}
       <Route path="/vereinbarung" element={<ProtectedRoute><CoachingAgreementScreen /></ProtectedRoute>} />
 
-      {/* Haupt-App mit BottomNav */}
+      {/* Startadresse: angemeldet → Heute (/home), sonst Landing (U1, E-U1-1) */}
+      <Route path="/" element={user ? <Navigate to="/home" replace /> : <Navigate to="/landing" replace />} />
+
+      {/* Haupt-App mit BottomNav: Heute · Gespräch · Spiegel. Profil über den Avatar (ProfileButton). */}
       <Route element={<AppShell />}>
         <Route path="/home" element={<ProtectedRoute><HomeScreen /></ProtectedRoute>} />
         <Route path="/coach" element={<ProtectedRoute><CoachScreen /></ProtectedRoute>} />
