@@ -24,3 +24,6 @@ Thumbs.db
 *.local
 dev-dist/
 
+
+# Audit-Ergebnisse (Metadaten aus der Live-DB) nicht einchecken
+docs/security/*-audit-result.md
