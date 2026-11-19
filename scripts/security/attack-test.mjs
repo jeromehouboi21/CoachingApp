@@ -728,18 +728,24 @@ async function testsU4(a, b) {
     const { error } = await b.client.rpc('access_state_for', { p_user_id: b.userId });
     record('U4-b', 'rpc access_state_for (als B, nur service_role)', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
   }
-  {
-    const { data, error } = await b.client.from('profiles')
-      .update({ trial_sessions_used: 0 }).eq('id', b.userId).select('id');
-    record('U4-c', 'update profiles.trial_sessions_used direkt', '42501',
-      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
-  }
   let bState = null;
   {
     const { data, error } = await b.client.rpc('get_access_state');
     bState = data;
     const ok = !error && ['kennenlernen', 'ruhemodus', 'begleitung'].includes(data?.phase);
     record('U4-d', 'rpc get_access_state (als B)', 'Phase', ok ? PASS : FAIL, error ? errCode(error) : `phase=${data?.phase}`);
+  }
+  {
+    // Ein ANDERER Wert als der aktuelle – ein Update ohne Änderung lässt der Schutz-Trigger zu
+    const current = Number(bState?.starts_used ?? 0);
+    const { data, error } = await b.client.from('profiles')
+      .update({ trial_sessions_used: current + 7 }).eq('id', b.userId).select('id');
+    if (!error && data?.length) {
+      // Lücke: sofort zurücksetzen (geht nur, wenn der Schutz fehlt), Ergebnis bleibt FAIL
+      await b.client.from('profiles').update({ trial_sessions_used: current }).eq('id', b.userId);
+    }
+    record('U4-c', 'update profiles.trial_sessions_used direkt', '42501',
+      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
   }
   // „4. Gespräch ohne Begleitung“: neues Gespräch im Ruhemodus → 429 session_limit
   if (bState?.phase === 'ruhemodus') {
@@ -759,7 +765,9 @@ async function testsU4(a, b) {
     record('U4-e', 'neues Gespräch im Ruhemodus', '429 session_limit', SKIP, `B ist nicht im Ruhemodus (phase=${bState?.phase ?? '?'}) – u4-test-setup.sql`);
   }
   // „101. Nachricht“: synthetisches Gespräch von A mit 100 Nachrichten → 409 conversation_cap
+  // Frische Anmeldung: Wird zwischendurch ein Faktor von A entfernt, beendet Supabase alle Sitzungen.
   {
+    a = { ...a, ...(await signIn('A (U4)', A)) };
     const { data: capConv } = await a.client.from('conversations').select('id')
       .eq('user_id', a.userId).eq('title', 'SECTEST Kappung').limit(1).maybeSingle();
     if (!capConv) {
