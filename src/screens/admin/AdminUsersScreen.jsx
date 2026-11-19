@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useAdminMfaContext } from '../../hooks/useAdminMfa'
 import { ChevronLeft } from 'lucide-react'
 
 export function AdminUsersScreen() {
   const { session, profile } = useAuth()
   const navigate = useNavigate()
+  const mfa = useAdminMfaContext()
+  const [loadError, setLoadError] = useState(null)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
@@ -20,30 +23,51 @@ export function AdminUsersScreen() {
   const [inviteError, setInviteError] = useState(null)
   const [inviteSuccess, setInviteSuccess] = useState(null)
 
-  const fetchUsers = async () => {
-    setLoading(true)
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+  // 403 mfa_required (z. B. abgelaufene aal2-Sitzung): MFA-Stand neu prüfen → AdminRoute zeigt den Code-Screen
+  const isMfaRequired = (res, data) => {
+    if (res.status === 403 && data?.error === 'mfa_required') {
+      mfa?.refresh()
+      return true
+    }
+    return false
+  }
+
+  // Kein stilles Scheitern: Fehler sichtbar machen statt leerer Liste
+  const adminGet = async (fn) => {
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`, {
       headers: {
         'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${session.access_token}`,
       },
     })
-    const data = await res.json()
-    setUsers(data.users ?? [])
-    setLoading(false)
+    const data = await res.json().catch(() => null)
+    if (isMfaRequired(res, data)) return null
+    if (!res.ok) throw new Error(data?.error ?? `http_${res.status}`)
+    return data
+  }
+
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const data = await adminGet('admin-users')
+      if (data) { setUsers(data.users ?? []); setLoadError(null) }
+    } catch {
+      setLoadError('Die Nutzerliste konnte gerade nicht geladen werden.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fetchFeedback = async () => {
     setFeedbackLoading(true)
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-feedback`, {
-      headers: {
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-      },
-    })
-    const data = await res.json()
-    setFeedback(data.feedback ?? [])
-    setFeedbackLoading(false)
+    try {
+      const data = await adminGet('admin-feedback')
+      if (data) { setFeedback(data.feedback ?? []); setLoadError(null) }
+    } catch {
+      setLoadError('Das Feedback konnte gerade nicht geladen werden.')
+    } finally {
+      setFeedbackLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -73,6 +97,8 @@ export function AdminUsersScreen() {
       // Kein stilles Scheitern: lokalen Stand nur übernehmen, wenn der Server bestätigt
       if (res.ok) {
         setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...patch } : u)))
+      } else if (isMfaRequired(res, await res.json().catch(() => null))) {
+        return
       } else {
         window.alert('Änderung konnte nicht gespeichert werden.')
       }
@@ -102,7 +128,8 @@ export function AdminUsersScreen() {
           sessionLimit: inviteLimit === '' ? null : parseInt(inviteLimit, 10),
         }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
+      if (isMfaRequired(res, data)) return
       if (!res.ok) {
         setInviteError(data.error || 'Einladung fehlgeschlagen.')
         return
@@ -137,6 +164,12 @@ export function AdminUsersScreen() {
           Zurück
         </button>
         <h1 className="font-display text-[24px] text-ink mb-2">Nutzerverwaltung</h1>
+        {loadError && <p className="text-[13px] text-coral mb-2">{loadError}</p>}
+        {mfa && mfa.factors.length < 2 && (
+          <button onClick={mfa.beginAddDevice} className="text-[12px] text-accent mb-3">
+            Zweites Gerät für den Admin-Code hinzufügen
+          </button>
+        )}
         <p className="text-[14px] text-ink-2 mb-4">
           {tab === 'users' ? `${users.length} Nutzer` : `${feedback.length} Rückmeldungen`}
         </p>

@@ -67,11 +67,31 @@ export async function assertConversationOwner(
 }
 
 /** Prüft, ob der Aufrufer Admin ist (über den echten service_role-Client). */
+/**
+ * Liest Claims aus einem JWT, das requireUser bereits per admin.auth.getUser(token) geprüft hat.
+ * Nur für geprüfte Tokens verwenden — nie für ungeprüfte.
+ */
+function readVerifiedClaims(token: string): Record<string, unknown> {
+  const part = token.split('.')[1] ?? '';
+  const b64 = part.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(part.length / 4) * 4, '=');
+  try {
+    const parsed = JSON.parse(atob(b64));
+    if (!parsed || typeof parsed !== 'object') throw new Error('not_object');
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new HttpError(401, 'invalid_token');
+  }
+}
+
+/** Admin = is_admin UND zweiter Faktor in dieser Sitzung (aal2, S-06). */
 export async function requireAdmin(ctx: AuthContext): Promise<void> {
   const { data, error } = await ctx.admin
     .from('profiles').select('is_admin').eq('id', ctx.user.id).maybeSingle();
   if (error) throw new HttpError(500, 'admin_check_failed');
   if (!data?.is_admin) throw new HttpError(403, 'forbidden');
+
+  const claims = readVerifiedClaims(ctx.token);
+  if (claims.aal !== 'aal2') throw new HttpError(403, 'mfa_required');
 }
 
 function timingSafeEqual(a: string, b: string): boolean {

@@ -23,14 +23,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Schriften liegen lokal (S-10) und werden über globPatterns (woff2) vorgeladen
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: { cacheName: 'google-fonts-cache', expiration: { maxAgeSeconds: 31536000 } }
-          }
-        ]
       }
     })
   ]

@@ -28,7 +28,8 @@ Deno.serve(async (req) => {
     try {
       await requireAdmin(ctx);
     } catch (e) {
-      if (e instanceof HttpError && e.status === 403) logger.warn('Forbidden — non-admin attempted admin-invite-user');
+      if (e instanceof HttpError && e.code === 'mfa_required') logger.warn('mfa_required');
+      else if (e instanceof HttpError && e.status === 403) logger.warn('Forbidden — non-admin attempted admin-invite-user');
       throw e;
     }
     const supabase = ctx.admin;

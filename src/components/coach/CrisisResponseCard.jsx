@@ -4,6 +4,10 @@ import { Heart } from 'lucide-react'
 // sie zu echten Tap-to-call/Tap-to-open-Links. Der Fließtext kommt vom Modell
 // (angewiesen, den Pflichttext unverändert wiederzugeben) — deshalb hier
 // robustes Nacherkennen statt starrem Parsen einer exakten Struktur.
+// S-08: zweite Linie — Links nur für tel: und https:, alles andere bleibt Text
+const SAFE_HREF = /^(tel:\+?[0-9 ()/-]{3,30}|https:\/\/[^\s<>"']+)$/i
+function safeHref(raw) { return SAFE_HREF.test(raw) ? raw : null }
+
 function linkify(content) {
   const pattern = /(0800\s?111\s?0\s?111|0800\s?111\s?0\s?222|\b116\s?123\b|\b112\b|\b110\b|telefonseelsorge\.de)/g
   const parts = []
@@ -29,12 +33,10 @@ function linkify(content) {
         </a>
       )
     } else {
-      const digits = token.replace(/\s/g, '')
-      parts.push(
-        <a key={key++} href={`tel:${digits}`} className="underline font-medium">
-          {token}
-        </a>
-      )
+      const href = safeHref(`tel:${token.replace(/\s/g, '')}`)
+      parts.push(href
+        ? <a key={key++} href={href} className="underline font-medium">{token}</a>
+        : token)
     }
     lastIndex = pattern.lastIndex
   }

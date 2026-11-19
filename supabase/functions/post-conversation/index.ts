@@ -639,7 +639,12 @@ Deno.serve(async (req) => {
     }
 
     // 6. Anonymes Muster + RAG-Eintrag speichern
-    if (anonSummary.context && anonSummary.pattern) {
+    // Lernbasis-Schalter (S-13, Entscheidung D-1: pausiert). Nicht gesetzt = aus.
+    // pattern_references und insights (persönlich) laufen unverändert weiter.
+    const learningEnabled = (Deno.env.get('RAG_LEARNING_ENABLED') ?? '').trim() === '1';
+    if (!learningEnabled) {
+      logger.info('learning_disabled', { conversationId });
+    } else if (anonSummary.context && anonSummary.pattern) {
       let embedding: number[] | null = null;
       if (openaiKey) {
         const textToEmbed = [anonSummary.context, anonSummary.pattern, anonSummary.what_helped]

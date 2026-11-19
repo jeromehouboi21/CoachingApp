@@ -13,6 +13,8 @@ import { HowItWorksScreen } from './screens/howto/HowItWorksScreen'
 import { WellnessCheckScreen } from './screens/wellness/WellnessCheckScreen'
 import { PremiumScreen } from './screens/premium/PremiumScreen'
 import { AdminUsersScreen } from './screens/admin/AdminUsersScreen'
+import { AdminMfaScreen } from './screens/admin/AdminMfaScreen'
+import { useAdminMfa, AdminMfaContext } from './hooks/useAdminMfa'
 import { StimmenScreen } from './screens/stimmen/StimmenScreen'
 import { VorstehenScreen } from './screens/verstehen/VorstehenScreen'
 import { MusterDetail } from './screens/verstehen/MusterDetail'
@@ -46,12 +48,16 @@ function ProtectedRoute({ children }) {
   return children
 }
 
+// Admin-Bereich nur mit zweitem Faktor (S-06). Maßgeblich ist der Server (requireAdmin → aal2);
+// hier wird nur die Bedienung gesteuert.
 function AdminRoute({ children }) {
   const { user, profile, loading } = useAuth()
-  if (loading) return <LoadingScreen />
+  const mfa = useAdminMfa()
+  if (loading || mfa.loading) return <LoadingScreen />
   if (!user) return <Navigate to="/landing" replace />
   if (!profile?.is_admin) return <Navigate to="/home" replace />
-  return children
+  if (mfa.level !== 'aal2' || mfa.enrolledJustNow || mfa.addingDevice) return <AdminMfaScreen mfa={mfa} />
+  return <AdminMfaContext.Provider value={mfa}>{children}</AdminMfaContext.Provider>
 }
 
 export default function App() {
