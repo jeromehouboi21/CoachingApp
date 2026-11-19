@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Lock } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { ChatBubble } from '../../components/coach/ChatBubble'
 import { TypingIndicator } from '../../components/coach/TypingIndicator'
 import { ChatInput } from '../../components/coach/ChatInput'
 import { supabase } from '../../lib/supabase'
 import { readRateLimit, rateLimitMessage } from '../../lib/rateLimit'
 import { functionHeaders, functionUrl } from '../../lib/functions'
+import { WhyMemoryBlock } from '../../components/WhyMemoryBlock'
 
 const OPENING = "Hast du Fragen zur App — wie sie funktioniert, was sie kostet, oder ob sie das Richtige für dich ist? Ich beantworte sie gerne."
 
@@ -179,26 +180,10 @@ export function HowItWorksScreen() {
             </a>
           </div>
 
-          {/* Block 3 — Datenschutz */}
+          {/* Block 3 — Warum sich die App etwas merkt (Paket K W2, ersetzt „Dein Raum gehört dir“) */}
           <div className="bg-accent-light rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Lock size={18} color="var(--color-accent)" />
-              <h2 className="text-[15px] font-medium text-ink">Dein Raum gehört dir</h2>
-            </div>
-            <ul className="flex flex-col gap-1.5">
-              {[
-                'Deine Gespräche werden nur für dich gespeichert',
-                'Keine Weitergabe an Dritte — niemals',
-                'Keine Werbung, kein Tracking deines Verhaltens',
-                'Deine Daten werden nicht zum Training von KI-Modellen verwendet',
-              ].map((item, i) => (
-                <li key={i} className="flex gap-2 text-[14px] text-ink-2">
-                  <span className="text-accent flex-none">·</span>
-                  {item}
-                </li>
-              ))}
-            </ul>
-            <button onClick={() => navigate('/datenschutz')} className="text-[13px] text-ink-3 hover:text-ink-2 mt-2 hover:underline">
+            <WhyMemoryBlock />
+            <button onClick={() => navigate('/datenschutz')} className="text-[13px] text-ink-3 hover:text-ink-2 mt-3 hover:underline block">
               Datenschutzerklärung lesen →
             </button>
           </div>

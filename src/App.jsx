@@ -24,6 +24,7 @@ import { CoachingAgreementScreen } from './screens/legal/CoachingAgreementScreen
 import { MfaChallengeScreen } from './screens/auth/MfaChallengeScreen'
 import { PasswordChangeScreen } from './screens/account/PasswordChangeScreen'
 import { PasswordResetScreen } from './screens/account/PasswordResetScreen'
+import { SecurityInfoScreen } from './screens/legal/SecurityInfoScreen'
 
 function LoadingScreen() {
   return (
@@ -80,6 +81,7 @@ export default function App() {
       <Routes>
         <Route path="/impressum" element={<ImpressumScreen />} />
         <Route path="/datenschutz" element={<DatenschutzScreen />} />
+        <Route path="/sicherheit" element={<SecurityInfoScreen />} />
         <Route path="*" element={<MfaChallengeScreen />} />
       </Routes>
     )
@@ -143,6 +145,8 @@ export default function App() {
       {/* Rechtliches — öffentlich zugänglich */}
       <Route path="/impressum" element={<ImpressumScreen />} />
       <Route path="/datenschutz" element={<DatenschutzScreen />} />
+      {/* Paket K W2: öffentlich, ohne Datenbankaufrufe, keine Umleitung für Angemeldete */}
+      <Route path="/sicherheit" element={<SecurityInfoScreen />} />
 
       {/* Fallback */}
       <Route

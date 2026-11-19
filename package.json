@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "postbuild": "node scripts/security/check-build.mjs",
+    "postbuild": "node scripts/security/check-build.mjs && node scripts/security/check-content.mjs",
     "preview": "vite preview",
     "security:test": "node --env-file=.env.security.local scripts/security/attack-test.mjs",
     "security:deletion-test": "node --env-file=.env.security.local scripts/security/deletion-test.mjs",

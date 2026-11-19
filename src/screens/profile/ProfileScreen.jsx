@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { useAccessState } from '../../lib/accessState'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound, ShieldCheck } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
@@ -28,6 +28,33 @@ function phaseLine(access) {
   if (typeof access.starts_limit !== 'number') return 'Kennenlernen'
   const current = Math.min(access.starts_used + 1, access.starts_limit)
   return `Kennenlernen · Gespräch ${current} von ${access.starts_limit}`
+}
+
+function ProfileSection({ title, children }) {
+  return (
+    <section className="mb-6">
+      <p className="text-[11px] uppercase tracking-[0.06em] font-medium text-ink-3 mb-2 px-1">{title}</p>
+      {children}
+    </section>
+  )
+}
+
+function MenuList({ items }) {
+  return (
+    <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
+      {items.map(({ icon: Icon, label, action }) => (
+        <button
+          key={label}
+          onClick={action}
+          className="w-full flex items-center gap-3 px-4 py-4 border-b border-[var(--color-border)] last:border-0 hover:bg-surface-2 transition-colors text-left"
+        >
+          <Icon size={18} color="var(--color-ink-2)" />
+          <span className="flex-1 text-[15px] text-ink">{label}</span>
+          <ChevronRight size={16} color="var(--color-ink-3)" />
+        </button>
+      ))}
+    </div>
+  )
 }
 
 export function ProfileScreen() {
@@ -159,43 +186,52 @@ export function ProfileScreen() {
         </a>
       </div>
 
-      {/* Datenschutz: Beitrag zur Lernbasis (S-13) */}
-      <LearningConsentCard profile={profile} onChanged={refreshProfile} />
-
-      {/* Sicherheit: zweiter Faktor für alle (S-06b) */}
-      <SecurityCard />
-
-      {/* Settings */}
-      <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
-        {[
+      {/* Paket K W2: Gliederung nach Konzept 7 – Dein Begleiter · Konto & Sicherheit · Rechtliches */}
+      <ProfileSection title="Dein Begleiter">
+        <MenuList items={[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
           ...(profile?.plan !== 'premium' ? [{ icon: CreditCard, label: 'Begleitung', action: () => navigate('/begleitung') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setBetaConsent(false); setBetaError(false); setShowBetaModal(true) } }] : []),
           ...(profile?.plan === 'tester' || profile?.plan === 'premium' ? [{ icon: ClipboardList, label: 'Beta-Fragebogen ausfüllen', action: () => navigate('/feedback') }] : []),
-          { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },
-          { icon: KeyRound, label: 'Passwort', action: () => navigate('/profil/passwort') },   // Paket K W1, bis W2 hier
-          { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
+        ]} />
+        {/* Lernbasis: deine Erfahrungen teilen (S-13) */}
+        <div className="mt-3">
+          <LearningConsentCard profile={profile} onChanged={refreshProfile} />
+        </div>
+      </ProfileSection>
+
+      <ProfileSection title="Konto & Sicherheit">
+        <MenuList items={[
+          { icon: KeyRound, label: 'Passwort ändern', action: () => navigate('/profil/passwort') },
+          { icon: ShieldCheck, label: 'Wie wir deine Daten schützen', action: () => navigate('/sicherheit') },
           { icon: Download, label: 'Meine Daten herunterladen', action: () => setShowExportSheet(true) },
+        ]} />
+        {/* Konto zusätzlich schützen (S-06b) */}
+        <div className="mt-3">
+          <SecurityCard />
+        </div>
+      </ProfileSection>
+
+      <ProfileSection title="Rechtliches">
+        <MenuList items={[
+          { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },
+          { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
           { icon: FileText, label: 'Impressum', action: () => navigate('/impressum') },
-        ].map(({ icon: Icon, label, action }) => (
-          <button
-            key={label}
-            onClick={action}
-            className="w-full flex items-center gap-3 px-4 py-4 border-b border-[var(--color-border)] last:border-0 hover:bg-surface-2 transition-colors text-left"
-          >
-            <Icon size={18} color="var(--color-ink-2)" />
-            <span className="flex-1 text-[15px] text-ink">{label}</span>
-            <ChevronRight size={16} color="var(--color-ink-3)" />
-          </button>
-        ))}
+        ]} />
+      </ProfileSection>
+
+      <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-4 py-4 border-b border-[var(--color-border)] hover:bg-surface-2 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-4 py-4 hover:bg-surface-2 transition-colors text-left"
         >
           <LogOut size={18} color="var(--color-coral)" />
           <span className="flex-1 text-[15px] text-coral">Abmelden</span>
         </button>
+      </div>
+      <div className="border-t border-[var(--color-border)] my-5" />
+      <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         <button
           onClick={() => { setDeleteInput(''); setDeleteError(''); setShowDeleteModal(true) }}
           className="w-full flex items-center gap-3 px-4 py-4 hover:bg-surface-2 transition-colors text-left"

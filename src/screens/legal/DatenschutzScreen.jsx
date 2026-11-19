@@ -190,6 +190,11 @@ export function DatenschutzScreen() {
             </p>
           </div>
 
+          {/* Paket K W2: nur ein Link, keine Textänderung */}
+          <button onClick={() => navigate('/sicherheit')} className="text-[13px] text-accent hover:underline text-left">
+            Wie wir deine Daten schützen ›
+          </button>
+
         </div>
       </div>
     </div>

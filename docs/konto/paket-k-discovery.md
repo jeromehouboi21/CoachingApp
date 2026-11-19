@@ -42,3 +42,34 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - Dashboard (J-K1) gesetzt: Mindestlänge 12, „Require current password when updating“ an, Redirect-URL `/passwort-neu`, Vorlagen „Reset password“ (`supabase/templates/recovery.html`) und „Password changed“ (`password_changed.html`).
 - J-K2 von Jerome bestätigt: (a) Passwort ändern inkl. Fehler bei falschem aktuellem Passwort, Abmelden anderer Geräte, Mail · (b) Passwort vergessen → Link → neues Passwort · (c) zweiter Klick auf denselben Link → „abgelaufen“ · (d) Fantasie-Adresse → gleicher Text · (f) Angriffstest K1–K3 PASS.
 - **D-3 geklärt:** Die Einladung (erstes Passwort ohne aktuelles Passwort) funktioniert auch mit „Require current password“ (e).
+
+## 2.1 Antworten für W2 (20.11.2026)
+
+| Frage | Befund |
+|---|---|
+| 6 Belege | Je Aussage in `src/content/securityMeasures.js` (Feld `evidence`). Seit Paket C abgeschlossen sind S-09, S-06b, S-22, S-16 **live** (im Konzept noch „geplant“); „Passwort geändert → Mail“ live nach J-K2 (a). |
+| 7 Tracking | Kein Analyse-, Tracking- oder Fehlerdienst im Frontend (`package.json`, `src/`); CSP nur `self` + Supabase (`vercel.json`); Schriften lokal (`@fontsource`). → „Keine Werbung, kein Tracking …“ live. |
+| 8 Drittanbieter mit Inhalten | **Anthropic** (Antworten, `chat`) · **OpenAI** (Embeddings der ersten Nachricht für RAG und der Lernbasis-Einträge, `_shared/rag.ts`, `post-conversation`, sofern der Schlüssel gesetzt ist) · **Browser-Spracherkennung** (Google/Apple) bei der Spracheingabe. Kein Mistral. |
+| 9 „Wie es funktioniert“ | `src/screens/howto/HowItWorksScreen.jsx`, Block 3 „Dein Raum gehört dir“ mit vier Punkten, u. a. „Keine Weitergabe an Dritte — niemals“. |
+| 10 Profil | Profil hinter dem Avatar ist seit U1 umgesetzt. Einträge vor W2: siehe W1-Abschnitt; Karten Lernbasis und „Konto zusätzlich schützen“ standen lose über der Liste. |
+
+## W2 – Abweichungen vom Konzept (zur Bestätigung in J-K3)
+
+| # | Befund | Umsetzung |
+|---|---|---|
+| W2-1 | Konzept nennt für die Spracheingabe **Mistral (EU)**. Tatsächlich nutzt die App die **Spracherkennung des Browsers** (Web Speech API; Hinweis aus S-11/C-3). | Eintrag „Spracheingabe“ mit dem zutreffenden Text, live (Beleg `useVoiceInput`, Hinweis im Chat). |
+| W2-2 | **OpenAI** bekommt Inhalte (Embeddings), steht nicht im Konzept. | Eigener Eintrag „R-3 OpenAI“, `text_offen` bis R-3 (Speicherfrist, AV-Vertrag). Bitte prüfen, ob der OpenAI-Schlüssel in den Supabase-Secrets gesetzt ist. |
+| W2-3 | **Region der Datenbank** lässt sich im Code nicht belegen (nur die Functions, S-09). | Eintrag „Deine Daten liegen … Frankfurt“ `text_offen`, bis Jerome die Projekt-Region im Dashboard bestätigt (Project Settings → General). |
+| W2-4 | **„Keine Weitergabe an Dritte — niemals“** in „Wie es funktioniert“ widerspricht W2-2 und der Anthropic-Nutzung (außerdem absolutes „niemals“). Ebenso „Deine Gespräche werden nur für dich gespeichert“. | Block 3 durch „Warum sich die App etwas merkt“ ersetzt (Handoff 4.3 erlaubt Ersatz). Gleiche Formulierungen stehen noch in `LandingScreen`, `AuthScreen` (Text + Datenschutz-Modal) und `Step4Auth` → **Beobachtung**, gehört zu W3 (neuer Einstieg) bzw. R-2. |
+| W2-5 | Konzept 3.3: „Deine Einschätzungen – der Begleiter lernt, was dir hilft“ gilt erst mit U5b. | Zeile ehrlich ohne Lern-Aussage („deine eigene Einordnung deiner Erkenntnisse“); mit U5b anpassen. |
+| W2-6 | Fristen-Aussage (S-15) braucht Jeromes Formulierung. | `text_offen` mit Vorschlag aus `apply_retention` (Migration 036). |
+| W2-7 | Die Belege werden mit ins Frontend gebaut; ein Beleg nannte den Namen einer geheimen Umgebungsvariable → `check-build` brach ab (richtig). | Beleg umformuliert. Belege enthalten nur Dateipfade und Roadmap-IDs, keine Werte. |
+
+## W2 – Bauhinweise
+
+- Neue Dateien: `src/content/securityMeasures.js`, `src/content/whyMemory.js` (`EXPORT_AVAILABLE = true`, C-4 live), `src/screens/legal/SecurityInfoScreen.jsx` (Seite + `SecurityInfoSheet`), `src/components/WhyMemoryBlock.jsx`, `scripts/security/check-content.mjs` (im `postbuild` nach `check-build.mjs`).
+- Route `/sicherheit` öffentlich, auch für Angemeldete und auch während der Code-Abfrage (wie Impressum/Datenschutz).
+- „Wie es funktioniert“: Block 3 ersetzt durch `WhyMemoryBlock` (+ Links „Was genau gespeichert wird ›“, „Wie wir deine Daten schützen ›“, „Datenschutzerklärung lesen →“).
+- Datenschutzerklärung: nur Link „Wie wir deine Daten schützen ›“ unten, keine Textänderung.
+- Profil: Abschnitte „Dein Begleiter“ (inkl. Lernbasis-Karte), „Konto & Sicherheit“ (Passwort ändern, Wie wir deine Daten schützen, Meine Daten herunterladen, Karte „Konto zusätzlich schützen“), „Rechtliches“, Abmelden, Trennlinie, Konto löschen. Alle Funktionen existieren (keine Feature-Konstante nötig).
+- Angezeigt: 16 Aussagen live; `text_offen`: R-1, Region, R-3 Anthropic, R-3 OpenAI, S-15 Fristen; „Was du wissen solltest“: 2 von 3 (S-21 geplant).
