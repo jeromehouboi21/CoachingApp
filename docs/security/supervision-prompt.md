@@ -1,7 +1,7 @@
 # Supervision-Prompt zum Gegenlesen (S-13)
 
 > Für: Jerome, als Coach · Stand: Paket B, Welle 3 · Quelle: `supabase/functions/supervision/index.ts`
-> `SUPERVISION_IN_PROMPT` bleibt **aus**, bis du diesen Text freigibst.
+> **Freigegeben von Jerome am 19.11.2026.** `SUPERVISION_IN_PROMPT=1` wird erst nach dem Deploy von Welle 3 gesetzt (vorher läuft noch die alte Fassung ohne Regeln und Prüfschritt).
 
 ## Was die Supervision tut
 - **Wann:** jeden Montag um 06:00 per Cron.
