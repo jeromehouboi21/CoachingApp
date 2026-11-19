@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useAdminMfaContext } from '../../hooks/useAdminMfa'
 import { ChevronLeft } from 'lucide-react'
+import { functionHeaders, functionUrl } from '../../lib/functions'
 
 export function AdminUsersScreen() {
   const { session, profile } = useAuth()
@@ -37,11 +38,8 @@ export function AdminUsersScreen() {
 
   // Kein stilles Scheitern: Fehler sichtbar machen statt leerer Liste
   const adminGet = async (fn) => {
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${fn}`, {
-      headers: {
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${session.access_token}`,
-      },
+    const res = await fetch(functionUrl(fn), {
+      headers: functionHeaders(session.access_token),
     })
     const data = await res.json().catch(() => null)
     if (isMfaRequired(res, data)) return null
@@ -88,13 +86,9 @@ export function AdminUsersScreen() {
   const updateUser = async (userId, patch) => {
     setSavingId(userId)
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-users`, {
+      const res = await fetch(functionUrl('admin-users'), {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: functionHeaders(session.access_token),
         body: JSON.stringify({ userId, ...patch }),
       })
       // Kein stilles Scheitern: lokalen Stand nur übernehmen, wenn der Server bestätigt
@@ -118,13 +112,9 @@ export function AdminUsersScreen() {
     setInviteError(null)
     setInviteSuccess(null)
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-invite-user`, {
+      const res = await fetch(functionUrl('admin-invite-user'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${session.access_token}`,
-        },
+        headers: functionHeaders(session.access_token),
         body: JSON.stringify({
           email: inviteEmail,
           displayName: inviteName || null,

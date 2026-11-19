@@ -1,0 +1,9 @@
+title = "Friedensstifter"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Öffentliche Werte"
+regexes = ['''dpvqysabgycdjawkdrah\.supabase\.co''']
+paths = ['''package-lock\.json''']

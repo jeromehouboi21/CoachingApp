@@ -6,6 +6,7 @@ import {
 } from '../_shared/auth.ts';
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 import { findSimilarExperiences } from '../_shared/rag.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -1029,11 +1030,7 @@ function sanitizeEntryContext(v: unknown): EntryContext | undefined {
   };
 }
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const CORS_HEADERS = corsHeaders('POST, GET, OPTIONS');
 
 // ── Grenzen und Konstanten ───────────────────────────────────────────────────
 // Seit S-12 (Paket B) kommt der Verlauf im Gesprächsmodus aus der DB, nicht vom Client.

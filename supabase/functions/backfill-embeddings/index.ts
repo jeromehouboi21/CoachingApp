@@ -11,11 +11,9 @@
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
 import { generateEmbedding } from '../_shared/rag.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-cron-secret',
-};
+const CORS_HEADERS = corsHeaders('POST, OPTIONS', { extraAllowedHeaders: ['x-cron-secret'] });
 
 const BATCH_LIMIT = 100;
 

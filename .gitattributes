@@ -1,2 +1,8 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Nie in ZIPs zum Teilen (npm run share:zip, S-05)
+.env* export-ignore
+*.har export-ignore
+*.csv export-ignore
+docs/security/*audit-result* export-ignore

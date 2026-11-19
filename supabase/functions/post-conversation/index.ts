@@ -10,6 +10,7 @@ import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 const SESSION_NOTES_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Erstelle strukturierte Session-Notes für deine Coach-Akte.
@@ -281,11 +282,7 @@ function clampScore(value: unknown, min = 1, max = 5): number | null {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const CORS_HEADERS = corsHeaders('POST, GET, OPTIONS');
 
 // Seit S-12 (Paket B): Der Verlauf kommt aus der DB, ein mitgeschicktes messages[] wird
 // ignoriert. Verarbeitet werden höchstens die letzten MAX_PROCESSED_MESSAGES (Kostenbremse).

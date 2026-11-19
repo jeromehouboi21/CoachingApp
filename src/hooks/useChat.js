@@ -3,10 +3,10 @@ import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES, FIRST_OPENING_MESSAGE } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 import { readRateLimit, rateLimitMessage } from '../lib/rateLimit'
+import { functionHeaders, functionUrl } from '../lib/functions'
 
 const logger = createLogger('useChat')
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`
+const CHAT_URL = functionUrl('chat')
 
 const HICCUP_MESSAGE = 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.'
 const SESSION_EXPIRED_MESSAGE = 'Deine Sitzung ist abgelaufen. Bitte melde dich kurz ab und wieder an.'
@@ -19,11 +19,7 @@ function generateRequestId() {
 function postChat(accessToken, body) {
   return fetch(CHAT_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': ANON_KEY,
-      'Authorization': `Bearer ${accessToken}`,
-    },
+    headers: functionHeaders(accessToken),
     body: JSON.stringify(body),
   })
 }

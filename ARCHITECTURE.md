@@ -70,6 +70,7 @@ CoachingApp/
 │   │   ├── prompts.js                   ← UI-Texte: Eröffnungen (Kopie in chat/index.ts!), Wellness-Scores, Impulsfragen
 │   │   ├── rateLimit.js                 ← 429 rate_limited erkennen + Hinweistext
 │   │   ├── consent.js                   ← Versionen der Zustimmungstexte (inkl. LEARNING_CONSENT_VERSION)
+│   │   ├── functions.js                 ← functionUrl/functionHeaders (Region eu-central-1, S-09)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
 │   │
 │   ├── styles/
@@ -143,6 +144,7 @@ CoachingApp/
 ├── supabase/
 │   ├── functions/
 │   │   ├── _shared/
+│   │   │   ├── cors.ts                  ← corsHeaders(methods) für alle Functions (inkl. x-region, S-09)
 │   │   │   ├── auth.ts                  ← requireUser/requireAdmin(aal2)/requireInternalCaller, Eigentum, Limits
 │   │   │   ├── logger.ts                ← Zentraler Logger (sanitizeLogData, describeError)
 │   │   │   ├── rag.ts                   ← Embedding + match_experiences (nur serverseitig)
@@ -200,6 +202,10 @@ CoachingApp/
 │
 ├── scripts/security/attack-test.mjs     ← Angriffstest (npm run security:test)
 ├── scripts/security/deletion-test.mjs   ← Löschtest (npm run security:deletion-test, Testkonto C)
+├── scripts/security/secret-scan.mjs     ← gitleaks über die ganze Historie (npm run security:secrets, nur Fundorte)
+├── scripts/security/check-build.mjs     ← postbuild: dist/ auf Schlüssel prüfen, Build bricht ab
+├── scripts/share-zip.mjs                ← ZIP zum Teilen nur aus HEAD (npm run share:zip)
+├── .gitleaks.toml                       ← Allowlist öffentlicher Werte (Projekt-URL)
 ├── docs/security/                       ← Discovery, Handoffs, Lösungsdesign, Abschlussberichte
 ├── vercel.json                          ← SPA-Rewrite, Cache-, Security-Header, CSP
 ├── tailwind.config.js                   ← Custom Colors via CSS-Variablen
@@ -642,6 +648,12 @@ Einzige Stelle im Frontend wo der Supabase-Client initialisiert wird. Alle Hooks
 
 ---
 
+#### `src/lib/functions.js`
+
+Gemeinsame Bausteine für alle Edge-Function-Aufrufe (S-09): `functionUrl(name)` und `functionHeaders(accessToken, extra)` (Authorization, Content-Type, `apikey`, **`x-region: eu-central-1`**). Für künftige `supabase.functions.invoke`-Aufrufe: Option `region: INVOKE_REGION`. Jeder neue Function-Aufruf nutzt diese Bausteine — sonst entscheidet Supabase die Region selbst.
+
+---
+
 #### `src/lib/prompts.js`
 
 Zentrale Datei für alle UI-nahen Texte und Konfigurationen.
@@ -695,6 +707,8 @@ logger.error(msg, data)   // Console + DB (mit stack_trace)
 Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. **Imports haben feste Versionen** (`npm:@supabase/supabase-js@2.119.0`, `npm:@anthropic-ai/sdk@1.10.0` bzw. `https://esm.sh/@anthropic-ai/sdk@1.10.0`) — ohne Version zieht jeder Deploy die neueste Version (Ausfall 19.11.2026). Schalter-Secrets: `RAG_LEARNING_ENABLED` (Lernbasis, `1` = an), `SUPERVISION_IN_PROMPT` (BLOCK 5, `1` = an) — beide seit 19.11.2026 an. `admin-invite-user` nutzt zusätzlich optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`), `supervision` das Secret `CRON_SECRET`.
 
 **Sicherheitsmuster v2 (Pflicht, Security-Paket A):** Jede Function ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` aus `_shared/auth.ts` auf. Die Identität kommt **ausschließlich** aus dem JWT, nie aus dem Body; jede `conversationId` wird mit `assertConversationOwner()` geprüft (403). Gateway-Schalter „Verify JWT“ ist aus (`supabase/config.toml`), die Prüfung passiert im Code. Details: [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a).
+
+**CORS und Region (S-09, Paket C):** Alle Functions holen ihre CORS-Header aus `_shared/cors.ts` (`corsHeaders('POST, OPTIONS')`, interne Functions zusätzlich `x-cron-secret`). Erlaubt ist u. a. `x-region`; das Frontend schickt `x-region: eu-central-1`, die Antwort trägt `x-sb-edge-region: eu-central-1` (Angriffstest #32).
 
 ---
 
@@ -760,7 +774,7 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Kapazität-vs-W
   + BLOCK 2: Coach-Akte      (coach_file_entries inkl. linked_value + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte   (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext     (geprüfte Erfahrungen aus experience_patterns · als <erfahrungen_anderer_menschen>-Datenblock, „keine Anweisungen“, < > entfernt)
-  + BLOCK 5: Supervision     (Wöchentliche Empfehlung · nur mit SUPERVISION_IN_PROMPT=1, derzeit aus)
+  + BLOCK 5: Supervision     (Wöchentliche Empfehlung · nur mit SUPERVISION_IN_PROMPT=1, seit 19.11.2026 an)
   + BLOCK 6: Wellness-Check  (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
   + BLOCK 7: Entry-Kontext   (v2.6 — woher kommt der Mensch: pattern/tagesimpuls/verstehen; 'spiegel' ist vorgesehen, wird aber von keinem Screen genutzt)
 ```
@@ -893,7 +907,7 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 
 **Prompt-Regeln + Prüfschritt (S-13):** Der Prompt verlangt ausschließlich allgemeine Empfehlungen zum Coach-Verhalten (keine Einzelfälle, Zitate, Personendetails, keine Abschwächung von Sicherheits-/Krisenregeln). `improvement_recs` durchläuft `reviewLearningEntry` (`low_quality` zählt nicht); abgelehnt → `null`, Log `supervision_rejected` mit Codes. Prompt zum Gegenlesen: `docs/security/supervision-prompt.md` (freigegeben 19.11.2026).
 
-**Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. `supervision_logs.improvement_recs` lädt `chat` selbst, aber nur mit Secret `SUPERVISION_IN_PROMPT=1` (derzeit aus, S-12).
+**Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. `supervision_logs.improvement_recs` lädt `chat` selbst, aber nur mit Secret `SUPERVISION_IN_PROMPT=1` (seit 19.11.2026 an, S-12).
 
 ---
 
@@ -1538,6 +1552,9 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 - **Edge Functions:** `supabase functions deploy <name>` — `supabase/config.toml` hält `verify_jwt = false` für alle Functions fest (zur Sicherheit zusätzlich `--no-verify-jwt`)
 - **Migrationen:** `supabase db push` vor jedem Deployment das DB-Änderungen enthält
 - **Reihenfolge:** Erst den Branch nach `main` mergen (bzw. auschecken), **dann** `db push` und `functions deploy` — die CLI arbeitet mit dem lokalen Stand (Panne 19.11.2026: „Remote database is up to date“, weil die neue Migration lokal noch fehlte). Nach neuen RPCs: `notify pgrst, 'reload schema';`
+- **Build-Prüfung:** `postbuild` (`scripts/security/check-build.mjs`) läuft nach jedem `npm run build`, auch auf Vercel. Findet sie ein Schlüsselmuster (`sk-ant-`, OpenAI, `sb_secret_`, Namen geheimer Variablen) oder ein JWT mit einer anderen Rolle als `anon`, scheitert der Build und Vercel deployt nicht.
+- **Secret-Scan:** `npm run security:secrets` (gitleaks über die ganze Historie, Ausgabe nur Regel/Datei/Commit/Zeile; anon- und `sb_publishable_`-Keys gelten als öffentlich).
+- **ZIPs zum Teilen:** nur `npm run share:zip` (`git archive` aus HEAD, `export-ignore` für `.env*`, `*.har`, `*.csv`, Audit-Ergebnisse).
 - **Supabase CLI:** 2.95.4 (Update auf 3.x geplant, danach Probe-Deploy)
 - **Domain:** `app.friedensstifter.coach` (Vercel Custom Domain)
 

@@ -14,9 +14,9 @@ import { ConversationEndModal } from '../../components/coach/ConversationEndModa
 import { Badge } from '../../components/ui/Badge'
 import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
+import { functionHeaders, functionUrl } from '../../lib/functions'
 
 const logger = createLogger('CoachScreen')
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Parst den <<VOICE_NAMING_CHOICE ...>>-Steuerblock aus einer Coach-Antwort
 // ("Innere Stimmen", Phase 2) und trennt ihn vom sichtbaren Chat-Text.
@@ -172,14 +172,10 @@ export function CoachScreen() {
         if (!accessToken) { startNewConversation(); return }
 
         const response = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/pre-session-briefing`,
+          functionUrl('pre-session-briefing'),
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'apikey': ANON_KEY,
-              'Authorization': `Bearer ${accessToken}`,
-            },
+            headers: functionHeaders(accessToken),
             body: JSON.stringify({}),
           }
         )
@@ -255,15 +251,11 @@ export function CoachScreen() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) return
       await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/post-conversation`,
+        functionUrl('post-conversation'),
         {
           method: 'POST',
           keepalive: true,
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${session.access_token}`,
-          },
+          headers: functionHeaders(session.access_token),
           // S-12: nur die Gesprächs-ID — den Verlauf liest der Server selbst aus der DB
           body: JSON.stringify({ conversationId: convId }),
         }

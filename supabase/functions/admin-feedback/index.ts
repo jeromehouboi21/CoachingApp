@@ -5,12 +5,9 @@
 
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { HttpError, requireUser, requireAdmin, errorResponse, jsonResponse } from '../_shared/auth.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const CORS_HEADERS = corsHeaders('GET, OPTIONS');
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

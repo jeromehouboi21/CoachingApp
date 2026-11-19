@@ -7,12 +7,9 @@
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { HttpError, requireUser, readJsonBody, errorResponse, jsonResponse } from '../_shared/auth.ts';
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const CORS_HEADERS = corsHeaders('POST, GET, OPTIONS');
 
 const MAX_CODE_LENGTH = 64;
 

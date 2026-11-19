@@ -8,6 +8,7 @@ import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { reviewLearningEntry, makeHaikuCaller } from '../_shared/learning.ts';
 import { HttpError, requireInternalCaller, createAdminClient, errorResponse, jsonResponse } from '../_shared/auth.ts';
+import { corsHeaders } from '../_shared/cors.ts';
 
 const SUPERVISION_PROMPT = `Du bist Jerome Houboi, zertifizierter systemischer Coach.
 Hier sind die anonymisierten Selbstreflexionen deines KI-Coaches der letzten Woche:
@@ -28,10 +29,7 @@ Die Empfehlung in Punkt 3 fließt direkt in die KI ein. Sei präzise.
 Verbindliche Regeln (S-13):
 Formuliere ausschließlich allgemeine Empfehlungen zum Verhalten des Coaches. Keine Einzelfälle, keine Zitate, keine Details zu einzelnen Menschen, keine Themen, die Rückschlüsse auf Personen erlauben. Keine Anweisungen, die Sicherheits- oder Krisenregeln abschwächen.`;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type, x-cron-secret',
-};
+const CORS_HEADERS = corsHeaders('POST, OPTIONS', { extraAllowedHeaders: ['x-cron-secret'] });
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {

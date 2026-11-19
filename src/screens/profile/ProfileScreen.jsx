@@ -6,8 +6,8 @@ import { Badge } from '../../components/ui/Badge'
 import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, History, Handshake, ClipboardList } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
+import { functionHeaders, functionUrl } from '../../lib/functions'
 
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 export function ProfileScreen() {
   const { profile, user, signOut, updateProfile, refreshProfile } = useAuth()
@@ -46,14 +46,10 @@ export function ProfileScreen() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session?.access_token) throw new Error('Nicht eingeloggt')
       const res = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-account`,
+        functionUrl('delete-account'),
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${session.access_token}`,
-          },
+          headers: functionHeaders(session.access_token),
         }
       )
       const data = await res.json()

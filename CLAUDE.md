@@ -271,7 +271,7 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennun
   + BLOCK 2: Coach-Akte     (coach_file_entries + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte  (resonance_map · ab 3. Gespräch · immer unsichtbar)
   + BLOCK 4: RAG-Kontext    (Anonyme Erfahrungen)
-  + BLOCK 5: Supervision    (Wöchentliche Empfehlung · nur mit Secret SUPERVISION_IN_PROMPT=1, derzeit aus)
+  + BLOCK 5: Supervision    (Wöchentliche Empfehlung · nur mit Secret SUPERVISION_IN_PROMPT=1, seit 19.11.2026 an)
   + BLOCK 6: Wellness-Check (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
 ```
 
@@ -427,6 +427,8 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 - **Nur der Server schreibt `messages`** — kein `supabase.from('messages').insert` im Frontend (S-12)
 - **Neue Tabellen mit Personenbezug** brauchen eine `ON DELETE CASCADE`-Kette zu `auth.users`/`profiles`/`conversations`, gehören ggf. in `apply_retention()` (Migration 033) und werden mit dem Löschtest geprüft (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0).
 - **Lernbasis (S-13):** Inhalte gelangen nur mit `RAG_LEARNING_ENABLED=1`, Opt-in (`profiles.learning_opt_in`, nur über RPC `set_learning_opt_in`) und über `reviewLearningEntry` (`_shared/learning.ts`) in `experience_patterns`. Das gilt für jeden neuen nutzerübergreifenden Kanal. RAG-Treffer stehen im Prompt nur als gekennzeichneter Datenblock.
+- **Function-Aufrufe im Frontend** nur über `src/lib/functions.js` (`functionUrl`, `functionHeaders` mit `x-region: eu-central-1`, S-09); CORS-Header der Functions nur aus `_shared/cors.ts`.
+- **ZIPs für Chats nur über `npm run share:zip`** (nur eingecheckte Dateien, nie `.env*`). Der Build prüft `dist/` automatisch auf Schlüssel (`postbuild`), `npm run security:secrets` scannt die Historie.
 - Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 
 ### Sicherheitsmuster (Security-Paket A, Pflicht)

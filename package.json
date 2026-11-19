@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "postbuild": "node scripts/security/check-build.mjs",
     "preview": "vite preview",
     "security:test": "node --env-file=.env.security.local scripts/security/attack-test.mjs",
-    "security:deletion-test": "node --env-file=.env.security.local scripts/security/deletion-test.mjs"
+    "security:deletion-test": "node --env-file=.env.security.local scripts/security/deletion-test.mjs",
+    "security:secrets": "node scripts/security/secret-scan.mjs",
+    "share:zip": "node scripts/share-zip.mjs"
   },
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",

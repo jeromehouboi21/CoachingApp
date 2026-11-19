@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { createLogger, setLoggerUserId } from '../lib/logger'
+import { functionHeaders, functionUrl } from '../lib/functions'
 
 const logger = createLogger('useAuth')
 const CURRENT_CONSENT_VERSION = '1.0'
@@ -40,14 +41,10 @@ export function useAuth() {
           localStorage.removeItem('pendingInviteCode')
           try {
             const res = await fetch(
-              `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-invite-code`,
+              functionUrl('validate-invite-code'),
               {
                 method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-                  'Authorization': `Bearer ${session.access_token}`,
-                },
+                headers: functionHeaders(session.access_token),
                 body: JSON.stringify({ code: pendingCode }),
               }
             )

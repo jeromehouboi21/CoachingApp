@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 import { createLogger } from '../../lib/logger'
+import { functionHeaders, functionUrl } from '../../lib/functions'
 
 const logger = createLogger('Step4Auth')
 
-const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 const StepDots = ({ current, total }) => (
   <div className="flex gap-2">
@@ -55,14 +55,10 @@ export function Step4Auth({ onSuccess, onboardingData }) {
       if (inviteCode.trim() && accessToken) {
         try {
           const res = await fetch(
-            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/validate-invite-code`,
+            functionUrl('validate-invite-code'),
             {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'apikey': ANON_KEY,
-                'Authorization': `Bearer ${accessToken}`,
-              },
+              headers: functionHeaders(accessToken),
               body: JSON.stringify({ code: inviteCode.trim().toUpperCase() }),
             }
           )

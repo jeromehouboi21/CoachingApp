@@ -6,6 +6,7 @@ import { TypingIndicator } from '../../components/coach/TypingIndicator'
 import { ChatInput } from '../../components/coach/ChatInput'
 import { supabase } from '../../lib/supabase'
 import { readRateLimit, rateLimitMessage } from '../../lib/rateLimit'
+import { functionHeaders, functionUrl } from '../../lib/functions'
 
 const OPENING = "Hast du Fragen zur App — wie sie funktioniert, was sie kostet, oder ob sie das Richtige für dich ist? Ich beantworte sie gerne."
 
@@ -41,14 +42,10 @@ export function HowItWorksScreen() {
         return
       }
       const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
+        functionUrl('chat'),
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
+          headers: functionHeaders(accessToken),
           body: JSON.stringify({
             messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
             howtoMode: true,

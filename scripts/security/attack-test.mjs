@@ -113,7 +113,7 @@ function errCode(error) {
 
 /** Ruft eine Edge Function auf und liefert nur den HTTP-Status. Streams werden sofort abgebrochen. */
 async function callFunction(name, { token, apikey = true, method = 'POST', body } = {}) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'x-region': 'eu-central-1' };   // S-09 wie im Frontend
   if (apikey) headers.apikey = ANON_KEY;
   if (token) headers.Authorization = `Bearer ${token}`;
   const controller = new AbortController();
@@ -131,7 +131,7 @@ async function callFunction(name, { token, apikey = true, method = 'POST', body 
     } else {
       try { json = await res.json(); } catch {}
     }
-    return { status: res.status, json, isStream };
+    return { status: res.status, json, isStream, region: res.headers.get('x-sb-edge-region') };
   } catch (e) {
     if (e?.name === 'AbortError') return { status: 'timeout/abort', json: null };
     return { status: `network:${e?.code ?? e?.name ?? 'error'}`, json: null };
@@ -619,6 +619,22 @@ async function testsHeaders() {
   for (const [name, ok] of checks) record('HDR', `Header ${name}`, 'vorhanden', ok ? PASS : FAIL, ok ? 'ok' : 'fehlt/abweichend');
 }
 
+// ── S-09 (Paket C): Functions laufen in Frankfurt ───────────────────────────
+// Ungültige Bodys reichen: Den Header x-sb-edge-region setzt die Edge-Runtime bei jeder Antwort.
+// export-my-data kommt mit Welle C-4 dazu.
+async function testsRegion(b) {
+  const calls = [
+    ['chat', { token: b.token, body: {} }],
+    ['pre-session-briefing', { token: b.token, body: {} }],
+  ];
+  for (const [name, opts] of calls) {
+    const r = await callFunction(name, opts);
+    const ok = r.region === 'eu-central-1';
+    record(32, `Region ${name}`, 'x-sb-edge-region: eu-central-1', ok ? PASS : FAIL,
+      typeof r.status === 'number' ? `HTTP ${r.status} · ${r.region ?? 'kein Header'}` : String(r.status));
+  }
+}
+
 // ── Ausgabe ──────────────────────────────────────────────────────────────────
 function printResults() {
   const cols = [
@@ -651,6 +667,7 @@ function printResults() {
   await testsS15(b);
   await testsHeaders();
   await testsRateLimits(a, b);
+  await testsRegion(b);   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen
   // der Testkonten auf anderen Geräten (Standard von signOut() ist 'global').
