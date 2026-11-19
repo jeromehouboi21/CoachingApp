@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
         ? { approved: true, reasons: [] as string[] }
         : await reviewLearningEntry(extractedRecs.slice(0, 2000), haiku, ['low_quality']);
       if (review.approved) improvementRecs = extractedRecs.slice(0, 2000);
-      else logger.warn('supervision_rejected', { reasons: review.reasons });
+      else logger.warn('supervision_rejected', { reasons: review.reasons.join(',') });
     }
 
     const { error: insertError } = await supabase.from('supervision_logs').insert({
