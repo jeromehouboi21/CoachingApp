@@ -681,7 +681,8 @@ Deno.serve(async (req) => {
           .filter(Boolean).join('\n');
         const review = await reviewLearningEntry(entryText, makeHaikuCaller(anthropic));
         if (!review.approved) {
-          logger.info('learning_rejected', { conversationId, reasons: review.reasons });   // nur Codes
+          // Gründe als Text: sanitizeLogData würde ein Array zu {type,length} reduzieren
+          logger.info('learning_rejected', { conversationId, reasons: review.reasons.join(',') });   // nur Codes
         } else {
           const embedding = openaiKey
             ? await generateEmbedding([entryFields.context, entryFields.pattern, entryFields.what_helped].filter(Boolean).join(' — '), openaiKey)
