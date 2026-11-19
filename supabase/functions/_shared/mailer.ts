@@ -9,6 +9,19 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 export interface MailResult { ok: boolean; code?: string }
 
+// denomailer 1.6.0 kodiert Zeichen außerhalb von ASCII nicht zuverlässig (Befund 19.11.2026:
+// „Sicherheit“ kam als „e2??Sicherheit“ an). Deshalb gehen Betreff und Text als reines ASCII raus.
+const ASCII_MAP: Array<[RegExp, string]> = [
+  [/ä/g, 'ae'], [/ö/g, 'oe'], [/ü/g, 'ue'], [/Ä/g, 'Ae'], [/Ö/g, 'Oe'], [/Ü/g, 'Ue'], [/ß/g, 'ss'],
+  [/[„“”«»]/g, '"'], [/[‚‘’]/g, "'"], [/[–—]/g, '-'], [/·/g, '-'], [/…/g, '...'], [/\u00a0/g, ' '],
+];
+export function toMailAscii(s: string): string {
+  let out = s;
+  for (const [re, rep] of ASCII_MAP) out = out.replace(re, rep);
+  // deno-lint-ignore no-control-regex
+  return out.replace(/[^\t\n\r\x20-\x7e]/g, '?');
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => reject(Object.assign(new Error('smtp_timeout'), { name: 'smtp_timeout' })), ms);
@@ -41,7 +54,7 @@ export async function sendMail(to: string, subject: string, text: string): Promi
     client = new SMTPClient({
       connection: { hostname: host, port, tls: true, auth: { username: user, password: pass } },
     });
-    await withTimeout(client.send({ from: `Friedensstifter <${from}>`, to, subject, content: text }), 15_000);
+    await withTimeout(client.send({ from: `Friedensstifter <${from}>`, to, subject: toMailAscii(subject), content: toMailAscii(text) }), 15_000);
     return { ok: true };
   } catch (e) {
     return { ok: false, code: errorCode(e) };
