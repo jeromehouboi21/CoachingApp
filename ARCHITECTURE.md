@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C Welle C-3** (S-11: Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + Region Frankfurt · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`)
 
 ---
 
@@ -58,9 +58,9 @@ CoachingApp/
 │   ├── router.jsx                       ← Leerer Stub (Routing lebt komplett in App.jsx)
 │   │
 │   ├── hooks/                           ← Gesamter App-State (kein Zustand/Redux)
-│   │   ├── useAuth.js                   ← User, Session, Profile, Consent, Coaching-Vereinbarung
+│   │   ├── useAuth.js                   ← User, Session, Profile, Consent, Coaching-Vereinbarung, mfaGate (S-06b)
 │   │   ├── useChat.js                   ← Gesprächs-State, Streaming, Start-/Resume-Varianten, Senden mit clientMessageId
-│   │   ├── useAdminMfa.js               ← Zweiter Faktor (TOTP) für den Admin-Bereich + AdminMfaContext
+│   │   ├── useAdminMfa.js               ← Zweiter Faktor für den Admin-Bereich + AdminMfaContext (nutzt lib/mfa.js)
 │   │   ├── useMemory.js                 ← Legacy Coach-Gedächtnis (user_memory)
 │   │   ├── useStreak.js                 ← Tage-in-Folge (streak_count), seit U1 nirgends angezeigt
 │   │   └── useVoiceInput.js             ← Web Speech API (de-DE)
@@ -71,6 +71,7 @@ CoachingApp/
 │   │   ├── rateLimit.js                 ← 429 rate_limited erkennen + Hinweistext
 │   │   ├── consent.js                   ← Versionen der Zustimmungstexte (inkl. LEARNING_CONSENT_VERSION)
 │   │   ├── functions.js                 ← functionUrl/functionHeaders (Region eu-central-1, S-09)
+│   │   ├── mfa.js                       ← Zweiter Faktor: Stand, Einrichten, Prüfen, mfa-recovery, globaler Fehlerpfad (S-06b)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
 │   │
 │   ├── styles/
@@ -85,7 +86,8 @@ CoachingApp/
 │   │   │   ├── Avatar.jsx
 │   │   │   └── ScaleSlider.jsx
 │   │   ├── layout/                      ← Seitenrahmen
-│   │   │   ├── AppShell.jsx             ← <Outlet> + BottomNav
+│   │   │   ├── AppShell.jsx             ← <Outlet> + BottomNav + AgeConfirmSheet (S-11)
+│   │   │   ├── AgeConfirmSheet.jsx      ← Einmalige 18+-Bestätigung für Bestandsnutzer (RPC confirm_age)
 │   │   │   ├── BottomNav.jsx            ← 3 Tabs: Heute · Gespräch · Spiegel (ohne Zähler)
 │   │   │   └── ProfileButton.jsx        ← Avatar oben rechts → /profile (Heute, Gespräch, Spiegel)
 │   │   ├── coach/                       ← Chat-spezifische Komponenten
@@ -96,11 +98,20 @@ CoachingApp/
 │   │   │   ├── ConversationEndModal.jsx
 │   │   │   └── CrisisResponseCard.jsx   ← Eigene Card statt Bubble bei Krisenfall (v-Krise)
 │   │   ├── profile/
-│   │   │   └── LearningConsentCard.jsx  ← Opt-in „Zur Lernbasis beitragen“ (S-13)
+│   │   │   ├── LearningConsentCard.jsx  ← Opt-in „Zur Lernbasis beitragen“ (S-13)
+│   │   │   ├── SecurityCard.jsx         ← „Konto zusätzlich schützen“: Einrichten, Geräte, Codes, Entfernen (S-06b)
+│   │   │   └── DataExportSheet.jsx      ← „Meine Daten herunterladen“ (S-16)
+│   │   ├── mfa/                         ← Gemeinsame MFA-Bausteine (Admin + Nutzer, S-06b)
+│   │   │   ├── MfaCodeForm.jsx          ← 6-stelliger Code + Geräteauswahl
+│   │   │   ├── MfaEnrollFlow.jsx        ← QR-Code, Schlüssel, Code bestätigen
+│   │   │   ├── RecoveryCodesView.jsx    ← 10 Wiederherstellungscodes, einmalig
+│   │   │   └── RecoveryForm.jsx         ← Anmelden mit Wiederherstellungscode
 │   │   └── legal/
 │   │       └── CoachingAgreementContent.jsx ← Vertragstext, single source of truth
 │   │
 │   └── screens/
+│       ├── auth/
+│       │   └── MfaChallengeScreen.jsx   ← Code-Abfrage nach der Anmeldung (aal1 + Faktor, S-06b)
 │       ├── landing/                     ← Öffentliche Einstiegsseiten
 │       │   ├── LandingScreen.jsx
 │       │   ├── AuthScreen.jsx
@@ -149,7 +160,7 @@ CoachingApp/
 │   │   │   ├── monitorRules.ts          ← Regeln, Schwellen, Lebenszeichen für security-monitor (Log-Codes = Schnittstelle)
 │   │   │   ├── mailer.ts                ← SMTP über One.com Port 465 (denomailer@1.6.0), nur Fehlercodes
 │   │   │   ├── cors.ts                  ← corsHeaders(methods) für alle Functions (inkl. x-region, S-09)
-│   │   │   ├── auth.ts                  ← requireUser/requireAdmin(aal2)/requireInternalCaller, Eigentum, Limits
+│   │   │   ├── auth.ts                  ← requireUser(aal2 bei Faktor)/requireAdmin(aal2)/assertAal2/requireInternalCaller, Eigentum, Limits
 │   │   │   ├── logger.ts                ← Zentraler Logger (sanitizeLogData, describeError)
 │   │   │   ├── rag.ts                   ← Embedding + match_experiences (nur serverseitig)
 │   │   │   ├── learning.ts              ← Prüfschritt (Vorfilter + Haiku, fail-closed) für Lernbasis und Supervision
@@ -167,6 +178,7 @@ CoachingApp/
 │   │   ├── admin-invite-user/index.ts   ← Admin: Nutzer per E-Mail einladen (Beta-Zugang)
 │   │   ├── delete-account/index.ts      ← Account-Löschung (hard delete)
 │   │   ├── export-my-data/index.ts      ← Datenexport als Selbstauskunft (S-16)
+│   │   ├── mfa-recovery/index.ts        ← Wiederherstellungscodes, Wiederherstellen, Abschalten (S-06b)
 │   │   ├── supervision/index.ts         ← Wöchentliche KI-Supervision (Cron)
 │   │   └── backfill-embeddings/index.ts ← Wartung: fehlende Vektoren nachtragen (nur intern)
 │   ├── migrations/
@@ -205,7 +217,8 @@ CoachingApp/
 │   │   ├── 033_s15_cascade_and_retention.sql ← Löschregeln, apply_retention, inactive_accounts_report
 │   │   ├── 034_s22_security_monitoring.sql ← app_logs.origin, security_alerts, security_log_counts, Cron security-monitor
 │   │   ├── 035_u3_insight_surfacing.sql ← insights.surfaced_at/confirmed_at/dismissed_at (Heute)
-│   │   └── 036_s11_privacy_fixes.sql    ← Feedback-Einwilligung (RLS), age_confirmed_at, confirm_age, consent_ip entfernt
+│   │   ├── 036_s11_privacy_fixes.sql    ← Feedback-Einwilligung (RLS), age_confirmed_at, confirm_age, consent_ip entfernt
+│   │   └── 037_s06b_user_mfa.sql        ← mfa_satisfied(), Policy mfa_required auf Client-Tabellen, mfa_recovery_codes
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -269,11 +282,16 @@ Fallback (*) → /home (auth) oder /landing (nicht auth)
 
 ```jsx
 function ProtectedRoute({ children }) {
-  const { user, loading } = useAuth()
+  const { user, profile, loading, mfaGate, checkCoachingAgreement } = useAuth()
   if (loading) return <LoadingScreen />
   if (!user)   return <Navigate to="/landing" replace />
+  if (mfaGate === 'required') return <MfaChallengeScreen />          // S-06b, vor allem anderen
+  if (checkCoachingAgreement(profile) !== 'valid') return <Navigate to="/onboarding" replace />
   return children
 }
+
+// App: angemeldet + mfaGate 'required' → nur /impressum, /datenschutz, sonst MfaChallengeScreen
+// (auch /onboarding – ein leeres Profil heißt hier NICHT „neuer Nutzer“)
 
 function AdminRoute({ children }) {
   const { user, profile, loading } = useAuth()
@@ -289,6 +307,8 @@ function AdminRoute({ children }) {
 `AdminRoute` ist **nur UX** — die eigentliche Absicherung passiert serverseitig in `admin-users`/`admin-feedback`/`admin-invite-user` (`requireAdmin`: `is_admin` + JWT-Claim `aal = 'aal2'`, siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster)).
 
 **MFA-Ablauf (S-06):** ohne Faktor → `AdminMfaScreen` „Einrichten“ (QR-Code als `data:`-Bild, Schlüssel in Vierergruppen, 6-stelliger Code) → danach Erfolgskarte mit „Zweites Gerät hinzufügen“. Mit Faktor, aber Sitzung `aal1` → „Code eingeben“ (bei mehreren Geräten Auswahl). Nicht abgeschlossene Einrichtungen werden vor einem neuen `enroll` per `unenroll` entfernt. Antwortet eine Admin-Function mit `403 mfa_required`, ruft `AdminUsersScreen` `mfa.refresh()` auf und `AdminRoute` zeigt die Code-Abfrage. Log-Regel: nie QR-Code, Schlüssel oder Code loggen (nur `mfa_enrolled`, `mfa_verify_failed`). **Notfallweg:** Faktoren des eigenen Kontos im Supabase-Dashboard (Authentication → Users) entfernen und neu einrichten — setzt MFA am Supabase-Konto voraus.
+
+**Code-Abfrage für alle (S-06b, Paket C):** Hat ein Nutzer einen verifizierten Faktor und ist die Sitzung `aal1`, setzt `useAuth` `mfaGate = 'required'` **bevor** das Profil geladen wird (die RLS-Policy `mfa_required` liefert sonst 0 Zeilen). `App` und `ProtectedRoute` zeigen dann `MfaChallengeScreen`: Code eingeben (Geräteauswahl bei mehreren Faktoren) oder „Kein Zugriff auf deine App? Wiederherstellungscode verwenden“ → `RecoveryForm` → `mfa-recovery recover` → Sitzung erneuern → `/profile` mit Hinweis zum Neu-Einrichten (Flag in `sessionStorage`). Nach erfolgreicher Prüfung meldet Supabase `MFA_CHALLENGE_VERIFIED`, jede `useAuth`-Instanz prüft neu und lädt das Profil. Seit S-06b fragt die App auch Admins direkt nach der Anmeldung nach dem Code.
 
 ### AppShell
 
@@ -417,6 +437,8 @@ Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks
 - **Statistik (seit U1):** Gespräche · Erkenntnisse · Reflexionstage. Gespräche und Reflexionstage kommen aus `get_conversation_history()` (nur Gespräche mit eigener Nachricht): Gespräche = Anzahl gesamt, Reflexionstage = Anzahl verschiedener lokaler Kalendertage mit begonnenem Gespräch. Ladefehler → „–“ und `conversation_stats_failed`.
 
 - **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
+- **„Konto zusätzlich schützen“** (`SecurityCard`, S-06b, freiwillig): ohne Faktor Text + „Einrichten →“ → `MfaEnrollFlow` (Gerätename „Friedensstifter“) → `mfa-recovery codes:generate { afterEnroll: true }` → `RecoveryCodesView` (10 Codes einmalig, „Codes kopieren“, „Ich habe sie gesichert“) → Mail „Zweiter Faktor eingerichtet“. Scheitert das Erzeugen der Codes, bleibt ein sichtbarer Hinweis mit „Noch einmal versuchen“. Mit Faktor: Geräteliste, „Weiteres Gerät hinzufügen“, „Neue Wiederherstellungscodes“ (alte werden ungültig), „Zweiten Faktor entfernen“ (Bestätigungs-Sheet → `disable`). Nach einer Wiederherstellung Hinweis „Du bist wieder angemeldet. Dein zweiter Faktor wurde entfernt …“ mit „Jetzt einrichten →“.
+- **„Meine Daten herunterladen“** (`DataExportSheet`, S-16): Erklärtext → „Datei erstellen“ → `export-my-data` → Download als Blob; 429 → „Du hast heute schon drei Exporte erstellt. Morgen geht es wieder.“
 - Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Meine Daten herunterladen (`export-my-data`, S-16), Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
 
 ---
@@ -466,7 +488,9 @@ Namensgebung der Stimmen passiert weiterhin **ausschließlich im Chat** — sieh
 | 2 | Step2Question | Bereichswahl (Arbeit, Beziehung, Inneres, etc.) |
 | 3 | Step3Reveal | Systemisches Coaching erklären (hier darf der Begriff fallen) |
 | 3b | Step3bAgreement | Coaching-Vereinbarung — Zustimmung (nutzt `CoachingAgreementContent`) |
-| 4 | Step4Auth | E-Mail + Passwort (Registrierung mit Einwilligung) / Login; Magic Link nur für bestehende Konten (`shouldCreateUser: false`) |
+| 4 | Step4Auth | E-Mail + Passwort (Registrierung mit Einwilligung und Häkchen „Ich bin mindestens 18 Jahre alt.“ → Metadaten `age_confirmed`, S-11) / Login; Magic Link nur für bestehende Konten (`shouldCreateUser: false`) |
+
+Bestandsnutzer ohne `age_confirmed_at` sehen einmalig `AgeConfirmSheet` (in `AppShell`): „Ja, ich bin mindestens 18“ → RPC `confirm_age`; „Ich bin jünger“ → Hinweis auf 116 111 und den Löschweg im Profil (kein automatisches Löschen).
 
 ---
 
@@ -507,6 +531,8 @@ Namensgebung der Stimmen passiert weiterhin **ausschließlich im Chat** — sieh
 **ChatInput:**
 - Textarea mit dynamischer Höhe (38–120 px)
 - Mikrofon-Button togglet `useVoiceInput`; während der Aufnahme erscheint Interim-Text in der Box
+- Erster Tipp auf das Mikrofon (einmal pro Gerät, `localStorage` `fs_voice_hint_v1`, S-11): Hinweis „Kurz zur Spracheingabe“ (Browser-Spracherkennung, ggf. Google/Apple) mit „Verstanden, Mikrofon starten“ / „Lieber tippen“
+- `useVoiceInput` hört geduldig zu: `continuous` + stiller Neustart nach Pausen, Mikrofon aus nach 60 s ohne Sprache oder bei Berechtigungsfehlern; beim Senden wird die Aufnahme beendet
 - Send-Button (`ArrowUp`-Icon) nur aktiv wenn `!isLoading && content.trim()`
 
 **ConversationEndModal:**
@@ -522,6 +548,12 @@ Namensgebung der Stimmen passiert weiterhin **ausschließlich im Chat** — sieh
 #### Profil-Komponenten (`src/components/profile/`)
 
 **LearningConsentCard:** Opt-in zur Lernbasis (S-13), Texte wörtlich nach Lösungsdesign Paket B 5.3, Version `LEARNING_CONSENT_VERSION` aus `src/lib/consent.js`.
+
+**SecurityCard / DataExportSheet:** siehe ProfileScreen (S-06b, S-16).
+
+#### MFA-Bausteine (`src/components/mfa/`, S-06b)
+
+Gemeinsam für `AdminMfaScreen`, `MfaChallengeScreen` und `SecurityCard`: `MfaCodeForm` (6-stelliger Code, sendet automatisch bei 6 Ziffern, Geräteauswahl), `MfaEnrollFlow` (startet `enroll`, zeigt QR-Code und Schlüssel, bestätigt den Code), `RecoveryCodesView` (Codes nur im Speicher der Ansicht), `RecoveryForm` (`mfa-recovery recover`, Fehlertexte für falschen Code und 429). Die Logik liegt in `src/lib/mfa.js`. Nie QR-Code, Schlüssel, Codes oder Wiederherstellungscodes loggen.
 
 #### Legal-Komponenten (`src/components/legal/`)
 
@@ -541,6 +573,8 @@ Exports:
   session         — Supabase Session (mit access_token)
   profile         — profiles-Zeile aus DB (select('*') — inkl. is_admin, session_limit, etc.)
   loading         — Boolean (initiales Session-Laden)
+  mfaGate         — 'ok' | 'required' (aal1 + verifizierter Faktor → Code-Abfrage, S-06b)
+  refreshMfa()    — Sitzung erneuern und Sicherheitsstufe neu prüfen (= requestMfaCheck aus lib/mfa.js)
 
   signUp(email, password, displayName, meta)  — meta (Einwilligung, Vereinbarung, Onboarding) landet über handle_new_user im Profil
   signIn(email, password)
@@ -553,7 +587,9 @@ Exports:
 ```
 
 **Besonderheiten:**
-- Session wird beim Mount aus Supabase wiederhergestellt (`onAuthStateChange`)
+- Session wird beim Mount aus Supabase wiederhergestellt (`onAuthStateChange`, Verarbeitung per `setTimeout` außerhalb des Auth-Callbacks)
+- **Reihenfolge (S-06b):** erst `getAuthenticatorAssuranceLevel()`, dann – nur wenn frei – das Profil. Bei `aal1` mit Faktor bleibt `profile = null` und `mfaGate = 'required'`; das führt nie ins Onboarding. Beim Zurückkehren in den Tab (`visibilitychange`) wird die Stufe erneut geprüft.
+- **Kein gemeinsamer Context:** Jede Komponente mit `useAuth()` hat einen eigenen Zustand. Der globale Fehlerpfad (`403 mfa_required` aus Functions, `42501 mfa_required` aus RPCs → `checkMfaResponse` / `reportIfMfaRpcError`) erneuert deshalb einmal die Sitzung; das Ereignis `TOKEN_REFRESHED` lässt jede Instanz neu prüfen.
 - Pending Invite Code: Wenn ein Code in `localStorage` liegt (gesetzt im Onboarding), wird er nach E-Mail-Verifikation automatisch eingelöst
 - Consent-Versioning: `consent_version = '1.0'`, `coaching_agreement_version = '1.0'`, Lernbasis `learning_opt_in_version = '1.0'` (Konstanten in `src/lib/consent.js`)
 - `profile` enthält seit v3.x auch Admin-/Beta-/Invite-Felder — keine eigenen Hook-Exporte dafür nötig, da `select('*')` bereits alles lädt
@@ -949,6 +985,22 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 
 ---
 
+### `mfa-recovery` — Zweiter Faktor für alle (S-06b, Paket C)
+
+`POST { action, … }`, `requireUser(req, { allowAal1: true })` – aal1 ist nur zugelassen, weil `recover` genau dann gebraucht wird.
+
+| Aktion | Voraussetzung | Ablauf | Log | Mail |
+|---|---|---|---|---|
+| `codes:generate` `{ afterEnroll? }` | `assertAal2` + verifizierter Faktor (sonst `409 no_factor`), 5/Tag fail-closed | alte Codes löschen, 10 neue (`XXXXX-XXXXX`, Base32 ohne 0/O/1/I) erzeugen, HMAC-SHA-256 mit `MFA_CODE_PEPPER` speichern, Codes einmalig zurückgeben (`no-store`) | `mfa_codes_generated` | bei `afterEnroll`: „Zweiter Faktor eingerichtet“ |
+| `recover` `{ code }` | 5/Std + 10/Tag fail-closed | Code normalisieren → HMAC → unbenutzten Code des Nutzers suchen (kein Treffer → `400 invalid_code`) → `used_at` setzen (nur wenn noch leer) → **alle** Faktoren über die Admin-API löschen → restliche Codes löschen | `mfa_recovery_used` bzw. `mfa_recovery_failed` (Alarm) | „Wiederherstellungscode verwendet“ |
+| `disable` | `assertAal2` | alle Faktoren und Codes entfernen | `mfa_disabled` | „Zweiter Faktor entfernt“ (nur wenn Faktoren da waren) |
+
+Scheitert das Entfernen eines Faktors oder der Codes → `500 mfa_reset_failed` (Alarm). Fehlt der Pepper (< 32 Zeichen) → `500 mfa_not_configured`. Weder Codes noch Hashes werden geloggt; Mails enden mit „Warst du das nicht? Antworte auf diese Mail, dann schauen wir gemeinsam darauf.“ und laufen per `waitUntil` im Hintergrund (`mfa_mail_failed` nur Info).
+
+**Verhalten von Supabase Auth:** Wird ein Faktor bestätigt, beendet Supabase die übrigen aal1-Sitzungen desselben Kontos (z. B. auf einem anderen Gerät).
+
+---
+
 ### `security-monitor` — Monitoring (S-22, Paket C)
 
 **Läuft per Cron** (`security-monitor`, stündlich um :07, `x-cron-secret` aus Vault; nur intern über `requireInternalCaller`). Ablauf:
@@ -985,7 +1037,8 @@ createLogger(source: string, requestId?: string, userId?: string)
 
 | Export | Zweck |
 |---|---|
-| `requireUser(req)` | Token aus `Authorization: Bearer`, Prüfung über `admin.auth.getUser(token)` → `{ user, token, admin, userClient }`; sonst `401` |
+| `requireUser(req, opts?)` | Token aus `Authorization: Bearer`, Prüfung über `admin.auth.getUser(token)` → `{ user, token, admin, userClient }`; sonst `401`. **S-06b:** Hat der Nutzer einen verifizierten Faktor (`user.factors`, Fallback `admin.auth.admin.mfa.listFactors`), wird nur eine `aal2`-Sitzung angenommen, sonst `403 mfa_required` (Log `user_mfa_required`, nicht der Admin-Code `mfa_required`). `opts.allowAal1` setzt nur `mfa-recovery`. |
+| `assertAal2(ctx)` | verlangt `aal2` unabhängig vom Faktor (für `mfa-recovery codes:generate` / `disable`) |
 | `admin` | echter service_role-Client **ohne** Nutzer-Token (umgeht RLS) — nur für Daten, deren Eigentum geprüft ist |
 | `userClient` | anon-Key + Nutzer-Token → Rolle `authenticated`, `auth.uid()` gesetzt (z. B. für `consume_session`) |
 | `assertConversationOwner(admin, id, userId)` | UUID-Format (400) + Eigentum (403) |
@@ -1003,7 +1056,7 @@ createLogger(source: string, requestId?: string, userId?: string)
 |---|---|
 | `models.ts` | **Einzige Stelle für Modell-IDs** (`COACH_MODEL` = `claude-sonnet-5-5`, `HAIKU_MODEL`). `COACH_REQUEST_DEFAULTS`: `thinking: { type: 'between_tools' }` (kein Vorab-Denken; `disabled` gibt auf 5.5 einen 400) + `output_config.effort: 'medium'` (konstant, darf sich im Gespräch nicht ändern). `COACH_MAX_TOKENS` 560 / `COACH_CRISIS_MAX_TOKENS` 980 (neuer Tokenizer, × 1,4). `extractText()` liest Antworten nach Blocktyp statt `content[0]` (leer → `empty_text_response`). `ensureEndsWithUser()` hängt einen nicht gespeicherten Nutzer-Turn an, wenn der Verlauf auf `assistant` endet (Sonnet 5.5 kennt kein Prefill; geloggt als `synthetic_user_turn_added`). |
 | `rag.ts` | `generateEmbedding()` (OpenAI `text-embedding-3-small`, Timeout 2,5 s, Fehlergrund nur als Code) und `findSimilarExperiences()` (`match_experiences`). Nur serverseitig — Treffer verlassen den Server nicht. |
-| `rateLimit.ts` | Grenzwerte (`RATE_LIMITS`), `enforceRateLimit()` (RPC `consume_rate_limits`, fail-open/-closed wählbar), `rateLimitResponse()` (429 + `Retry-After`). |
+| `rateLimit.ts` | Grenzwerte (`RATE_LIMITS`, u. a. `export` 3/Tag, `mfaCodes` 5/Tag, `mfaRecover` 5/Std + 10/Tag), `enforceRateLimit()` (RPC `consume_rate_limits`, fail-open/-closed wählbar), `rateLimitResponse()` (429 + `Retry-After`). |
 | `learning.ts` | Prüfschritt `reviewLearningEntry()` für alles Nutzerübergreifende (Lernbasis, Supervision): Regex-Vorfilter (`contact`, `instruction`) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`). Das JSON wird aus der Antwort herausgelöst (robust gegen Text drumherum); technische Fehler → `review_api_failed` / `review_parse_failed`; immer fail-closed. `makeHaikuCaller()` als Adapter. |
 
 ---
@@ -1240,6 +1293,16 @@ mail_error    TEXT        -- nur Fehlercode
 ```
 Kein Personenbezug (keine IDs) → nicht im Export und nicht im Löschtest.
 
+**`mfa_recovery_codes`** — Wiederherstellungscodes für den zweiten Faktor (Migration 037, S-06b, nur service_role)
+```
+id         UUID PK
+user_id    UUID → auth.users ON DELETE CASCADE
+code_hash  TEXT        -- HMAC-SHA-256(normalisierter Code, MFA_CODE_PEPPER), nie der Code selbst
+used_at    TIMESTAMPTZ -- gesetzt beim Einlösen; danach werden alle Codes des Nutzers gelöscht
+created_at TIMESTAMPTZ
+```
+Keine Client-Rechte (Angriffstest #33). Im Export ohne `code_hash`, im Löschtest automatisch über `user_id` erfasst. Keine eigene Frist nötig: Codes verschwinden beim Wiederherstellen, Abschalten, Neu-Erzeugen und mit dem Konto.
+
 **`invite_codes`** — Beta-Tester-Zugang (Selbstregistrierung)
 ```
 code        TEXT UNIQUE (always uppercase)
@@ -1275,7 +1338,11 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 **`match_experiences()`** — pgvector-Suche, nur für `service_role` (Aufrufer: `_shared/rag.ts`). Seit 032 nur `review_status = 'approved'`; `source_user_id` ist nicht Teil der Rückgabe.
 
-**`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`.
+**`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`. Seit 037 zuerst MFA-Prüfung (`42501 mfa_required`).
+
+**`confirm_age()`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 036, S-11). Setzt `profiles.age_confirmed_at` für `auth.uid()` (bleibt beim ersten Wert). Seit 037 zuerst MFA-Prüfung.
+
+**`mfa_satisfied()`** — `SECURITY DEFINER`, `stable`, `search_path = ''`, ausführbar für `authenticated` (Migration 037, S-06b). `true`, wenn der JWT-Claim `aal = 'aal2'` ist **oder** der Nutzer keinen verifizierten Faktor in `auth.mfa_factors` hat. Grundlage der restriktiven Policy `mfa_required` und der MFA-Prüfung in Client-RPCs.
 
 **`security_log_counts(p_since, p_codes)`** — `SECURITY DEFINER`, nur `service_role` (Migration 034). Liefert je Code und Herkunft nur die Anzahl (`code, origin, n`), keine Inhalte. Aufrufer: `security-monitor`.
 
@@ -1308,9 +1375,11 @@ Alle Tabellen haben RLS. Policies gelten **nur für `authenticated`**, nie für 
 | `user_memory` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` |
 | `inner_voices` | SELECT, UPDATE | `user_id = auth.uid()` |
 | `coach_file_entries`, `coachee_profile`, `session_notes`, `pattern_references` | SELECT | `user_id = auth.uid()` |
-| `user_feedback`, `feedback_surveys` | INSERT | `user_id = auth.uid()` |
-| `app_logs` | INSERT | `user_id = auth.uid()` (Migration 026) |
-| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, `conversation_context`, `rate_limit_counters`, View `feedback_survey_scores` | **keine** | nur service_role |
+| `user_feedback`, `feedback_surveys` | INSERT | `user_id = auth.uid()` **und** `consent_given = true` (seit 036) |
+| `app_logs` | INSERT | `user_id = auth.uid()` (Migration 026); bewusst **ohne** MFA-Policy, damit Logging vor der Code-Eingabe funktioniert |
+| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, `conversation_context`, `rate_limit_counters`, `security_alerts`, `mfa_recovery_codes`, View `feedback_survey_scores` | **keine** | nur service_role |
+
+**MFA-Policy (S-06b, Migration 037):** Alle Tabellen der Liste oben mit Client-Rechten außer `app_logs` (`profiles`, `conversations`, `messages`, `insights`, `user_memory`, `inner_voices`, `coach_file_entries`, `coachee_profile`, `session_notes`, `pattern_references`, `user_feedback`, `feedback_surveys`) haben zusätzlich die **restriktive** Policy `mfa_required` (`for all to authenticated using/with check ((select public.mfa_satisfied()))`). Ein aal1-Token eines Nutzers mit Faktor liest damit 0 Zeilen und kann nichts schreiben – auch direkt über die API (Angriffstest #34). Neue Client-Tabellen bekommen diese Policy ebenfalls.
 
 Die View `feedback_survey_scores` hat `security_invoker = true`. Neue Tabellen bekommen per Default-Privileg weiterhin Rechte für `authenticated` → **jede neue Tabelle braucht RLS + explizite Policies + gezielte GRANTs**. Edge Functions arbeiten über `_shared/auth.ts` (siehe [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a)).
 
@@ -1567,11 +1636,15 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 
 **Monitoring und Notfallplan (S-22):** `security-monitor` (stündlich) → `security_alerts` → Mail über One.com-SMTP (Port 465) bzw. Admin-Tab „Sicherheit“. Für den Ernstfall: `docs/security/notfallplan.md` (sechs Szenarien, 72-Stunden-Frist LDI NRW, Vorfallsprotokoll; ausgedruckt griffbereit).
 
+**Mailkanal (`_shared/mailer.ts`):** Alarm-Mails, Wochenübersicht und Mails an Nutzer (Datenexport, zweiter Faktor) gehen über denselben SMTP-Zugang. Betreff und Text werden als reines ASCII verschickt (`toMailAscii`, denomailer kodiert Umlaute nicht zuverlässig). Mails enthalten nie Inhalte aus dem Konto, keine Nutzer-IDs und keine SMTP-Fehlertexte; Fehler nur als Code.
+
+**Zweiter Faktor für alle (S-06b, freiwillig):** Wer einen Faktor eingerichtet hat, kommt nur mit `aal2` an seine Daten – an drei Stellen: App (`useAuth.mfaGate` → `MfaChallengeScreen`), Edge Functions (`requireUser` → `403 mfa_required`) und Datenbank (restriktive Policy `mfa_required`, MFA-Prüfung in Client-RPCs). Wiederherstellung über 10 Einmal-Codes (`mfa-recovery`), danach sind alle Faktoren entfernt. Alarme: `mfa_recovery_used` (ab 1/Std), `mfa_recovery_failed` (ab 5/Std), `mfa_reset_failed`, `mfa_verify_failed` (Client, ab 5/Std).
+
 **Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
 
-**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), S-11 (Feedback nur mit Einwilligung, `age_confirmed_at` server-only), S-22 (#31 Monitoring nur intern), S-16 (#27 Export enthält nur B-Daten, ohne Vektoren/Hashes), S-06b (#33 Codes-Tabelle gesperrt; mit `ATTACK_TEST_MFA=1` #34–#38: aal1 mit Faktor gesperrt an Tabelle, Functions und RPC, Wiederherstellung, Aufräumen – TOTP ohne Zusatzpaket nach RFC 6238), Region Frankfurt (#32), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
 
-**Löschtest:** `npm run security:deletion-test` (`scripts/security/deletion-test.mjs`, frisches Testkonto C in `.env.security.local`) erzeugt Daten über die normalen Wege, löscht das Konto und prüft den Login; `supabase/security/deletion-check.sql` zählt danach die Reste je Tabelle (Erwartung überall 0; Stand 19.11.2026: 31 Prüfpunkte, alle 0).
+**Löschtest:** `npm run security:deletion-test` (`scripts/security/deletion-test.mjs`, frisches Testkonto C in `.env.security.local`) erzeugt Daten über die normalen Wege, löscht das Konto und prüft den Login; `supabase/security/deletion-check.sql` zählt danach die Reste je Tabelle (Erwartung überall 0; Stand 19.11.2026 nach C-5: 32 Prüfpunkte inkl. `mfa_recovery_codes` und `auth.mfa_factors`, alle 0). `DELETION_TEST_MFA=1` richtet vorher einen zweiten Faktor ein, erzeugt Codes, prüft den Export und löscht mit `aal2`.
 
 ### Browser-Schutz (S-08)
 
@@ -1605,7 +1678,7 @@ update profiles set is_admin = true where id = '<user_id>';
 
 - Plugin: `@vitejs/plugin-react` + `vite-plugin-pwa`
 - PWA Manifest: `name: Friedensstifter`, `theme_color: #2D5A4E`, `display: standalone`
-- Workbox: Precache inkl. lokaler Schriften (`woff2`), keine Runtime-Regeln für Fremd-Origins; `registerType: 'autoUpdate'` (neue Version gilt nach dem nächsten Laden — wichtig für Übergänge wie S-12 Welle 2a/2b)
+- Workbox: Precache inkl. lokaler Schriften (`woff2`), keine Runtime-Regeln für Fremd-Origins; `registerType: 'autoUpdate'` (neue Version gilt nach dem nächsten Laden — wichtig für Übergänge wie S-12 Welle 2a/2b). **Achtung (Befund C-5):** Der erste Aufruf nach einem Deploy läuft noch mit dem alten Bundle. Ändert ein Deploy Frontend und Datenbank-Regeln zusammen, kann die alte App kurz falsch reagieren (C-5: alte App ohne Code-Abfrage → Onboarding, Schreibversuche von der RLS abgelehnt). Nach dem Deploy einmal neu laden.
 - PWA-Icons: 192×192, 512×512 (maskable)
 
 ### Umgebungsvariablen
@@ -1620,10 +1693,13 @@ ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
 SITE_URL=                    # optional, Fallback: https://app.friedensstifter.coach (nur admin-invite-user)
-CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als 'cron_secret'
+CRON_SECRET=                 # supervision, security-monitor; derselbe Wert liegt in Vault als 'cron_secret'
+SMTP_HOST= SMTP_PORT=465 SMTP_USER= SMTP_PASS=   # One.com, Mailkanal (Alarme, Export-/MFA-Mails)
+ALERT_EMAIL_FROM= ALERT_EMAIL_TO=                 # Absender bzw. Empfänger der Alarm-Mails
+MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellungscodes (≥ 32 Zeichen, offline gesichert)
 ```
 
-`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der Testkonten A und B für `npm run security:test` und eines frischen Kontos C für `npm run security:deletion-test` (Vorlage `.env.security.example`).
+`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der Testkonten A und B für `npm run security:test` und eines frischen Kontos C für `npm run security:deletion-test` (Vorlage `.env.security.example`). Schalter beim Aufruf (cmd): `set ATTACK_TEST_MFA=1&& npm run security:test`, `set DELETION_TEST_MFA=1&& npm run security:deletion-test`.
 
 ### Deployment
 
@@ -1643,7 +1719,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
-3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `export-my-data`, `supervision`, `security-monitor`, `backfill-embeddings` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
+3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `export-my-data`, `mfa-recovery`, `supervision`, `security-monitor`, `backfill-embeddings` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
 5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller` und Eintrag in `supabase/config.toml`; Log-Regel beachten
 6. Neue externe Dienste/Origins: in die CSP (`vercel.json`) aufnehmen

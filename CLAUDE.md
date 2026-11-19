@@ -4,6 +4,7 @@
 **Stand:** Design-Dokument v2.5 implementiert
 **Arbeitsverzeichnis:** `f:/OneDrive/Documents/GitHub/CoachingApp/`
 **Security-Paket B abgeschlossen (19.11.2026):** Bericht `docs/security/paket-b-abschlussbericht.md` · Auftrag `docs/security/handoff-security-paket-b.md`, Lösungsdesign `docs/security/friedensstifter-security-paket-b-design-v1.md`, Bestandsaufnahme `docs/security/paket-b-discovery.md`
+**Security-Paket C abgeschlossen (19.11.2026):** Bericht `docs/security/paket-c-abschlussbericht.md` · Auftrag `docs/security/handoff-security-paket-c.md`, Lösungsdesign `docs/security/friedensstifter-security-paket-c-design-v2.md`, Bestandsaufnahme `docs/security/paket-c-discovery.md`, Notfallplan `docs/security/notfallplan.md`
 
 ---
 
@@ -478,6 +479,7 @@ Beide Logger (`src/lib/logger.ts`, `supabase/functions/_shared/logger.ts`) schic
 - **Angriffstest:** `npm run security:test` → alle PASS (Testkonten in `.env.security.local`, Vorlage `.env.security.example`; `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein)
 - Header prüfen: `curl -sI https://app.friedensstifter.coach` (HSTS, CSP, Permissions-Policy …) — die CSP ist seit 19.11.2026 **erzwingend**; neue externe Quellen sonst blockiert
 - **Löschtest** bei Änderungen an Tabellen mit Personenbezug oder an der Löschlogik: `npm run security:deletion-test` (frisches Testkonto C) + `supabase/security/deletion-check.sql` → überall 0
+- **Nach dem Deploy einmal neu laden** (PWA `autoUpdate`: der erste Aufruf läuft noch mit dem alten Bundle). Bei Änderungen an Frontend **und** RLS/Functions gleichzeitig: Reihenfolge Frontend → Functions → Migration (Befund C-5)
 
 ---
 
