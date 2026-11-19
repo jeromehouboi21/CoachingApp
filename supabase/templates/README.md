@@ -10,5 +10,6 @@ Inhalt kopieren und im Dashboard einfügen.
 | `confirmation.html` | Confirm signup | Bitte bestätige deine E-Mail-Adresse |
 | `magic_link.html` | Magic Link | Dein Anmelde-Link für Friedensstifter |
 | `recovery.html` | Reset Password | Neues Passwort für Friedensstifter |
+| `password_changed.html` | Security notification „Password changed“ (ggf. Feature Preview) | Dein Passwort wurde geändert |
 
 Platzhalter: `{{ .ConfirmationURL }}` (enthält Token und Weiterleitung). Sprachprinzip beachten.
