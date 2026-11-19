@@ -6,7 +6,7 @@
 import Anthropic from 'npm:@anthropic-ai/sdk';
 import { createLogger, describeError, type Logger } from '../_shared/logger.ts';
 import {
-  HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
+  HttpError, requireUser, assertConversationOwner, readJsonBody, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 
@@ -286,12 +286,13 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Grenzen (Security-Paket A, S-03): Das Frontend schickt den kompletten Verlauf.
-// Verarbeitet werden höchstens die letzten MAX_PROCESSED_MESSAGES (Kostenbremse).
+// Seit S-12 (Paket B): Der Verlauf kommt aus der DB, ein mitgeschicktes messages[] wird
+// ignoriert. Verarbeitet werden höchstens die letzten MAX_PROCESSED_MESSAGES (Kostenbremse).
+// Body-Limit bleibt großzügig, weil alte Clients (gecachte PWA) noch den Verlauf mitschicken.
 const MAX_BODY_BYTES = 512 * 1024;
-const MAX_MESSAGE_ENTRIES = 1000;
-const MAX_CONTENT_CHARS = 8000;
 const MAX_PROCESSED_MESSAGES = 200;
+// Welle 2b: false → altes Format (mit messages[]) bekommt 409 client_outdated
+const LEGACY_FORMAT_ALLOWED = true;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -315,12 +316,29 @@ Deno.serve(async (req) => {
 
     // 2. Eigentum an der Konversation prüfen, bevor irgendetwas gelesen oder geschrieben wird
     const conversationId = await assertConversationOwner(supabase, body.conversationId, userId);
-    const allMessages = validateMessages(body.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS });
+    if (body.messages !== undefined) {
+      logger.info('legacy_format', { kind: 'post_conversation' });
+      if (!LEGACY_FORMAT_ALLOWED) throw new HttpError(409, 'client_outdated');
+    }
 
-    logger.info('Request body received', { messageCount: allMessages.length, conversationId });
+    // Verlauf aus der DB (nur Nachrichten dieser, bereits geprüften Konversation)
+    const { data: historyRows, count: historyCount, error: historyError } = await supabase
+      .from('messages')
+      .select('role, content', { count: 'exact' })
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: false })
+      .limit(MAX_PROCESSED_MESSAGES);
+    if (historyError) {
+      logger.error('history_load_failed', { code: historyError.code, conversationId });
+      throw new HttpError(500, 'history_load_failed');
+    }
+    const messages = ((historyRows ?? []) as { role: 'user' | 'assistant'; content: string }[]).reverse();
+    const totalMessages = historyCount ?? messages.length;
 
-    if (allMessages.length < 3) {
-      logger.info('Skipped — too few messages', { messageCount: allMessages.length, conversationId });
+    logger.info('Request body received', { messageCount: totalMessages, conversationId });
+
+    if (totalMessages < 3) {
+      logger.info('Skipped — too few messages', { messageCount: totalMessages, conversationId });
       return jsonResponse({ ok: true, skipped: true }, CORS_HEADERS);
     }
 
@@ -339,17 +357,16 @@ Deno.serve(async (req) => {
       throw new HttpError(500, 'idempotency_check_failed');
     }
 
-    if (existing && existing.post_processed_message_count >= allMessages.length) {
+    if (existing && existing.post_processed_message_count >= totalMessages) {
       logger.info('Skipped — already processed for this message count', {
         conversationId,
-        messageCount: allMessages.length,
+        messageCount: totalMessages,
         alreadyProcessed: existing.post_processed_message_count,
       });
       return jsonResponse({ ok: true, skipped: true, reason: 'idempotent' }, CORS_HEADERS);
     }
 
-    const messages = allMessages.slice(-MAX_PROCESSED_MESSAGES);
-    logger.info('Started', { conversationId, messageCount: allMessages.length, processedCount: messages.length });
+    logger.info('Started', { conversationId, messageCount: totalMessages, processedCount: messages.length });
 
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY') });
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
@@ -441,7 +458,7 @@ Deno.serve(async (req) => {
           open_thread: sessionNotes.where_we_left_off ?? null,
           open_thread_intensity: deriveIntensity(sessionNotes),
           post_processed_at: new Date().toISOString(),
-          post_processed_message_count: allMessages.length,
+          post_processed_message_count: totalMessages,
         })
         .eq('id', conversationId)
         .eq('user_id', userId);

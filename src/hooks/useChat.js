@@ -6,13 +6,74 @@ import { readRateLimit, rateLimitMessage } from '../lib/rateLimit'
 
 const logger = createLogger('useChat')
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`
+
+const HICCUP_MESSAGE = 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.'
+const SESSION_EXPIRED_MESSAGE = 'Deine Sitzung ist abgelaufen. Bitte melde dich kurz ab und wieder an.'
+export const OUTDATED_MESSAGE = 'Es gibt eine neue Version der App. Tipp hier, um sie zu laden.'
 
 function generateRequestId() {
   return crypto.randomUUID().slice(0, 8)
 }
 
-// options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 antwortet
-// (Monatslimit erreicht). Die Zählung selbst passiert serverseitig (consume_session).
+function postChat(accessToken, body) {
+  return fetch(CHAT_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': ANON_KEY,
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+async function isClientOutdated(response) {
+  if (response.status !== 409) return false
+  try {
+    const body = await response.clone().json()
+    return body?.error === 'client_outdated'
+  } catch {
+    return false
+  }
+}
+
+function outdatedBubble() {
+  return { role: 'assistant', content: OUTDATED_MESSAGE, isError: true, action: 'reload', id: `outdated-${Date.now()}` }
+}
+
+// SSE-Stream lesen. Zeilen werden gepuffert, damit ein über zwei Chunks verteiltes
+// Ereignis nicht verloren geht.
+async function readStream(response, { onMeta, onText }) {
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let finished = false
+  while (!finished) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6)
+      if (data === '[DONE]') { finished = true; break }
+      try {
+        const parsed = JSON.parse(data)
+        if (parsed.meta) onMeta?.(parsed.meta)
+        if (parsed.text) onText?.(parsed.text)
+      } catch { /* unvollständige oder fremde Zeile */ }
+    }
+  }
+}
+
+// Seit S-12 (Paket B) schreibt nur noch der Server Nachrichten. Der Client schickt pro
+// Nachricht { conversationId, message: { clientMessageId, content, inputMode } } bzw. für
+// Eröffnungen { conversationId, start }. Akte, Briefing, Resonanzkarte, Gedächtnis und RAG
+// lädt die chat-Function selbst.
+//
+// options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 (Monatslimit) antwortet.
 export function useChat(userId, session, options = {}) {
   const onSessionLimitRef = useRef(options.onSessionLimit)
   onSessionLimitRef.current = options.onSessionLimit
@@ -25,79 +86,46 @@ export function useChat(userId, session, options = {}) {
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [conversationId, setConversationId] = useState(null)
-  // Akte, Briefing, Resonanzkarte, Gedächtnis und RAG lädt die chat-Function selbst
-  // (Security S-12) — der Client schickt nur Nachrichten und den Eröffnungsanlass.
 
-  // Wellness-Start: kein sichtbarer User-Turn, Coach antwortet direkt aus dem System-Prompt
-  const startWellnessConversation = useCallback(async (wellnessCheck) => {
+  // Gemeinsamer Ablauf für Eröffnungen, bei denen der Coach sofort antwortet
+  // (Wellness-Check, Wiederkehr-Begrüßung, Entry-Kontext). Die Antwort speichert der Server.
+  const startStreamedOpening = useCallback(async ({ variant, title, extra = {}, errorLabel }) => {
     setMessages([])
     setConversationId(null)
     pendingConvRef.current = null
 
     let convId = null
     if (userId) {
-      const { data: conv } = await supabase
+      const { data: conv, error } = await supabase
         .from('conversations')
-        .insert({ user_id: userId, title: 'Wellness-Check' })
+        .insert({ user_id: userId, title })
         .select()
         .single()
-      if (conv) {
+      if (error || !conv) {
+        logger.error('Conversation insert failed', { code: error?.code ?? null, start: variant })
+      } else {
         convId = conv.id
         setConversationId(convId)
+        logger.info('Conversation started', { conversationId: convId, start: variant })
       }
     }
 
-    logger.info('Conversation started', {
-      conversationId: convId,
-      hasWellnessCheck: true,
-      wellnessScore: wellnessCheck.score,
-    })
-    logger.info('WellnessCheck context applied', {
-      score: wellnessCheck.score,
-      hasContext: !!wellnessCheck.context,
-      label: wellnessCheck.label,
-    })
-
     setIsLoading(true)
-    const assistantMessage = { role: 'assistant', content: '', id: Date.now() }
-    setMessages([assistantMessage])
-
+    const localId = `opening-${Date.now()}`
+    setMessages([{ role: 'assistant', content: '', id: localId }])
     const requestId = generateRequestId()
 
     try {
       const accessToken = session?.access_token ?? null
       if (!accessToken) {
-        logger.error('No access token available — aborting wellness start', { requestId })
-        setIsLoading(false)
-        setMessages([{
-          role: 'assistant',
-          content: 'Deine Sitzung ist abgelaufen. Bitte melde dich kurz ab und wieder an.',
-          isError: true,
-          id: Date.now(),
-        }])
+        logger.error('No access token available — aborting opening', { requestId, start: variant })
+        setMessages([{ role: 'assistant', content: SESSION_EXPIRED_MESSAGE, isError: true, id: Date.now() }])
         return
       }
 
-      logger.info('API request dispatched', { requestId, messageCount: 0, hasWellnessCheck: true })
-
+      logger.info('API request dispatched', { requestId, start: variant })
       const streamStart = Date.now()
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            messages: [],
-            conversationId: convId,
-            wellnessCheck,
-            requestId,
-          }),
-        }
-      )
+      const response = await postChat(accessToken, { conversationId: convId, start: variant, ...extra, requestId })
 
       const rateLimited = await readRateLimit(response)
       if (rateLimited) {
@@ -109,6 +137,11 @@ export function useChat(userId, session, options = {}) {
         logger.warn('Session limit reached (server)', { requestId })
         setMessages([])
         onSessionLimitRef.current?.()
+        return
+      }
+      if (await isClientOutdated(response)) {
+        logger.warn('client_outdated', { requestId })
+        setMessages([outdatedBubble()])
         return
       }
       if (!response.ok) {
@@ -117,282 +150,58 @@ export function useChat(userId, session, options = {}) {
       }
       if (convId) countedConvIdsRef.current.add(convId)
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
       let fullContent = ''
+      let serverId = null
       let firstToken = true
-      let totalChunks = 0
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') break
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.text) {
-                if (firstToken) {
-                  logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
-                  firstToken = false
-                }
-                totalChunks++
-                fullContent += parsed.text
-                setMessages([{ ...assistantMessage, content: fullContent }])
-              }
-            } catch {}
+      await readStream(response, {
+        onMeta: (meta) => { if (meta.assistantMessageId) serverId = meta.assistantMessageId },
+        onText: (text) => {
+          if (firstToken) {
+            logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
+            firstToken = false
           }
-        }
-      }
+          fullContent += text
+          setMessages([{ role: 'assistant', content: fullContent, id: localId, serverId }])
+        },
+      })
 
-      if (!fullContent) {
-        logger.warn('Stream completed but response was empty', { requestId, conversationId: convId })
-      } else {
-        logger.info('Stream completed', { requestId, totalChunks, duration_ms: Date.now() - streamStart })
-      }
-
-      if (userId && convId && fullContent) {
-        await supabase.from('messages').insert({
-          conversation_id: convId,
-          role: 'assistant',
-          content: fullContent,
-        })
-      }
-
-      logger.debug('WellnessCheck state cleared')
+      if (!fullContent) logger.warn('Stream completed but response was empty', { requestId, conversationId: convId })
+      else logger.info('Stream completed', { requestId, duration_ms: Date.now() - streamStart })
     } catch (err) {
-      logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
-      setMessages([{
-        role: 'assistant',
-        content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
-        isError: true,
-        id: Date.now(),
-      }])
+      logger.error(errorLabel, err instanceof Error ? err : new Error(String(err)))
+      setMessages([{ role: 'assistant', content: HICCUP_MESSAGE, isError: true, id: Date.now() }])
     } finally {
       setIsLoading(false)
     }
   }, [userId, session])
 
-  // Wiederkehr-Begrüßung: Coach öffnet automatisch mit einem ersten Turn
-  // (basierend auf offenem Faden aus dem letzten Gespräch)
+  // Wellness-Start: kein sichtbarer User-Turn, Coach antwortet direkt aus dem System-Prompt
+  const startWellnessConversation = useCallback(async (wellnessCheck) => {
+    logger.info('WellnessCheck context applied', {
+      score: wellnessCheck.score,
+      hasContext: !!wellnessCheck.context,
+      label: wellnessCheck.label,
+    })
+    return startStreamedOpening({
+      variant: 'wellness', title: 'Wellness-Check', extra: { wellnessCheck }, errorLabel: 'Wellness start failed',
+    })
+  }, [startStreamedOpening])
+
+  // Wiederkehr-Begrüßung: Coach öffnet mit Bezug auf den offenen Faden (lädt der Server)
   const startBriefingConversation = useCallback(async () => {
-    setMessages([])
-    setConversationId(null)
-    pendingConvRef.current = null
+    return startStreamedOpening({ variant: 'briefing', title: 'Gespräch', errorLabel: 'Briefing start failed' })
+  }, [startStreamedOpening])
 
-    let convId = null
-    if (userId) {
-      const { data: conv } = await supabase
-        .from('conversations')
-        .insert({ user_id: userId, title: 'Gespräch' })
-        .select()
-        .single()
-      if (conv) {
-        convId = conv.id
-        setConversationId(convId)
-      }
-    }
-
-    setIsLoading(true)
-    const assistantMessage = { role: 'assistant', content: '', id: Date.now() }
-    setMessages([assistantMessage])
-
-    const requestId = generateRequestId()
-
-    try {
-      const accessToken = session?.access_token ?? null
-      if (!accessToken) {
-        setIsLoading(false)
-        return
-      }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            messages: [],
-            conversationId: convId,
-            requestId,
-          }),
-        }
-      )
-
-      const rateLimited = await readRateLimit(response)
-      if (rateLimited) {
-        logger.warn('Rate limit reached (server)', { requestId, retryAfter: rateLimited.retryAfter })
-        setMessages([{ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
-        return
-      }
-      if (response.status === 429) {
-        logger.warn('Session limit reached (server)', { requestId })
-        setMessages([])
-        onSessionLimitRef.current?.()
-        return
-      }
-      if (!response.ok) throw new Error(`API error ${response.status}`)
-      if (convId) countedConvIdsRef.current.add(convId)
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let fullContent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        for (const line of chunk.split('\n')) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') break
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.text) {
-                fullContent += parsed.text
-                setMessages([{ ...assistantMessage, content: fullContent }])
-              }
-            } catch {}
-          }
-        }
-      }
-
-      if (userId && convId && fullContent) {
-        await supabase.from('messages').insert({
-          conversation_id: convId,
-          role: 'assistant',
-          content: fullContent,
-        })
-      }
-    } catch (err) {
-      logger.error('Briefing start failed', err instanceof Error ? err : new Error(String(err)))
-      setMessages([{
-        role: 'assistant',
-        content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
-        isError: true,
-        id: Date.now(),
-      }])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [userId, session])
-
-  // Entry-Kontext-Start: Coach öffnet automatisch mit themenspezifischer Antwort
-  // Priorität über Wiederkehr-Begrüßung, aber NICHT über Wellness-Check
+  // Entry-Kontext-Start: Coach öffnet mit themenspezifischer Antwort
   const startEntryContextConversation = useCallback(async (entryContext) => {
-    setMessages([])
-    setConversationId(null)
-    pendingConvRef.current = null
-
-    let convId = null
-    if (userId) {
-      const { data: conv } = await supabase
-        .from('conversations')
-        .insert({ user_id: userId, title: 'Gespräch' })
-        .select()
-        .single()
-      if (conv) {
-        convId = conv.id
-        setConversationId(convId)
-      }
-    }
-
-    setIsLoading(true)
-    const assistantMessage = { role: 'assistant', content: '', id: Date.now() }
-    setMessages([assistantMessage])
-
-    const requestId = generateRequestId()
-
-    try {
-      const accessToken = session?.access_token ?? null
-      if (!accessToken) { setIsLoading(false); return }
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            messages: [],
-            conversationId: convId,
-            entryContext,
-            requestId,
-          }),
-        }
-      )
-
-      const rateLimited = await readRateLimit(response)
-      if (rateLimited) {
-        logger.warn('Rate limit reached (server)', { requestId, retryAfter: rateLimited.retryAfter })
-        setMessages([{ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() }])
-        return
-      }
-      if (response.status === 429) {
-        logger.warn('Session limit reached (server)', { requestId })
-        setMessages([])
-        onSessionLimitRef.current?.()
-        return
-      }
-      if (!response.ok) throw new Error(`API error ${response.status}`)
-      if (convId) countedConvIdsRef.current.add(convId)
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let fullContent = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        for (const line of chunk.split('\n')) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') break
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.text) {
-                fullContent += parsed.text
-                setMessages([{ ...assistantMessage, content: fullContent }])
-              }
-            } catch {}
-          }
-        }
-      }
-
-      if (userId && convId && fullContent) {
-        await supabase.from('messages').insert({
-          conversation_id: convId,
-          role: 'assistant',
-          content: fullContent,
-        })
-      }
-    } catch (err) {
-      logger.error('Entry-context start failed', err instanceof Error ? err : new Error(String(err)))
-      setMessages([{
-        role: 'assistant',
-        content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
-        isError: true,
-        id: Date.now(),
-      }])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [userId, session])
+    return startStreamedOpening({
+      variant: 'entry', title: 'Gespräch', extra: { entryContext }, errorLabel: 'Entry-context start failed',
+    })
+  }, [startStreamedOpening])
 
   // Lädt ein bestehendes Gespräch aus dem Verlauf und macht es zum aktiven
   // Gespräch, damit es über sendMessage() ganz normal weitergeführt werden kann.
-  // Zählt bewusst NICHT als neue Session (kein countSession() im CoachScreen-Aufrufpfad).
+  // Zählt bewusst NICHT als neue Session.
   const loadConversation = useCallback(async (convId) => {
     if (!userId || !convId) return false
 
@@ -405,7 +214,7 @@ export function useChat(userId, session, options = {}) {
     if (error || !data || data.length === 0) {
       logger.error('Failed to load conversation for resume', {
         conversationId: convId,
-        error: error?.message ?? 'empty result',
+        code: error?.code ?? 'empty_result',
       })
       return false
     }
@@ -419,11 +228,12 @@ export function useChat(userId, session, options = {}) {
     return true
   }, [userId])
 
+  // Standard-Start: Eröffnungstext aus dem Pool wird sofort angezeigt; gespeichert wird er
+  // vom Server (start 'first'/'standard', ohne Modellaufruf, zählt nicht als Gespräch).
   const startNewConversation = useCallback(async (isFirstEver = false) => {
-    const opening = isFirstEver
-      ? FIRST_OPENING_MESSAGE
-      : OPENING_MESSAGES[Math.floor(Math.random() * OPENING_MESSAGES.length)]
-    const firstMessage = { role: 'assistant', content: opening, id: Date.now() }
+    const openingIndex = Math.floor(Math.random() * OPENING_MESSAGES.length)
+    const opening = isFirstEver ? FIRST_OPENING_MESSAGE : OPENING_MESSAGES[openingIndex]
+    const firstMessage = { role: 'assistant', content: opening, id: `opening-${Date.now()}` }
     setMessages([firstMessage])
     setConversationId(null)
 
@@ -439,13 +249,24 @@ export function useChat(userId, session, options = {}) {
           return null
         }
         setConversationId(conv.id)
-        logger.info('Conversation started', { conversationId: conv.id, hasWellnessCheck: false })
-        const { error: msgError } = await supabase.from('messages').insert({
-          conversation_id: conv.id,
-          role: 'assistant',
-          content: opening,
-        })
-        if (msgError) logger.error('Opening message insert failed', { code: msgError.code ?? null, conversationId: conv.id })
+        logger.info('Conversation started', { conversationId: conv.id, start: isFirstEver ? 'first' : 'standard' })
+
+        try {
+          const { data: { session: current } } = await supabase.auth.getSession()
+          if (!current?.access_token) {
+            logger.error('opening_store_failed', { conversationId: conv.id, reason: 'no_token' })
+          } else {
+            const res = await postChat(current.access_token, {
+              conversationId: conv.id,
+              start: isFirstEver ? 'first' : 'standard',
+              openingIndex,
+              requestId: generateRequestId(),
+            })
+            if (!res.ok) logger.error('opening_store_failed', { conversationId: conv.id, status: res.status })
+          }
+        } catch (err) {
+          logger.error('opening_store_failed', { conversationId: conv.id, errorType: err?.name ?? 'Error' })
+        }
         return conv.id
       }
       const pending = createConversation()
@@ -456,198 +277,155 @@ export function useChat(userId, session, options = {}) {
     return firstMessage
   }, [userId])
 
-  const sendMessage = useCallback(async (content, inputMode = 'text') => {
+  // Sendet eine Nutzer-Nachricht. Gespeichert wird sie vom Server. Scheitert das Senden,
+  // bleibt sie mit status 'failed' stehen und lässt sich mit derselben clientMessageId
+  // erneut senden (retryMessage) — der Server legt sie trotzdem nur einmal an.
+  const sendMessage = useCallback(async (content, inputMode = 'text', retry = null) => {
     if (!content.trim() || isLoading) return
 
-    const userMessage = { role: 'user', content, id: Date.now() }
-    const updatedMessages = [...messages, userMessage]
-    setMessages(updatedMessages)
+    const clientMessageId = retry?.clientMessageId ?? crypto.randomUUID()
+    const userLocalId = retry?.id ?? clientMessageId
+    const placeholderId = `reply-${clientMessageId}-${Date.now()}`
+
+    if (retry) {
+      setMessages(prev => prev.map(m => (m.id === userLocalId ? { ...m, status: 'sending' } : m)))
+    } else {
+      setMessages(prev => [...prev, { role: 'user', content, id: userLocalId, clientMessageId, inputMode, status: 'sending' }])
+    }
     setIsLoading(true)
 
-    const messageIndex = updatedMessages.filter(m => m.role === 'user').length
+    const setUserStatus = (status) =>
+      setMessages(prev => prev.map(m => (m.id === userLocalId ? { ...m, status } : m)))
+    const markFailed = (extraBubble = null) =>
+      setMessages(prev => {
+        const next = prev
+          .filter(m => m.id !== placeholderId)
+          .map(m => (m.id === userLocalId ? { ...m, status: 'failed' } : m))
+        return extraBubble ? [...next, extraBubble] : next
+      })
+
+    const messageIndex = messages.filter(m => m.role === 'user').length + (retry ? 0 : 1)
     // Falls die Konversation gerade noch angelegt wird: auf die ID warten
     const activeConvId = conversationId ?? (pendingConvRef.current ? await pendingConvRef.current : null)
-    logger.info('Message sent', { conversationId: activeConvId, messageIndex })
-
-    if (userId && activeConvId) {
-      const { error: insertError } = await supabase.from('messages').insert({
-        conversation_id: activeConvId,
-        role: 'user',
-        content,
-        input_mode: inputMode,
-      })
-      if (insertError) logger.error('User message insert failed', { code: insertError.code ?? null, conversationId: activeConvId })
-    }
+    logger.info('Message sent', { conversationId: activeConvId, messageIndex, retry: !!retry })
 
     const accessToken = session?.access_token ?? null
     if (!accessToken) {
       logger.error('No access token available — aborting sendMessage', { conversationId: activeConvId })
+      markFailed({ role: 'assistant', content: SESSION_EXPIRED_MESSAGE, isError: true, id: `expired-${Date.now()}` })
       setIsLoading(false)
-      setMessages(prev => {
-        const updated = [...prev]
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          content: 'Deine Sitzung ist abgelaufen. Bitte melde dich kurz ab und wieder an.',
-          isError: true,
-        }
-        return updated
-      })
+      return
+    }
+    if (!activeConvId) {
+      logger.error('No conversation available — message not sent')
+      markFailed()
+      setIsLoading(false)
       return
     }
 
-    const assistantMessage = { role: 'assistant', content: '', id: Date.now() + 1 }
-    setMessages(prev => [...prev, assistantMessage])
-
+    setMessages(prev => [...prev, { role: 'assistant', content: '', id: placeholderId }])
     const requestId = generateRequestId()
+    let accepted = false
 
     try {
-      logger.info('API request dispatched', {
-        requestId,
-        messageCount: updatedMessages.length,
-        hasWellnessCheck: false,
-      })
-
+      logger.info('API request dispatched', { requestId, messageIndex })
       const streamStart = Date.now()
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            messages: updatedMessages.map(m => ({ role: m.role, content: m.content })),
-            conversationId: activeConvId,
-            requestId,
-          }),
-        }
-      )
+      const response = await postChat(accessToken, {
+        conversationId: activeConvId,
+        message: { clientMessageId, content, inputMode },
+        requestId,
+      })
 
       const rateLimited = await readRateLimit(response)
       if (rateLimited) {
         logger.warn('Rate limit reached (server)', { requestId, conversationId: activeConvId, retryAfter: rateLimited.retryAfter })
-        setMessages(prev => [...prev.slice(0, -1), { role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: Date.now() + 1 }])
+        markFailed({ role: 'assistant', content: rateLimitMessage(rateLimited.retryAfter), isError: true, id: `rate-${Date.now()}` })
         return
       }
       if (response.status === 429) {
         logger.warn('Session limit reached (server)', { requestId, conversationId: activeConvId })
-        // Platzhalter-Bubble entfernen, Limit-Modal zeigen
-        setMessages(prev => prev.slice(0, -1))
+        markFailed()
         onSessionLimitRef.current?.()
+        return
+      }
+      if (await isClientOutdated(response)) {
+        logger.warn('client_outdated', { requestId })
+        markFailed(outdatedBubble())
         return
       }
       if (!response.ok) {
         logger.error('API request failed', { requestId, status: response.status })
         throw new Error(`API error ${response.status}`)
       }
-      if (activeConvId) countedConvIdsRef.current.add(activeConvId)
+      countedConvIdsRef.current.add(activeConvId)
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
       let fullContent = ''
       let firstToken = true
       let totalChunks = 0
-      let messageType = 'standard'
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') break
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.meta?.messageType) {
-                messageType = parsed.meta.messageType
-                setMessages(prev => {
-                  const updated = [...prev]
-                  updated[updated.length - 1] = { ...updated[updated.length - 1], messageType }
-                  return updated
-                })
-              }
-              if (parsed.text) {
-                if (firstToken) {
-                  logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
-                  firstToken = false
-                }
-                totalChunks++
-                fullContent += parsed.text
-                setMessages(prev => {
-                  const updated = [...prev]
-                  updated[updated.length - 1] = { ...updated[updated.length - 1], content: fullContent }
-                  return updated
-                })
-              }
-            } catch {}
+      await readStream(response, {
+        onMeta: (meta) => {
+          accepted = true
+          setUserStatus('sent')
+          setMessages(prev => prev.map(m => (m.id === placeholderId
+            ? { ...m, serverId: meta.assistantMessageId ?? m.serverId, messageType: meta.messageType ?? m.messageType }
+            : m)))
+          if (meta.replayed) logger.info('Reply restored from server', { requestId })
+        },
+        onText: (text) => {
+          accepted = true
+          if (firstToken) {
+            logger.info('Stream first token received', { requestId, duration_ms: Date.now() - streamStart })
+            firstToken = false
           }
-        }
-      }
+          totalChunks++
+          fullContent += text
+          setMessages(prev => prev.map(m => (m.id === placeholderId ? { ...m, content: fullContent } : m)))
+        },
+      })
+      setUserStatus('sent')
 
-      if (!fullContent) {
-        logger.warn('Stream completed but response was empty', { requestId, conversationId: activeConvId })
-      } else {
-        logger.info('Stream completed', { requestId, totalChunks, duration_ms: Date.now() - streamStart })
-      }
-
-      if (userId && activeConvId && fullContent) {
-        const { error: replyError } = await supabase.from('messages').insert({
-          conversation_id: activeConvId,
-          role: 'assistant',
-          content: fullContent,
-          message_type: messageType,
-        })
-        if (replyError) logger.error('Assistant message insert failed', { code: replyError.code ?? null, conversationId: activeConvId })
-      }
+      if (!fullContent) logger.warn('Stream completed but response was empty', { requestId, conversationId: activeConvId })
+      else logger.info('Stream completed', { requestId, totalChunks, duration_ms: Date.now() - streamStart })
     } catch (err) {
       logger.error('Stream error during receive', err instanceof Error ? err : new Error(String(err)))
-      setMessages(prev => {
-        const updated = [...prev]
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          content: 'Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da.',
-          isError: true,
-        }
-        return updated
-      })
+      if (accepted) {
+        // Der Server hat die Nachricht angenommen und speichert die Antwort selbst zu Ende.
+        setMessages(prev => prev.map(m => (m.id === placeholderId
+          ? { ...m, content: HICCUP_MESSAGE, isError: true }
+          : m)))
+      } else {
+        markFailed()
+      }
     } finally {
       setIsLoading(false)
     }
-  }, [messages, isLoading, userId, conversationId, session])
+  }, [messages, isLoading, conversationId, session])
 
-  // Nach Gesprächsende: Gedächtnis + Erkenntnis via Haiku extrahieren
+  const retryMessage = useCallback((msg) => {
+    if (!msg || msg.role !== 'user') return
+    return sendMessage(msg.content, msg.inputMode ?? 'text', msg)
+  }, [sendMessage])
+
+  // Nach Gesprächsende: Gedächtnis + Erkenntnis via Haiku extrahieren. Der Server liest
+  // das Gespräch selbst aus der DB (über die conversationId).
   const extractMemoryAndInsight = useCallback(async () => {
-    if (!userId || messages.length < 3) return null
+    if (!userId || !conversationId || messages.length < 3) return null
 
     try {
       const accessToken = session?.access_token ?? null
       if (!accessToken) return null
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': ANON_KEY,
-            'Authorization': `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            messages: messages.map(m => ({ role: m.role, content: m.content })),
-            extractMemory: true,
-            requestId: generateRequestId(),
-          }),
-        }
-      )
+      const response = await postChat(accessToken, {
+        mode: 'extract',
+        extractMemory: true,
+        conversationId,
+        requestId: generateRequestId(),
+      })
       if (!response.ok) return null
       return await response.json()
     } catch {
       return null
     }
-  }, [messages, userId])
+  }, [messages, userId, conversationId, session])
 
   return {
     messages,
@@ -658,6 +436,7 @@ export function useChat(userId, session, options = {}) {
     startBriefingConversation,
     startEntryContextConversation,
     sendMessage,
+    retryMessage,
     extractMemoryAndInsight,
     loadConversation,
     setMessages,

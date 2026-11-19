@@ -2,7 +2,7 @@ import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
 import { detectCrisis } from './crisisDetection.ts';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import {
-  HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse,
+  HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse, isUuid,
 } from '../_shared/auth.ts';
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 import { findSimilarExperiences } from '../_shared/rag.ts';
@@ -1028,14 +1028,86 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Grenzen gegen Missbrauch und Kosten (Security-Paket A, S-03).
-// Der Gesprächsverlauf wird bei jeder Anfrage komplett mitgeschickt. Statt lange
-// Gespräche mit 413 abzubrechen, gehen nur die letzten MAX_MESSAGES an das Modell.
-// Harte Obergrenzen (413): Body-Größe, Länge einer einzelnen Nachricht, Anzahl Einträge.
+// ── Grenzen und Konstanten ───────────────────────────────────────────────────
+// Seit S-12 (Paket B) kommt der Verlauf im Gesprächsmodus aus der DB, nicht vom Client.
+// Harte Obergrenzen (413) gelten für Body und Einzelnachricht; ans Modell gehen höchstens
+// die letzten MAX_MESSAGES Nachrichten.
 const MAX_BODY_BYTES = 200 * 1024;
 const MAX_MESSAGES = 60;
-const MAX_MESSAGE_ENTRIES = 400;
+const MAX_HISTORY_ROWS = 400;      // aus der DB geladen (für Takt-Zählung und RAG)
+const MAX_MESSAGE_ENTRIES = 400;   // nur Howto/Legacy-Body
 const MAX_CONTENT_CHARS = 8000;
+const CHAT_MODEL = 'claude-sonnet-4-5';
+
+// Altes Format (Client schickt messages[] und speichert selbst). Welle 2a: noch erlaubt,
+// Welle 2b (Mig. 031): false → 409 client_outdated.
+const LEGACY_FORMAT_ALLOWED = true;
+
+// Eröffnungstexte für Standard-Starts. Quelle: src/lib/prompts.js (OPENING_MESSAGES,
+// FIRST_OPENING_MESSAGE) — bei Änderungen beide Stellen anpassen.
+const OPENING_MESSAGES = [
+  'Schön, dass du heute hier bist. Was ist das eine Thema, das dich gerade wirklich beschäftigt? Es braucht kein großes Problem sein.',
+  'Willkommen zurück. Wie ist es dir seit unserem letzten Gespräch ergangen? Was hat sich verändert — auch wenn es klein erscheint?',
+  'Ein neues Gespräch. Was bringst du heute mit? Was ist gerade leise da und wartet darauf, gehört zu werden?',
+];
+const FIRST_OPENING_MESSAGE = 'Schön, dass du da bist. Was beschäftigt dich gerade — gibt es etwas, das du schon länger mit dir trägst?';
+
+const START_VARIANTS = ['first', 'standard', 'wellness', 'briefing', 'entry'] as const;
+type StartVariant = typeof START_VARIANTS[number];
+
+declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
+
+type ChatMsg = { role: 'user' | 'assistant'; content: string };
+type HistoryRow = { id: string; role: 'user' | 'assistant'; content: string; created_at: string };
+
+// deno-lint-ignore no-explicit-any
+async function loadHistory(admin: any, convId: string, logger: any): Promise<HistoryRow[]> {
+  const { data, error } = await admin
+    .from('messages')
+    .select('id, role, content, created_at')
+    .eq('conversation_id', convId)
+    .order('created_at', { ascending: false })
+    .limit(MAX_HISTORY_ROWS);
+  if (error) {
+    logger.error('history_load_failed', { conversationId: convId, code: error.code });
+    throw new HttpError(500, 'history_load_failed');
+  }
+  return ((data ?? []) as HistoryRow[]).reverse();
+}
+
+// Anthropic: Verlauf beginnt mit user; aufeinanderfolgende gleiche Rollen werden zusammengeführt
+// (z. B. Eröffnung + Coach-Antwort, oder Nutzer-Nachricht nach einer gescheiterten Antwort).
+function toApiMessages(history: ChatMsg[]): ChatMsg[] {
+  const out: ChatMsg[] = [];
+  for (const m of history) {
+    if (!m.content) continue;
+    const last = out[out.length - 1];
+    if (last && last.role === m.role) last.content += '\n\n' + m.content;
+    else out.push({ role: m.role, content: m.content });
+  }
+  if (out.length === 0 || out[0].role !== 'user') out.unshift({ role: 'user', content: '.' });
+  return out;
+}
+
+function sseResponse(readable: ReadableStream): Response {
+  return new Response(readable, {
+    headers: { ...CORS_HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+  });
+}
+
+// Wiederholung einer bereits beantworteten Nachricht (gleiche clientMessageId): gespeicherte
+// Antwort ausliefern statt neu zu erzeugen.
+function replayResponse(meta: Record<string, unknown>, text: string): Response {
+  const enc = new TextEncoder();
+  return sseResponse(new ReadableStream({
+    start(c) {
+      c.enqueue(enc.encode(`data: ${JSON.stringify({ meta })}\n\n`));
+      c.enqueue(enc.encode(`data: ${JSON.stringify({ text })}\n\n`));
+      c.enqueue(enc.encode('data: [DONE]\n\n'));
+      c.close();
+    },
+  }));
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -1050,46 +1122,83 @@ Deno.serve(async (req) => {
 
     // 2. Body mit Größenlimit lesen
     const body = await readJsonBody(req, MAX_BODY_BYTES);
-    // memory, coachFile, briefing, ragContext, supervisionNote aus dem Body werden
-    // bewusst ignoriert (S-12) — chat lädt diesen Kontext selbst.
-    const { extractMemory, howtoMode, requestId, conversationId } = body as any;
-    const wellnessCheck = sanitizeWellnessCheck((body as any).wellnessCheck);
-    const entryContext = sanitizeEntryContext((body as any).entryContext);
-    const safeRequestId = typeof requestId === 'string' ? requestId.slice(0, 64) : undefined;
+    // deno-lint-ignore no-explicit-any
+    const b = body as any;
+    // memory, coachFile, briefing, ragContext, supervisionNote werden ignoriert (S-12, Teil 1).
+    const safeRequestId = typeof b.requestId === 'string' ? b.requestId.slice(0, 64) : undefined;
     logger = createLogger('chat', safeRequestId, user.id);
 
-    const isExtract = !!extractMemory;
-    const isHowto = !isExtract && !!howtoMode;
+    const isExtract = b.mode === 'extract' || !!b.extractMemory;
+    const isHowto = !isExtract && (b.mode === 'howto' || !!b.howtoMode);
     const isCoaching = !isExtract && !isHowto;
 
-    // Rate-Limit pro Nutzer, vor jeder teuren Arbeit. Fail-open: Bei einem DB-Fehler läuft
-    // das Gespräch weiter (protokolliert), die Monatszählung (consume_session) bleibt strikt.
+    // Rate-Limit pro Nutzer, vor jeder teuren Arbeit (fail-open, siehe _shared/rateLimit.ts)
     await enforceRateLimit(admin, user.id,
       isExtract ? RATE_LIMITS.extract : isHowto ? RATE_LIMITS.howto : RATE_LIMITS.chat, logger, true);
 
-    const allMessages = validateMessages(body.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS });
+    const wellnessCheck = sanitizeWellnessCheck(b.wellnessCheck);
+    const entryContext = sanitizeEntryContext(b.entryContext);
+
+    // 3. Format erkennen (nur Gesprächsmodus)
+    const hasMessage = b.message !== undefined && b.message !== null;
+    const start: StartVariant | undefined = START_VARIANTS.includes(b.start) ? b.start : undefined;
+    if (b.start !== undefined && !start) throw new HttpError(400, 'invalid_start');
+    if (hasMessage && start) throw new HttpError(400, 'invalid_request');
+    const isV2 = isCoaching && (hasMessage || !!start);
+    const isLegacy = isCoaching && !isV2;
+
+    let newMessage: { clientMessageId: string; content: string; inputMode: 'text' | 'voice' } | null = null;
+    if (hasMessage) {
+      const m = b.message;
+      const content = typeof m?.content === 'string' ? m.content : '';
+      if (!content.trim()) throw new HttpError(400, 'invalid_message');
+      if (content.length > MAX_CONTENT_CHARS) throw new HttpError(413, 'message_too_long');
+      if (!isUuid(m?.clientMessageId)) throw new HttpError(400, 'invalid_client_message_id');
+      newMessage = { clientMessageId: m.clientMessageId, content, inputMode: m?.inputMode === 'voice' ? 'voice' : 'text' };
+    }
+    if (isV2 && b.messages !== undefined) logger.info('body_messages_ignored');
+
+    if (isLegacy) {
+      logger.info('legacy_format', { kind: 'conversation' });
+      if (!LEGACY_FORMAT_ALLOWED) throw new HttpError(409, 'client_outdated');
+      if (!Array.isArray(b.messages) && !wellnessCheck) throw new HttpError(400, 'invalid_messages');
+    }
+
+    // 4. Eigentum an der Konversation prüfen, BEVOR irgendetwas gelesen oder geschrieben wird.
+    let convId: string | null = null;
+    if (isCoaching || (b.conversationId !== undefined && b.conversationId !== null && b.conversationId !== '')) {
+      convId = await assertConversationOwner(admin, b.conversationId, user.id);
+    }
+
     logger.info('Request received', {
-      requestId: safeRequestId, messageCount: allMessages.length,
+      requestId: safeRequestId,
       mode: isExtract ? 'extract' : isHowto ? 'howto' : 'coaching',
+      format: isLegacy ? 'legacy' : isV2 ? (start ? `start_${start}` : 'message') : 'n/a',
     });
 
-    if (isCoaching && !Array.isArray(body.messages) && !wellnessCheck) {
-      throw new HttpError(400, 'invalid_messages');
-    }
-    if (isExtract && allMessages.length === 0) {
-      throw new HttpError(400, 'invalid_messages');
-    }
-
-    // 3. Eigentum an der Konversation prüfen, BEVOR irgendetwas gelesen oder geschrieben wird.
-    //    Im normalen Gesprächsmodus ist die conversationId Pflicht (serverseitige Zählung).
-    let convId: string | null = null;
-    if (isCoaching || (conversationId !== undefined && conversationId !== null && conversationId !== '')) {
-      convId = await assertConversationOwner(admin, conversationId, user.id);
-    }
-
-    const messages = allMessages.length > MAX_MESSAGES ? allMessages.slice(-MAX_MESSAGES) : allMessages;
-    if (messages.length !== allMessages.length) {
-      logger.info('Message history trimmed', { requestId: safeRequestId, originalCount: allMessages.length, keptCount: messages.length });
+    // 5. Standard-Eröffnung: Server speichert den Pool-Text. Kein Modellaufruf und keine
+    //    Sitzungszählung — ein Standard-Gespräch zählt erst mit der ersten Nutzer-Nachricht.
+    if (start === 'first' || start === 'standard') {
+      const idx = Number.isInteger(b.openingIndex) && b.openingIndex >= 0 && b.openingIndex < OPENING_MESSAGES.length
+        ? b.openingIndex : 0;
+      const content = start === 'first' ? FIRST_OPENING_MESSAGE : OPENING_MESSAGES[idx];
+      const { count, error: countError } = await admin
+        .from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', convId);
+      if (countError) {
+        logger.error('opening_check_failed', { conversationId: convId, code: countError.code });
+        throw new HttpError(500, 'message_insert_failed');
+      }
+      if ((count ?? 0) > 0) return jsonResponse({ ok: true, skipped: true }, CORS_HEADERS);
+      const { data: opening, error: openingError } = await admin.from('messages').insert({
+        conversation_id: convId, role: 'assistant', content, message_type: 'standard',
+        metadata: { kind: 'opening', variant: start },
+      }).select('id').single();
+      if (openingError || !opening) {
+        logger.error('opening_insert_failed', { conversationId: convId, code: openingError?.code ?? 'unknown' });
+        throw new HttpError(500, 'message_insert_failed');
+      }
+      logger.info('Opening stored', { conversationId: convId, variant: start });
+      return jsonResponse({ ok: true, assistantMessageId: opening.id, content }, CORS_HEADERS);
     }
 
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -1097,26 +1206,31 @@ Deno.serve(async (req) => {
       logger.error('ANTHROPIC_API_KEY not configured', { requestId: safeRequestId });
       throw new HttpError(500, 'not_configured');
     }
-
     const anthropic = new Anthropic({ apiKey });
 
-    // Gedächtnis-Extraktion nach Gesprächsende (kein Streaming, schnell via Haiku).
-    // Zählt nicht als Sitzung und läuft auch bei erreichtem Limit.
+    // 6. Gedächtnis-Extraktion (kein Streaming, Haiku). Mit conversationId aus der DB.
     if (isExtract) {
-      logger.info('Anthropic API call started', { requestId: safeRequestId, model: 'claude-haiku-4-5-20251001', messageCount: messages.length });
-      const conversationText = messages
+      let extractMessages: ChatMsg[];
+      if (convId) {
+        if (b.messages !== undefined) logger.info('body_messages_ignored');
+        extractMessages = (await loadHistory(admin, convId, logger)).slice(-MAX_MESSAGES);
+      } else {
+        logger.info('legacy_format', { kind: 'extract' });
+        if (!LEGACY_FORMAT_ALLOWED) throw new HttpError(409, 'client_outdated');
+        extractMessages = validateMessages(b.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS })
+          .slice(-MAX_MESSAGES) as ChatMsg[];
+      }
+      if (extractMessages.length === 0) throw new HttpError(400, 'invalid_messages');
+
+      logger.info('Anthropic API call started', { requestId: safeRequestId, model: 'claude-haiku-4-5-20251001', messageCount: extractMessages.length });
+      const conversationText = extractMessages
         .map((m) => `${m.role === 'user' ? 'Nutzer' : 'Coach'}: ${m.content}`)
         .join('\n');
-
       const response = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 600,
-        messages: [{
-          role: 'user',
-          content: `${MEMORY_EXTRACT_PROMPT}\n\nGespräch:\n${conversationText}`,
-        }],
+        messages: [{ role: 'user', content: `${MEMORY_EXTRACT_PROMPT}\n\nGespräch:\n${conversationText}` }],
       });
-
       const text = response.content[0].type === 'text' ? response.content[0].text : '{}';
       try {
         return jsonResponse(JSON.parse(text), CORS_HEADERS);
@@ -1126,44 +1240,80 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat
-    // (vor dem Kürzen, damit der Rhythmus bei langen Gesprächen stimmt).
-    const assistantTurnCount = allMessages.filter((m) => m.role === 'assistant').length;
+    // 7. Verlauf bestimmen
+    //    Gesprächsmodus: aus der DB (Client-Verlauf wird verworfen).
+    //    Howto: weiterhin vom Client (nichts wird gespeichert, keine nutzerübergreifende Wirkung).
+    let history: HistoryRow[] = [];
+    let userText: string | undefined;          // Text für die Krisenerkennung
+    let userMessageId: string | null = null;
+    let existingUserMessage = false;
 
-    // 4. Krisenerkennung — nur bei echter Nutzer-Nachricht im Gesprächsmodus (nicht bei
-    //    synthetischen Eröffnungen wie Wellness-Check/Briefing/Entry-Kontext, dort ist
-    //    messages leer) und nicht im Howto-Modus (dort greift die generischere
-    //    Krisen-Anweisung im Basis-Prompt). Läuft VOR der Limit-Prüfung, damit eine
-    //    Krisenantwort auch bei erreichtem Limit ausgeliefert wird (Entscheidung 18.11.2026).
-    let crisisDetected = false;
-    const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
+    if (isHowto) {
+      const howtoMessages = validateMessages(b.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS });
+      history = howtoMessages.map((m, i) => ({ id: `howto-${i}`, role: m.role as 'user' | 'assistant', content: m.content, created_at: '' }));
+    } else if (convId) {
+      history = await loadHistory(admin, convId, logger);
+    }
 
-    // Kontext parallel zur Krisenerkennung laden (wirft nie, siehe loadCoachContext)
-    const firstUserMessage = allMessages.find((m) => m.role === 'user')?.content;
+    if (newMessage && convId) {
+      userText = newMessage.content;
+      // Idempotenz: dieselbe clientMessageId schon gespeichert? (Wiederholung nach Netzfehler)
+      const { data: existing, error: existingError } = await admin
+        .from('messages').select('id, created_at')
+        .eq('conversation_id', convId).eq('client_message_id', newMessage.clientMessageId)
+        .maybeSingle();
+      if (existingError) {
+        logger.error('message_lookup_failed', { conversationId: convId, code: existingError.code });
+        throw new HttpError(500, 'message_insert_failed');
+      }
+      if (existing) {
+        existingUserMessage = true;
+        userMessageId = existing.id;
+        const reply = history.find((m) => m.role === 'assistant' && m.created_at > existing.created_at);
+        if (reply) {
+          logger.info('Retry answered from storage', { conversationId: convId });
+          return replayResponse({ userMessageId: existing.id, assistantMessageId: reply.id, messageType: 'standard', replayed: true }, reply.content);
+        }
+      }
+    } else if (isLegacy) {
+      // Alter Client: speichert User- und Coach-Nachricht noch selbst. Wir speichern nichts,
+      // verwerfen den mitgeschickten Verlauf und nehmen nur die letzte Nutzer-Nachricht, falls
+      // der Insert des alten Clients noch nicht in der DB angekommen ist.
+      const bodyMessages = Array.isArray(b.messages)
+        ? validateMessages(b.messages, { maxEntries: MAX_MESSAGE_ENTRIES, maxContentChars: MAX_CONTENT_CHARS })
+        : [];
+      const lastBodyUser = [...bodyMessages].reverse().find((m) => m.role === 'user');
+      userText = lastBodyUser?.content;
+      const newest = history[history.length - 1];
+      if (lastBodyUser && (!newest || newest.role !== 'user')) {
+        history.push({ id: 'legacy-pending', role: 'user', content: lastBodyUser.content, created_at: new Date().toISOString() });
+      }
+    }
+
+    // Zählt, wie viele Antworten der Coach in diesem Gespräch bereits gegeben hat.
+    const assistantTurnCount = history.filter((m) => m.role === 'assistant').length;
+
+    // 8. Kontext parallel zur Krisenerkennung laden (wirft nie, siehe loadCoachContext)
+    const firstUserMessage = history.find((m) => m.role === 'user')?.content ?? userText;
     const contextPromise: Promise<CoachContext> = isCoaching && convId
       ? loadCoachContext(admin, user.id, convId, firstUserMessage, logger)
       : Promise.resolve({});
 
-    if (isCoaching && lastUserMessage?.content) {
-      const classification = await detectCrisis(anthropic, lastUserMessage.content);
+    // 9. Krisenerkennung — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Läuft VOR der
+    //    Limit-Prüfung, damit eine Krisenantwort auch bei erreichtem Limit ausgeliefert wird.
+    let crisisDetected = false;
+    let crisisConfidence: string | null = null;
+    if (isCoaching && userText) {
+      const classification = await detectCrisis(anthropic, userText);
       if (classification.acute_risk && classification.confidence !== 'low') {
         crisisDetected = true;
+        crisisConfidence = classification.confidence;
         logger.warn('Crisis detected in user message', { requestId: safeRequestId, confidence: classification.confidence, conversationId: convId });
-
-        const { error: crisisInsertError } = await admin.from('crisis_events').insert({
-          user_id: user.id,
-          conversation_id: convId,
-          confidence: classification.confidence,
-          excerpt: lastUserMessage.content.slice(0, 300),
-        });
-        if (crisisInsertError) {
-          logger.error('crisis_events insert failed', { code: crisisInsertError.code, requestId: safeRequestId });
-        }
       }
     }
 
-    // 5. Sitzung serverseitig zählen und Limit prüfen (atomar, idempotent pro Konversation).
-    //    userClient, damit auth.uid() in der Funktion gesetzt ist.
+    // 10. Sitzung serverseitig zählen und Limit prüfen (atomar, idempotent pro Konversation).
+    //     Vor dem Speichern der Nutzer-Nachricht, damit bei erreichtem Limit nichts liegen bleibt.
     if (isCoaching) {
       const { data: session, error: sessionError } = await userClient.rpc('consume_session', { p_conversation_id: convId });
       if (sessionError) {
@@ -1184,21 +1334,58 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Alle 4 Antworten (Mittelwert aus dem gewünschten 3–5er Rhythmus) aktiv
-    // ein Wirkmechanismus-Angebot einstreuen — aber erst ab der 3. Antwort,
-    // damit der Einstieg ins Gespräch nicht sofort mit einer Erklärung startet.
+    // 11. Nutzer-Nachricht speichern (nur neues Format; Retry legt keine zweite an)
+    if (newMessage && convId && !existingUserMessage) {
+      const { data: inserted, error: insertError } = await admin.from('messages').upsert({
+        conversation_id: convId,
+        role: 'user',
+        content: newMessage.content,
+        input_mode: newMessage.inputMode,
+        client_message_id: newMessage.clientMessageId,
+        message_type: 'standard',
+      }, { onConflict: 'conversation_id,client_message_id', ignoreDuplicates: true }).select('id, created_at');
+      if (insertError) {
+        logger.error('user_message_insert_failed', { conversationId: convId, code: insertError.code });
+        throw new HttpError(500, 'message_insert_failed');
+      }
+      let row: { id: string; created_at: string } | undefined = inserted?.[0];
+      if (!row) {
+        // Paralleler Retry hat gewonnen → bestehende Zeile verwenden
+        const { data: again } = await admin.from('messages').select('id, created_at')
+          .eq('conversation_id', convId).eq('client_message_id', newMessage.clientMessageId).maybeSingle();
+        row = again ?? undefined;
+      }
+      if (!row) {
+        logger.error('user_message_insert_failed', { conversationId: convId, code: 'not_found_after_upsert' });
+        throw new HttpError(500, 'message_insert_failed');
+      }
+      userMessageId = row.id;
+      history.push({ id: row.id, role: 'user', content: newMessage.content, created_at: row.created_at });
+    }
+
+    if (crisisDetected && userText) {
+      const { error: crisisInsertError } = await admin.from('crisis_events').insert({
+        user_id: user.id,
+        conversation_id: convId,
+        message_id: userMessageId,
+        confidence: crisisConfidence,
+        excerpt: userText.slice(0, 300),
+      });
+      if (crisisInsertError) {
+        logger.error('crisis_events insert failed', { code: crisisInsertError.code, requestId: safeRequestId });
+      }
+    }
+
+    // Alle 4 Antworten (ab der 3.) aktiv ein Wirkmechanismus-Angebot einstreuen.
     const OFFER_INTERVAL = 4;
     const offerMechanism =
       isCoaching && assistantTurnCount >= 3 && assistantTurnCount % OFFER_INTERVAL === 0;
-
     if (offerMechanism) {
       logger.info('Mechanism-offer cadence triggered', { requestId: safeRequestId, assistantTurnCount });
     }
 
-    // "Innere Stimmen" — Zwei-Phasen-Chatflow (Teil 4). Serverseitig getaktet,
-    // nie beide Phasen im selben Turn. Übersprungen im Howto-Modus (keine
-    // echte Coaching-Konversation), bei akuter Belastung und im Krisenfall — das
-    // Sicherheitsnetz hat Vorrang vor der Taktung (Teil 4.4).
+    // "Innere Stimmen" — Zwei-Phasen-Chatflow, serverseitig getaktet, nie beide Phasen im
+    // selben Turn; übersprungen bei Howto, akuter Belastung und im Krisenfall.
     const acuteDistress = !!wellnessCheck && wellnessCheck.score <= 3;
     let introduceVoice: InnerVoice | undefined;
     let namingVoice: InnerVoice | undefined;
@@ -1245,7 +1432,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Normaler Chat — Streaming
+    // 12. System-Prompt
     const { memory, ragContext, supervisionNote, briefing, coachFile } =
       crisisDetected || !isCoaching ? {} as CoachContext : await contextPromise;
     const systemPrompt = crisisDetected
@@ -1259,65 +1446,100 @@ Deno.serve(async (req) => {
       logger.info('WellnessCheck context injected into prompt', { requestId: safeRequestId, score: wellnessCheck.score, tone });
     }
 
-    // Anthropic erfordert: messages muss mit user-Role beginnen und nicht leer sein.
-    // Bei Wellness-Start ist messages leer oder beginnt mit assistant → synthetischen Trigger einfügen.
-    let apiMessages: { role: 'user' | 'assistant'; content: string }[] = messages.map((m) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }));
-    if (apiMessages.length === 0 || apiMessages[0].role !== 'user') {
-      apiMessages = [{ role: 'user', content: '.' }, ...apiMessages];
+    const apiMessages = toApiMessages(history.slice(-MAX_MESSAGES));
+    if (history.length > MAX_MESSAGES) {
+      logger.info('Message history trimmed', { requestId: safeRequestId, originalCount: history.length, keptCount: MAX_MESSAGES });
     }
 
-    logger.info('Anthropic API call started', { requestId: safeRequestId, model: 'claude-sonnet-4-5', messageCount: apiMessages.length });
+    // 13. Stream. Im neuen Format speichert der Server die Antwort selbst — auch wenn der
+    //     Client mittendrin abbricht (D-7: zu Ende generieren). Legacy: alter Client speichert.
+    const persist = isV2 && !!convId;
+    const assistantId = crypto.randomUUID();
+    const messageType = crisisDetected ? 'crisis_response' : 'standard';
 
+    logger.info('Anthropic API call started', { requestId: safeRequestId, model: CHAT_MODEL, messageCount: apiMessages.length });
     const streamStart = Date.now();
     const stream = await anthropic.messages.stream({
-      model: 'claude-sonnet-4-5',
-      // Der Pflichttext im Krisenfall (Hotline-Nummern + Fließtext) braucht mehr
-      // Raum als eine normale Antwort — darf niemals abgeschnitten werden.
+      model: CHAT_MODEL,
+      // Der Pflichttext im Krisenfall braucht mehr Raum und darf nicht abgeschnitten werden.
       max_tokens: crisisDetected ? 700 : 400,
       system: systemPrompt,
       messages: apiMessages,
     });
 
     const encoder = new TextEncoder();
+    let clientGone = false;
+    req.signal?.addEventListener('abort', () => { clientGone = true; });
+
     const readable = new ReadableStream({
-      async start(controller) {
-        let tokenCount = 0;
-        // Meta-Signal VOR dem ersten Text-Chunk: teilt dem Frontend mit, dass diese
-        // Antwort als CrisisResponseCard statt als normale Chat-Bubble gerendert
-        // werden soll (siehe useChat.js/CoachScreen.jsx).
-        if (crisisDetected) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ meta: { messageType: 'crisis_response' } })}\n\n`));
-        }
-        try {
-          for await (const chunk of stream) {
-            if (chunk.type === 'content_block_delta' &&
-                chunk.delta.type === 'text_delta') {
-              tokenCount++;
-              const data = `data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`;
-              controller.enqueue(encoder.encode(data));
+      start(controller) {
+        const send = (line: string) => {
+          if (clientGone) return;
+          try { controller.enqueue(encoder.encode(line)); } catch { clientGone = true; }
+        };
+
+        const work = (async () => {
+          let full = '';
+          let tokenCount = 0;
+          let streamFailed = false;
+          let stopReason: string | null = null;
+
+          // Meta-Signal VOR dem ersten Text-Chunk: IDs (neues Format) und Darstellungsart
+          if (persist || crisisDetected) {
+            send(`data: ${JSON.stringify({ meta: {
+              messageType,
+              ...(persist ? { userMessageId, assistantMessageId: assistantId } : {}),
+            } })}\n\n`);
+          }
+
+          try {
+            for await (const chunk of stream) {
+              if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+                tokenCount++;
+                full += chunk.delta.text;
+                send(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
+              } else if (chunk.type === 'message_delta') {
+                // deno-lint-ignore no-explicit-any
+                stopReason = (chunk as any).delta?.stop_reason ?? stopReason;
+              }
+            }
+            logger.info('Stream completed', { requestId: safeRequestId, tokenCount, duration_ms: Date.now() - streamStart, clientAborted: clientGone });
+          } catch (streamError: unknown) {
+            streamFailed = true;
+            logger.error('Stream error', { requestId: safeRequestId, ...describeError(streamError) });
+          }
+
+          if (persist) {
+            if (full) {
+              const { error: assistantError } = await admin.from('messages').insert({
+                id: assistantId,
+                conversation_id: convId,
+                role: 'assistant',
+                content: full,
+                message_type: messageType,
+                metadata: { model: CHAT_MODEL, client_aborted: clientGone, stop_reason: stopReason, stream_failed: streamFailed },
+              });
+              if (assistantError) {
+                logger.error('assistant_insert_failed', { conversationId: convId, code: assistantError.code });
+              }
+            } else {
+              logger.warn('assistant_empty', { conversationId: convId, streamFailed });
             }
           }
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          logger.info('Stream completed', { requestId: safeRequestId, tokenCount, duration_ms: Date.now() - streamStart });
-        } catch (streamError: unknown) {
-          logger.error('Stream error', { requestId: safeRequestId, ...describeError(streamError) });
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-        } finally {
-          controller.close();
-        }
-      }
+
+          send('data: [DONE]\n\n');
+          try { controller.close(); } catch { /* bereits geschlossen */ }
+        })();
+
+        // Läuft weiter, auch wenn der Client die Verbindung trennt
+        if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(work);
+      },
+      cancel() {
+        clientGone = true;
+      },
     });
 
-    return new Response(readable, {
-      headers: {
-        ...CORS_HEADERS,
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-      }
-    });
+    return sseResponse(readable);
 
   } catch (error: unknown) {
     if (error instanceof RateLimitError) return rateLimitResponse(error, CORS_HEADERS);

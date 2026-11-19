@@ -101,7 +101,7 @@ export function CoachScreen() {
   const { memory, updateMemory } = useMemory(user?.id)
   // Sitzungen zählt der Server (consume_session in der chat-Function). Bei 429
   // zeigt der Screen das Limit-Modal und lädt das Profil neu.
-  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, extractMemoryAndInsight, loadConversation, isConversationCounted } = useChat(user?.id, session, {
+  const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startBriefingConversation, startEntryContextConversation, sendMessage, retryMessage, extractMemoryAndInsight, loadConversation, isConversationCounted } = useChat(user?.id, session, {
     onSessionLimit: () => { setShowLimitModal(true); refreshProfile() },
   })
   const bottomRef = useRef(null)
@@ -246,7 +246,7 @@ export function CoachScreen() {
   // weiterhin eigene Header — wichtig, weil die Edge Function den Supabase-Access-
   // Token im Authorization-Header braucht.
   const runPostConversation = useCallback(async (msgs, convId) => {
-    if (!msgs || msgs.length < 3) return
+    if (!convId || !msgs || msgs.length < 3) return
     if (processedRef.current.has(convId)) return // Idempotenz — Client-Seite
     processedRef.current.add(convId)
     try {
@@ -262,10 +262,8 @@ export function CoachScreen() {
             'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
             'Authorization': `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({
-            messages: msgs.map(m => ({ role: m.role, content: m.content })),
-            conversationId: convId,
-          }),
+          // S-12: nur die Gesprächs-ID — den Verlauf liest der Server selbst aus der DB
+          body: JSON.stringify({ conversationId: convId }),
         }
       )
     } catch {
@@ -444,8 +442,24 @@ export function CoachScreen() {
             <div key={msg.id}>
               {msg.messageType === 'crisis_response' ? (
                 <CrisisResponseCard content={cleanText} />
+              ) : msg.action === 'reload' ? (
+                <button type="button" onClick={() => window.location.reload()} className="block w-full text-left">
+                  <ChatBubble role={msg.role} content={cleanText} isError={msg.isError} />
+                </button>
               ) : (
                 <ChatBubble role={msg.role} content={cleanText} isError={msg.isError} />
+              )}
+              {msg.role === 'user' && msg.status === 'failed' && (
+                <div className="flex justify-end mt-1">
+                  <button
+                    type="button"
+                    onClick={() => retryMessage(msg)}
+                    disabled={isLoading}
+                    className="text-[12px] text-coral underline disabled:opacity-50"
+                  >
+                    Nicht gesendet – nochmal versuchen
+                  </button>
+                </div>
               )}
               {naming && !isLoading && !handledVoiceIds.has(naming.voiceId) && (
                 <VoiceNamingChips
