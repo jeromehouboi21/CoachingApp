@@ -647,10 +647,10 @@ function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisi
   // BLOCK 1: Pre-Session-Briefing — Coach liest die Akte, bevor er spricht
   // Nur vorhanden wenn ein vorheriges Gespräch existiert.
   // U3: Beim Fortsetzen ersetzt der Block FORTSETZUNG das Briefing über das letzte andere Gespräch.
-  if (continueCtx) {
-    prompt += buildContinueBlock(continueCtx);   // U5a: ersetzt FORTSETZUNG
-  } else if (resume) {
-    prompt += buildResumeBlock(resume);
+  // U5a: FORTSETZUNG/WEITERARBEITEN stehen ganz am ENDE des Prompts (letztes Wort, siehe unten),
+  // sonst übernimmt das Modell den Ton der Standard-Eröffnung aus dem Verlauf.
+  if (continueCtx || resume) {
+    // kein Briefing über ein anderes Gespräch
   } else if (briefing && briefing.conversationCount > 1) {
     let briefingText = `\n\n--- PRE-SESSION-BRIEFING ---
 Dies ist Gespräch Nr. ${briefing.conversationCount} mit diesem Menschen.
@@ -917,6 +917,14 @@ Maximal 1 Satz.`;
 
     entryBlock += `\n--- ENDE ENTRY-KONTEXT ---`;
     prompt += entryBlock;
+  }
+
+  // Fortsetzen (U3) bzw. Weiterarbeiten (U5a): als LETZTER Block, damit die Pflichtstruktur
+  // der ersten Nachricht Vorrang vor allem anderen hat.
+  if (continueCtx) {
+    prompt += buildContinueBlock(continueCtx);
+  } else if (resume) {
+    prompt += buildResumeBlock(resume);
   }
 
   return prompt;
@@ -1653,7 +1661,12 @@ Deno.serve(async (req) => {
       ...COACH_REQUEST_DEFAULTS,
       system: systemPrompt,
       // Sonnet 5.5: letzte Nachricht muss vom Nutzer sein (Coach spricht zuerst / Fortsetzen)
-      messages: ensureEndsWithUser(apiMessages, isHowto ? 'howto' : 'chat', logger),
+      messages: ensureEndsWithUser(apiMessages, isHowto ? 'howto' : 'chat', logger,
+        continueContext
+          ? '[Hinweis: Der Mensch hat dieses Gespräch geöffnet, um an seiner früheren Erkenntnis weiterzuarbeiten, und hat noch nichts geschrieben. Beginne genau nach der Pflichtstruktur im Block WEITERARBEITEN – nicht mit einer allgemeinen Begrüßung.]'
+          : resumeContext
+            ? '[Hinweis: Der Mensch hat dieses Gespräch wieder geöffnet und noch nichts geschrieben. Beginne nach dem Block FORTSETZUNG.]'
+            : undefined),
     });
 
     const encoder = new TextEncoder();

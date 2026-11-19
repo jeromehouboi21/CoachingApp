@@ -59,11 +59,13 @@ type ApiMessage = { role: 'user' | 'assistant'; content: string };
  * synthetischer, NICHT gespeicherter Nutzer-Turn angehängt. Er wird nie in `messages` geschrieben
  * und nie im Frontend angezeigt.
  */
-export function ensureEndsWithUser<T extends ApiMessage>(msgs: T[], label: string, logger?: Pick<Logger, 'info'>): ApiMessage[] {
+export function ensureEndsWithUser<T extends ApiMessage>(
+  msgs: T[], label: string, logger?: Pick<Logger, 'info'>, hint?: string,
+): ApiMessage[] {
   if (msgs.length > 0 && msgs[msgs.length - 1].role === 'user') return msgs;
   logger?.info('synthetic_user_turn_added', { label, length: msgs.length });
   return [
     ...msgs,
-    { role: 'user', content: '[Hinweis: Der Nutzer hat das Gespräch geöffnet und noch nichts geschrieben. Beginne gemäß deiner Anweisungen.]' },
+    { role: 'user', content: hint ?? '[Hinweis: Der Nutzer hat das Gespräch geöffnet und noch nichts geschrieben. Beginne gemäß deiner Anweisungen.]' },
   ];
 }
