@@ -60,6 +60,7 @@ const ALL_TABLE_NAMES = [...OWNED_TABLES.map(t => t.name), MESSAGE_TABLE.name, .
 const EDGE_FUNCTIONS = [
   'chat', 'post-conversation', 'pre-session-briefing', 'validate-invite-code',
   'delete-account', 'admin-users', 'admin-feedback', 'admin-invite-user', 'supervision', 'backfill-embeddings',
+  'export-my-data',
 ];
 
 // ── Ergebnis-Sammlung ────────────────────────────────────────────────────────
@@ -648,6 +649,60 @@ async function testsS22(b) {
   }
 }
 
+// ── S-16 (Paket C, C-4): Datenexport enthält nur B's Daten ──────────────────
+// Ein Aufruf pro Lauf (Rate-Limit 3/Tag). Ausgegeben werden nur Zähler und Schlüsselnamen.
+const OWNER_KEYS = ['user_id', 'source_user_id'];
+const CONV_KEYS = ['conversation_id', 'source_conversation_id', 'last_enriched_by'];
+const FORBIDDEN_KEYS = ['embedding', 'code_hash', 'invited_by'];
+
+async function testsS16(a, b) {
+  const r = await callFunction('export-my-data', { token: b.token, body: {} });
+  if (r.status === 429) {
+    record(27, 'export-my-data als B', '200, nur B-Daten', SKIP, 'Tageslimit (3/Tag) erreicht – morgen erneut');
+    return r;
+  }
+  if (r.status !== 200 || !r.json) {
+    record(27, 'export-my-data als B', '200, nur B-Daten', FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+    return r;
+  }
+  const { data: convs } = await b.client.from('conversations').select('id').eq('user_id', b.userId);
+  const bConvs = new Set((convs ?? []).map((c) => c.id));
+  const problems = new Set();
+  let rows = 0;
+  const walk = (node, path) => {
+    if (Array.isArray(node)) { node.forEach((n) => walk(n, path)); return; }
+    if (!node || typeof node !== 'object') return;
+    for (const [k, v] of Object.entries(node)) {
+      if (FORBIDDEN_KEYS.includes(k)) problems.add(`Schlüssel ${k}`);
+      if (OWNER_KEYS.includes(k) && v !== null && v !== b.userId) problems.add(`fremde ${k} (${path})`);
+      if (CONV_KEYS.includes(k) && v !== null && !bConvs.has(v)) problems.add(`fremde ${k} (${path})`);
+      if (v && typeof v === 'object') walk(v, path ? `${path}.${k}` : k);
+    }
+  };
+  const groups = ['konto', 'gespraeche', 'spiegel_akte', 'coach_notizen', 'sicherheit_support', 'lernbasis', 'hinweise'];
+  for (const g of groups) {
+    if (!r.json[g]) problems.add(`Gruppe ${g} fehlt`);
+    for (const [table, list] of Object.entries(r.json[g] ?? {})) {
+      if (Array.isArray(list)) rows += list.length;
+      walk(list, `${g}.${table}`);
+    }
+  }
+  if (!r.json._erklaerung) problems.add('_erklaerung fehlt');
+  if ((r.json.konto?.profiles ?? []).some((p) => p.id !== b.userId)) problems.add('fremdes Profil');
+  if (r.json.gespraeche?.conversation_context || r.json.hinweise?.conversation_context) problems.add('conversation_context mit Inhalt');
+  for (const h of r.json.hinweise?.ergaenzende_erfahrungen ?? []) {
+    const keys = Object.keys(h).sort().join(',');
+    if (keys !== 'conversation_id,vorhanden') problems.add('Hinweis mit Inhalt');
+  }
+  // B's eigene app_logs nennen A's Gesprächs-ID legitim (abgelehnte Zugriffe früherer Testläufe)
+  const text = JSON.stringify(r.json, (k, v) => (k === 'app_logs' ? undefined : v));
+  if (text.includes(a.userId) || text.includes(a.conv.id)) problems.add('A-ID im Export');
+
+  record(27, 'export-my-data als B', '200, nur B-Daten, ohne Vektoren/Hashes',
+    problems.size === 0 ? PASS : FAIL, problems.size ? [...problems].slice(0, 3).join('; ') : `ok (${rows} Zeilen)`);
+  return r;
+}
+
 async function testsRateLimits(a, b) {
   // 16 + 17: Rate-Limits (Migration 029). Bewusst am Ende: B ist danach für chat ca. 1 Minute
   // und für validate-invite-code bis zu 1 Stunde gesperrt. Keine KI-Kosten (ungültiger Code
@@ -699,8 +754,13 @@ async function testsHeaders() {
 
 // ── S-09 (Paket C): Functions laufen in Frankfurt ───────────────────────────
 // Ungültige Bodys reichen: Den Header x-sb-edge-region setzt die Edge-Runtime bei jeder Antwort.
-// export-my-data kommt mit Welle C-4 dazu.
-async function testsRegion(b) {
+// export-my-data: Header aus dem Aufruf in testsS16 (kein zweiter Export, Rate-Limit 3/Tag).
+async function testsRegion(b, exportResult) {
+  if (exportResult) {
+    const ok = exportResult.region === 'eu-central-1';
+    record(32, 'Region export-my-data', 'x-sb-edge-region: eu-central-1', ok ? PASS : FAIL,
+      typeof exportResult.status === 'number' ? `HTTP ${exportResult.status} · ${exportResult.region ?? 'kein Header'}` : String(exportResult.status));
+  }
   const calls = [
     ['chat', { token: b.token, body: {} }],
     ['pre-session-briefing', { token: b.token, body: {} }],
@@ -746,8 +806,9 @@ function printResults() {
   await testsS11(b);
   await testsHeaders();
   await testsS22(b);
+  const exportResult = await testsS16(a, b);
   await testsRateLimits(a, b);
-  await testsRegion(b);   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
+  await testsRegion(b, exportResult);   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
 
   // scope 'local': nur die Sitzung dieses Skripts beenden – nicht die Browser-Sitzungen
   // der Testkonten auf anderen Geräten (Standard von signOut() ist 'global').

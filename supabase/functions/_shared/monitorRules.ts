@@ -30,6 +30,7 @@ export const RULES: Rule[] = [
   { id: 'supervision_rejected',    codes: ['supervision_rejected'],    windowMin: 10080, threshold: 2,  label: 'Supervision-Empfehlung verworfen' },
   // ab C-4 / C-5 (Codes entstehen erst mit diesen Wellen):
   { id: 'export_burst',            codes: ['export_created'],          windowMin: 60,    threshold: 10, label: 'Viele Datenexporte' },
+  { id: 'export_incomplete',       codes: ['export_incomplete'],       windowMin: 60,    threshold: 1,  label: 'Datenexport unvollständig' },
   { id: 'mfa_recovery_used',       codes: ['mfa_recovery_used'],       windowMin: 60,    threshold: 1,  label: 'Wiederherstellungscode verwendet' },
   { id: 'mfa_recovery_failed',     codes: ['mfa_recovery_failed'],     windowMin: 60,    threshold: 5,  label: 'Falsche Wiederherstellungscodes' },
   // nur in der Wochenübersicht:
@@ -39,6 +40,7 @@ export const RULES: Rule[] = [
   { id: 'learning_rejected',       codes: ['learning_rejected'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Abgelehnte Lernbasis-Einträge' },
   { id: 'supervision_protocol_rejected', codes: ['supervision_protocol_rejected'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Supervision-Protokoll verworfen' },
   { id: 'export_created',          codes: ['export_created'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Datenexporte' },
+  { id: 'export_mail_failed',      codes: ['export_mail_failed'],      windowMin: 10080, threshold: 0, infoOnly: true, label: 'Bestätigungsmail zum Export nicht versandt' },
   // Modellwechsel T0 (Qualität, keine Sicherheit):
   { id: 'coach_response_truncated', codes: ['coach_response_truncated'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Coach-Antwort abgeschnitten (max_tokens)' },
   { id: 'coach_response_unexpected_stop', codes: ['coach_response_unexpected_stop'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Coach-Antwort mit unerwartetem Ende (z. B. refusal)' },

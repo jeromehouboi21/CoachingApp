@@ -166,6 +166,7 @@ CoachingApp/
 │   │   ├── security-monitor/index.ts    ← Stündliches Monitoring, Alarm-Mails (Cron, nur intern, S-22)
 │   │   ├── admin-invite-user/index.ts   ← Admin: Nutzer per E-Mail einladen (Beta-Zugang)
 │   │   ├── delete-account/index.ts      ← Account-Löschung (hard delete)
+│   │   ├── export-my-data/index.ts      ← Datenexport als Selbstauskunft (S-16)
 │   │   ├── supervision/index.ts         ← Wöchentliche KI-Supervision (Cron)
 │   │   └── backfill-embeddings/index.ts ← Wartung: fehlende Vektoren nachtragen (nur intern)
 │   ├── migrations/
@@ -416,7 +417,7 @@ Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks
 - **Statistik (seit U1):** Gespräche · Erkenntnisse · Reflexionstage. Gespräche und Reflexionstage kommen aus `get_conversation_history()` (nur Gespräche mit eigener Nachricht): Gespräche = Anzahl gesamt, Reflexionstage = Anzahl verschiedener lokaler Kalendertage mit begonnenem Gespräch. Ladefehler → „–“ und `conversation_stats_failed`.
 
 - **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
-- Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
+- Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Plan (nicht Tester), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Meine Daten herunterladen (`export-my-data`, S-16), Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
 
 ---
 
@@ -915,6 +916,27 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 
 ---
 
+### `export-my-data` — Datenexport als Selbstauskunft (S-16, Paket C)
+
+- `POST`, `requireUser`; Identität nur aus dem JWT. Liest über `admin`, **jede** Abfrage gefiltert auf `uid` bzw. die eigenen Gesprächs-IDs, seitenweise à 1000 Zeilen
+- Rate-Limit `export` 3/Tag, **fail-closed** (`_shared/rateLimit.ts`); 429 → „Du hast heute schon drei Exporte erstellt. Morgen geht es wieder.“
+- Inhalt (Entscheidung C-4 = alles mit Personenbezug), Tabellenliste als Konstante `EXPORT_TABLES`:
+  - `konto`: E-Mail, Anlage, letzte Anmeldung, zweite Faktoren (nur Name, Typ, Status, Datum), `profiles`
+  - `gespraeche`: `conversations`, `messages`
+  - `spiegel_akte`: `insights`, `coach_file_entries`, `coachee_profile`, `user_memory`, `pattern_references`, `inner_voices`
+  - `coach_notizen`: `session_notes`, `resonance_map`, `coach_reflections`
+  - `sicherheit_support`: `crisis_events` (inkl. `notes`), `user_feedback`, `feedback_surveys`, `app_logs`, `rate_limit_counters`
+  - `lernbasis`: eigene `experience_patterns` (`source_user_id`)
+  - `hinweise`: `conversation_context` nur als `{ conversation_id, vorhanden: true }` (enthält Erfahrungen anderer Menschen)
+- Nie in der Datei: Spalten `embedding`, `code_hash`, `invited_by` (ID einer anderen Person). Ausgeschlossen mit Begründung (`EXCLUDED_TABLES`): `supervision_logs`, `security_alerts`, `invite_codes`
+- Oben `_erklaerung` (Gruppen in je einem Satz, Verantwortlicher laut Impressum, Kontakt). Antwort `Content-Disposition: attachment; filename="friedensstifter-export-JJJJ-MM-TT.json"`
+- Scheitert eine Tabelle → `500 export_incomplete` (Log mit Tabellenname und Code, Alarm in `monitorRules.ts`); kein unvollständiger Export
+- Log `export_created { tables, rows }`; Bestätigungsmail ohne Inhalte an die eigene Adresse (`export_mail_failed` nur Info)
+- **Neue Tabelle mit Personenbezug** → in `EXPORT_TABLES` oder mit Begründung in `EXCLUDED_TABLES`
+- Frontend: Profil → „Meine Daten herunterladen“ → `DataExportSheet` (Blob-Download)
+
+---
+
 ### `supervision` — Wöchentliche KI-Supervision
 
 **Läuft per Cron** (`weekly-supervision`, Mo 06:00 UTC, über `pg_net`). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
@@ -1239,7 +1261,7 @@ response_shown     BOOLEAN DEFAULT true
 user_acknowledged  BOOLEAN
 reviewed_by_jerome BOOLEAN DEFAULT false
 reviewed_at        TIMESTAMPTZ
-notes              TEXT       -- nie dem Nutzer sichtbar
+notes              TEXT       -- im Alltag nicht sichtbar, Teil der Selbstauskunft (Art. 15, S-16)
 ```
 RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer sieht seine Einträge nicht. Nur ein echter `service_role`-Client (ohne Nutzer-Token, `BYPASSRLS`) kann schreiben. Keine Echtzeit-Benachrichtigung — wöchentliche Sichtung durch Jerome, analog zum Supervision-Cron.
 
@@ -1568,7 +1590,7 @@ upgrade-insecure-requests
 
 ### Admin-Berechtigung
 
-Jede Admin-Function prüft über `requireAdmin()` `profiles.is_admin` **und** den zweiten Faktor (`aal2`), **bevor** irgendetwas gelesen/geschrieben wird — ein versteckter Frontend-Screen (`AdminRoute`) ist ausdrücklich kein Ersatz dafür, da jede Anfrage auch direkt gegen die API gerichtet werden könnte. Nicht-Admins erhalten `403 forbidden`, Admins ohne zweiten Faktor `403 mfa_required`. Neue Admin-Functions (z. B. Datenexport S-16, protokollierte Einsicht S-20) laufen ebenfalls über `requireAdmin`.
+Jede Admin-Function prüft über `requireAdmin()` `profiles.is_admin` **und** den zweiten Faktor (`aal2`), **bevor** irgendetwas gelesen/geschrieben wird — ein versteckter Frontend-Screen (`AdminRoute`) ist ausdrücklich kein Ersatz dafür, da jede Anfrage auch direkt gegen die API gerichtet werden könnte. Nicht-Admins erhalten `403 forbidden`, Admins ohne zweiten Faktor `403 mfa_required`. Neue Admin-Functions (z. B. protokollierte Einsicht S-20) laufen ebenfalls über `requireAdmin`. Der Datenexport (S-16) ist dagegen eine **Selbstauskunft**: `export-my-data` mit `requireUser`, nur die eigenen Daten (siehe „Datenexport“).
 
 `is_admin` wird **nie** über die App gesetzt (Henne-Ei-Problem) — einmaliges manuelles Update im Supabase-SQL-Editor:
 ```sql
@@ -1621,7 +1643,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
-3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `supervision`, `security-monitor`, `backfill-embeddings` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
+3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `export-my-data`, `supervision`, `security-monitor`, `backfill-embeddings` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
 5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller` und Eintrag in `supabase/config.toml`; Log-Regel beachten
 6. Neue externe Dienste/Origins: in die CSP (`vercel.json`) aufnehmen

@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { Badge } from '../../components/ui/Badge'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
+import { DataExportSheet } from '../../components/profile/DataExportSheet'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
 
@@ -27,6 +28,7 @@ export function ProfileScreen() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editName, setEditName] = useState('')
   const [showBetaModal, setShowBetaModal] = useState(false)
+  const [showExportSheet, setShowExportSheet] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleteInput, setDeleteInput] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -160,6 +162,7 @@ export function ProfileScreen() {
           ...(profile?.plan === 'tester' || profile?.plan === 'premium' ? [{ icon: ClipboardList, label: 'Beta-Fragebogen ausfüllen', action: () => navigate('/feedback') }] : []),
           { icon: Handshake, label: 'Coaching-Vereinbarung', action: () => navigate('/vereinbarung') },
           { icon: Shield, label: 'Datenschutzerklärung', action: () => navigate('/datenschutz') },
+          { icon: Download, label: 'Meine Daten herunterladen', action: () => setShowExportSheet(true) },
           { icon: FileText, label: 'Impressum', action: () => navigate('/impressum') },
         ].map(({ icon: Icon, label, action }) => (
           <button
@@ -221,6 +224,9 @@ export function ProfileScreen() {
           </div>
         </div>
       )}
+
+      {/* Datenexport (S-16) */}
+      {showExportSheet && <DataExportSheet onClose={() => setShowExportSheet(false)} />}
 
       {/* Konto löschen Modal */}
       {showDeleteModal && (

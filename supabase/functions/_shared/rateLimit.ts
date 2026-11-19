@@ -25,6 +25,8 @@ export const RATE_LIMITS = {
   // Schutz gegen Durchprobieren von Codes
   inviteCode:    [{ bucket: 'invite_hour', limit: 5, window_seconds: HOUR },
                   { bucket: 'invite_day', limit: 10, window_seconds: DAY }],
+  // Datenexport (S-16), fail-closed
+  export:        [{ bucket: 'export_day', limit: 3, window_seconds: DAY }],
 } satisfies Record<string, RateRule[]>;
 
 export class RateLimitError extends HttpError {
