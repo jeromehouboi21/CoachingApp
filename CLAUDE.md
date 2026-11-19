@@ -254,8 +254,12 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | `post-conversation` | Nach Gespräch (fire-and-forget) | RAG-Eintrag, Selbstreflexion, open_thread, pattern_references |
 | `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
+| `backfill-embeddings` | Manuell (SQL-Editor, `net.http_post` + Vault-Secret) | Wartung: fehlende Vektoren in experience_patterns nachtragen (nur intern) |
+| `admin-users` / `admin-feedback` / `admin-invite-user` | Admin-Bereich | nur mit `is_admin` **und** zweitem Faktor (`aal2`, S-06) |
 
 ### `chat` — System-Prompt Aufbau
+
+**Nachrichten schreibt nur der Server (S-12, Paket B Welle 2a):** Gesprächsmodus `{ conversationId, message: { clientMessageId, content, inputMode } }` bzw. Eröffnung `{ conversationId, start: 'first'|'standard'|'wellness'|'briefing'|'entry' }`. `chat` lädt den Verlauf aus der DB, speichert die Nutzer-Nachricht idempotent (nach `consume_session`) und die Antwort per `EdgeRuntime.waitUntil` auch nach Client-Abbruch. `first`/`standard` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`!), ohne Modellaufruf und ohne Zählung. Altes Format (`messages[]`) → noch erlaubt und als `legacy_format` geloggt, ab Welle 2b `409 client_outdated`.
 
 **Kontext lädt `chat` selbst (S-12):** Akte, Profil, Resonanzkarte, Briefing, Legacy-Gedächtnis, RAG und Supervision kommen aus der DB (`loadCoachContext`). Entsprechende Body-Felder werden ignoriert; vom Client kommen nur `messages`, `conversationId`, `wellnessCheck` und `entryContext` (typ- und längengeprüft). RAG läuft einmal pro Gespräch beim ersten Nutzer-Input (`_shared/rag.ts`) und wird in `conversation_context` gespeichert (kein Client-Zugriff).
 
@@ -315,12 +319,13 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennun
 ### useChat — 3 Start-Funktionen
 
 ```
-startNewConversation(isFirstEver)   → Pool-Nachricht oder FIRST_OPENING_MESSAGE
-startWellnessConversation(wc)       → Coach antwortet sofort auf Wellness-Score
-startBriefingConversation(briefing) → Coach antwortet sofort auf offenen Faden
+startNewConversation(isFirstEver)          → Pool-Text sofort anzeigen, Server speichert (start first/standard)
+startWellnessConversation(wc)              → start 'wellness' — Coach antwortet sofort auf Wellness-Score
+startBriefingConversation()                → start 'briefing' — Coach antwortet auf offenen Faden (lädt der Server)
+startEntryContextConversation(entryContext) → start 'entry'
 ```
 
-Beim `sendMessage` werden mitgeschickt: `messages`, `conversationId`, `requestId` – sonst nichts (Kontext lädt der Server).
+Beim `sendMessage` werden mitgeschickt: `conversationId`, `message: { clientMessageId, content, inputMode }`, `requestId` – sonst nichts. Gescheitertes Senden → Nachricht `status: 'failed'`, „Nicht gesendet – nochmal versuchen“ (`retryMessage`, gleiche `clientMessageId`). `post-conversation` bekommt nur `{ conversationId }`, die Extraktion `{ mode: 'extract', conversationId }`.
 
 ### CoachScreen — Eröffnungslogik (3 Varianten)
 
@@ -418,9 +423,11 @@ Counter: `profiles.sessions_used_this_month` · gezählt **nur serverseitig** ü
 - Coach-Gedächtnis ist für den User unsichtbar
 - Fehlermeldung im Chat: "Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da."
 - Alle Edge Functions verwenden `_shared/logger.ts` für strukturiertes Logging
+- **Nur der Server schreibt `messages`** — kein `supabase.from('messages').insert` im Frontend (S-12)
+- Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 
 ### Sicherheitsmuster (Security-Paket A, Pflicht)
-- **Jede Edge Function** ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` (Cron) aus `supabase/functions/_shared/auth.ts` auf; Admin-Functions zusätzlich `requireAdmin(ctx)`.
+- **Jede Edge Function** ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` (Cron) aus `supabase/functions/_shared/auth.ts` auf; Admin-Functions zusätzlich `requireAdmin(ctx)` — das verlangt seit S-06 auch den zweiten Faktor (`aal2`), Frontend dazu: `AdminRoute` + `AdminMfaScreen` + `useAdminMfa`.
 - Identität **nur** aus dem JWT (`ctx.user.id`), nie aus Body-Feldern wie `userId`. Jede `conversationId` mit `assertConversationOwner()` prüfen, bevor gelesen oder geschrieben wird. IDs aus Modellausgaben nur übernehmen, wenn sie dem Nutzer gehören; Writes über `admin` zusätzlich mit `.eq('user_id', userId)`.
 - `admin` = echter service_role-Client ohne Nutzer-Token; `userClient` = Rolle `authenticated` (für RPCs mit `auth.uid()`, z. B. `consume_session`).
 - Fehlerantworten nur als `{ error: <code> }` (`errorResponse`), keine `error.message`-Texte an den Client.
@@ -440,6 +447,7 @@ Beide Logger (`src/lib/logger.ts`, `supabase/functions/_shared/logger.ts`) schic
 - Migrations in Supabase ausführen (`supabase db push`)
 - Edge Functions deployen mit `supabase functions deploy <namen> --no-verify-jwt`
 - **Angriffstest:** `npm run security:test` → alle PASS (Testkonten in `.env.security.local`, Vorlage `.env.security.example`; `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein)
+- Header prüfen: `curl -sI https://app.friedensstifter.coach` (HSTS, CSP, Permissions-Policy …)
 
 ---
 
@@ -481,5 +489,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert in Supabase Vault 
 | `027_signup_consent_and_limit.sql` | session_limit Default 20 · handle_new_user übernimmt Einwilligung/Vereinbarung/Onboarding aus den signUp-Metadaten (Fix: Passwort musste zweimal gesetzt werden) |
 | `028_conversation_context.sql` | conversation_context (RAG-Ergebnis pro Gespräch, nur service_role) · S-12 |
 | `029_rate_limits.sql` | rate_limit_counters · RPC consume_rate_limits (nur service_role) · Cron purge-rate-limits |
+| `030_s12_server_messages.sql` | messages.client_message_id + eindeutiger Index (conversation_id, client_message_id) · metadata-Default · S-12 Welle 2a |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.
