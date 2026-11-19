@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: November 2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a (Server schreibt Nachrichten) und Welle 3 (Lernbasis mit Opt-in und Prüfschritt)
 
 ---
 
@@ -42,7 +42,9 @@
 - Spracheingabe landet im Textarea, wird nie automatisch abgesendet
 - Coach-Gedächtnis ist für den User unsichtbar
 - Alle Edge Functions loggen strukturiert via `_shared/logger.ts`
-- Admin-Berechtigungen werden **serverseitig** geprüft (`is_admin`-Check in der Edge Function selbst) — ein versteckter Frontend-Screen ist kein Zugriffsschutz (siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster))
+- Admin-Berechtigungen werden **serverseitig** geprüft (`is_admin` **und** zweiter Faktor `aal2` in der Edge Function selbst) — ein versteckter Frontend-Screen ist kein Zugriffsschutz (siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster))
+- Gesprächsnachrichten schreibt **nur der Server** (`chat`); der Client schickt pro Nachricht Text + `clientMessageId`, den Verlauf liest der Server aus der DB (S-12)
+- Browser-Schutz über Security-Header und Content-Security-Policy in `vercel.json` (S-08); keine Drittanbieter-Ressourcen außer Supabase
 
 ---
 
@@ -52,19 +54,22 @@
 CoachingApp/
 ├── src/
 │   ├── App.jsx                          ← Router-Root, ProtectedRoute/AdminRoute-Wrapper
-│   ├── main.jsx                         ← ReactDOM.render, BrowserRouter
+│   ├── main.jsx                         ← ReactDOM.render, BrowserRouter, lokale Schriften (@fontsource)
 │   ├── router.jsx                       ← Leerer Stub (Routing lebt komplett in App.jsx)
 │   │
 │   ├── hooks/                           ← Gesamter App-State (kein Zustand/Redux)
 │   │   ├── useAuth.js                   ← User, Session, Profile, Consent, Coaching-Vereinbarung
-│   │   ├── useChat.js                   ← Gesprächs-State, Streaming, 5 Start-/Resume-Varianten
+│   │   ├── useChat.js                   ← Gesprächs-State, Streaming, Start-/Resume-Varianten, Senden mit clientMessageId
+│   │   ├── useAdminMfa.js               ← Zweiter Faktor (TOTP) für den Admin-Bereich + AdminMfaContext
 │   │   ├── useMemory.js                 ← Legacy Coach-Gedächtnis (user_memory)
 │   │   ├── useStreak.js                 ← Tagesstreak-Berechnung
 │   │   └── useVoiceInput.js             ← Web Speech API (de-DE)
 │   │
 │   ├── lib/
 │   │   ├── supabase.js                  ← Supabase-Client (anon key)
-│   │   ├── prompts.js                   ← UI-Texte: Eröffnungen, Wellness-Scores, Impulsfragen
+│   │   ├── prompts.js                   ← UI-Texte: Eröffnungen (Kopie in chat/index.ts!), Wellness-Scores, Impulsfragen
+│   │   ├── rateLimit.js                 ← 429 rate_limited erkennen + Hinweistext
+│   │   ├── consent.js                   ← Versionen der Zustimmungstexte (inkl. LEARNING_CONSENT_VERSION)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
 │   │
 │   ├── styles/
@@ -88,6 +93,8 @@ CoachingApp/
 │   │   │   ├── TypingIndicator.jsx
 │   │   │   ├── ConversationEndModal.jsx
 │   │   │   └── CrisisResponseCard.jsx   ← Eigene Card statt Bubble bei Krisenfall (v-Krise)
+│   │   ├── profile/
+│   │   │   └── LearningConsentCard.jsx  ← Opt-in „Zur Lernbasis beitragen“ (S-13)
 │   │   └── legal/
 │   │       └── CoachingAgreementContent.jsx ← Vertragstext, single source of truth
 │   │
@@ -116,7 +123,8 @@ CoachingApp/
 │       ├── profile/
 │       │   └── ProfileScreen.jsx
 │       ├── admin/
-│       │   └── AdminUsersScreen.jsx     ← Admin-only: Nutzerverwaltung + Feedback + Einladen
+│       │   ├── AdminUsersScreen.jsx     ← Admin-only: Nutzerverwaltung + Feedback + Einladen
+│       │   └── AdminMfaScreen.jsx       ← Zweiten Faktor einrichten / Code eingeben (S-06)
 │       ├── wellness/
 │       │   └── WellnessCheckScreen.jsx  ← 1–10 Skala + Context-Chips
 │       ├── howto/
@@ -135,7 +143,11 @@ CoachingApp/
 ├── supabase/
 │   ├── functions/
 │   │   ├── _shared/
-│   │   │   └── logger.ts                ← Zentraler Logger für alle Edge Functions
+│   │   │   ├── auth.ts                  ← requireUser/requireAdmin(aal2)/requireInternalCaller, Eigentum, Limits
+│   │   │   ├── logger.ts                ← Zentraler Logger (sanitizeLogData, describeError)
+│   │   │   ├── rag.ts                   ← Embedding + match_experiences (nur serverseitig)
+│   │   │   ├── learning.ts              ← Prüfschritt (Vorfilter + Haiku, fail-closed) für Lernbasis und Supervision
+│   │   │   └── rateLimit.ts             ← Rate-Limit-Regeln + enforceRateLimit
 │   │   ├── chat/
 │   │   │   ├── index.ts                 ← Claude API Proxy + System-Prompt-Builder + Limit-/Krisen-Check
 │   │   │   └── crisisDetection.ts       ← Leichte Klassifikation auf akute Suizidalität
@@ -146,33 +158,51 @@ CoachingApp/
 │   │   ├── admin-feedback/index.ts      ← Admin: Feedback-Liste inkl. Name/E-Mail
 │   │   ├── admin-invite-user/index.ts   ← Admin: Nutzer per E-Mail einladen (Beta-Zugang)
 │   │   ├── delete-account/index.ts      ← Account-Löschung (hard delete)
-│   │   └── supervision/index.ts         ← Wöchentliche KI-Supervision (Cron)
-│   └── migrations/
-│       ├── 001_initial.sql              ← profiles, conversations, messages, RLS
-│       ├── 002_v1_1.sql                 ← user_memory, insights
-│       ├── 003_v1_4.sql                 ← experience_patterns (pgvector), coach_reflections, user_feedback
-│       ├── 004_v1_6.sql                 ← messages.input_mode, conversations.summary
-│       ├── 005_v1_8.sql                 ← app_logs
-│       ├── 006_v2_0.sql                 ← pattern_references
-│       ├── 007_v2_1.sql                 ← open_thread, last_return_greeting_at
-│       ├── 008_v2_2.sql                 ← coach_file_entries, coachee_profile, session_notes
-│       ├── 009_v2_4.sql                 ← resonance_map
-│       ├── 010_v2_5.sql                 ← invite_codes, profiles.plan = 'tester'
-│       ├── 011_v2_7.sql                 ← DSGVO-Consent-Felder
-│       ├── 012_v2_8.sql                 ← coaching_agreement_accepted_at
-│       ├── 013_v2_9.sql                 ← conversations.post_processed_at/_message_count (Idempotenz)
-│       ├── 014_v2_9b_grants.sql         ← GRANT-Statements für service_role versioniert
-│       ├── 015_v3_0_inner_voices.sql    ← inner_voices, coach_file_entries/pattern_references.voice_id
-│       ├── 016_admin_users.sql          ← profiles.is_admin/is_beta_tester/session_limit
-│       ├── 017_feedback_beta_type.sql   ← user_feedback.feedback_type + 'beta'
-│       ├── 018_invite_history.sql       ← profiles.invited_at/invited_by
-│       ├── 019_v3_2_linked_value.sql    ← coach_file_entries.linked_value
-│       ├── 020_v3_2_conversation_history.sql ← updated_at-Trigger, get_conversation_history() RPC
-│       └── 021_crisis_events.sql        ← crisis_events, messages.message_type
+│   │   ├── supervision/index.ts         ← Wöchentliche KI-Supervision (Cron)
+│   │   └── backfill-embeddings/index.ts ← Wartung: fehlende Vektoren nachtragen (nur intern)
+│   ├── migrations/
+│   │   ├── 001_initial.sql              ← profiles, conversations, messages, RLS
+│   │   ├── 002_v1_1.sql                 ← user_memory, insights
+│   │   ├── 003_v1_4.sql                 ← experience_patterns (pgvector), coach_reflections, user_feedback
+│   │   ├── 004_v1_6.sql                 ← messages.input_mode, conversations.summary
+│   │   ├── 005_v1_8.sql                 ← app_logs
+│   │   ├── 006_v2_0.sql                 ← pattern_references
+│   │   ├── 007_v2_1.sql                 ← open_thread, last_return_greeting_at
+│   │   ├── 008_v2_2.sql                 ← coach_file_entries, coachee_profile, session_notes
+│   │   ├── 009_v2_4.sql                 ← resonance_map
+│   │   ├── 010_v2_5.sql                 ← invite_codes, profiles.plan = 'tester'
+│   │   ├── 011_v2_7.sql                 ← DSGVO-Consent-Felder
+│   │   ├── 012_v2_8.sql                 ← coaching_agreement_accepted_at
+│   │   ├── 013_v2_9.sql                 ← conversations.post_processed_at/_message_count (Idempotenz)
+│   │   ├── 014_v2_9b_grants.sql         ← GRANT-Statements für service_role versioniert
+│   │   ├── 015_v3_0_inner_voices.sql    ← inner_voices, coach_file_entries/pattern_references.voice_id
+│   │   ├── 016_admin_users.sql          ← profiles.is_admin/is_beta_tester/session_limit
+│   │   ├── 017_feedback_beta_type.sql   ← user_feedback.feedback_type + 'beta'
+│   │   ├── 018_invite_history.sql       ← profiles.invited_at/invited_by
+│   │   ├── 019_v3_2_linked_value.sql    ← coach_file_entries.linked_value
+│   │   ├── 020_v3_2_conversation_history.sql ← updated_at-Trigger, get_conversation_history() RPC
+│   │   ├── 021_crisis_events.sql        ← crisis_events, messages.message_type
+│   │   ├── 022_feedback_survey.sql      ← feedback_surveys, View feedback_survey_scores
+│   │   ├── 023_session_counting.sql     ← consume_session, Schutz-Trigger conversations, Crons
+│   │   ├── 024_protect_profile_privileges.sql ← Schutz-Trigger profiles
+│   │   ├── 025_rls_hardening.sql        ← Least-Privilege-GRANTs/Policies
+│   │   ├── 026_app_logs_hardening.sql   ← app_logs nur Insert, 30 Tage
+│   │   ├── 027_signup_consent_and_limit.sql ← session_limit 20, handle_new_user mit Metadaten
+│   │   ├── 028_conversation_context.sql ← RAG-Ergebnis pro Gespräch (nur service_role)
+│   │   ├── 029_rate_limits.sql          ← rate_limit_counters, consume_rate_limits
+│   │   ├── 030_s12_server_messages.sql  ← messages.client_message_id (Idempotenz)
+│   │   ├── 031_s12_revoke_client_message_insert.sql ← Client darf messages nicht mehr schreiben (Welle 2b)
+│   │   └── 032_s13_learning_base.sql    ← Opt-in, source_user_id, review_status, set_learning_opt_in
+│   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
+│   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
+│   └── config.toml                      ← verify_jwt = false je Function
 │
+├── scripts/security/attack-test.mjs     ← Angriffstest (npm run security:test)
+├── docs/security/                       ← Discovery, Handoffs, Lösungsdesign, Abschlussberichte
+├── vercel.json                          ← SPA-Rewrite, Cache-, Security-Header, CSP
 ├── tailwind.config.js                   ← Custom Colors via CSS-Variablen
-├── vite.config.js                       ← PWA-Manifest, Workbox
-├── index.html                           ← viewport-fit=cover, Fonts
+├── vite.config.js                       ← PWA-Manifest, Workbox (keine Fremd-Origins)
+├── index.html                           ← viewport-fit=cover (Schriften kommen aus dem Build)
 ├── CLAUDE.md                            ← Technische Dokumentation für Claude Code
 └── ARCHITECTURE.md                      ← dieses Dokument
 ```
@@ -226,14 +256,18 @@ function ProtectedRoute({ children }) {
 
 function AdminRoute({ children }) {
   const { user, profile, loading } = useAuth()
-  if (loading) return <LoadingScreen />
+  const mfa = useAdminMfa()
+  if (loading || mfa.loading) return <LoadingScreen />
   if (!user) return <Navigate to="/landing" replace />
   if (!profile?.is_admin) return <Navigate to="/home" replace />
-  return children
+  if (mfa.level !== 'aal2' || mfa.enrolledJustNow || mfa.addingDevice) return <AdminMfaScreen mfa={mfa} />
+  return <AdminMfaContext.Provider value={mfa}>{children}</AdminMfaContext.Provider>
 }
 ```
 
-`AdminRoute` ist **nur UX** — die eigentliche Absicherung passiert serverseitig in `admin-users`/`admin-feedback`/`admin-invite-user` (siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster)).
+`AdminRoute` ist **nur UX** — die eigentliche Absicherung passiert serverseitig in `admin-users`/`admin-feedback`/`admin-invite-user` (`requireAdmin`: `is_admin` + JWT-Claim `aal = 'aal2'`, siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster)).
+
+**MFA-Ablauf (S-06):** ohne Faktor → `AdminMfaScreen` „Einrichten“ (QR-Code als `data:`-Bild, Schlüssel in Vierergruppen, 6-stelliger Code) → danach Erfolgskarte mit „Zweites Gerät hinzufügen“. Mit Faktor, aber Sitzung `aal1` → „Code eingeben“ (bei mehreren Geräten Auswahl). Nicht abgeschlossene Einrichtungen werden vor einem neuen `enroll` per `unenroll` entfernt. Antwortet eine Admin-Function mit `403 mfa_required`, ruft `AdminUsersScreen` `mfa.refresh()` auf und `AdminRoute` zeigt die Code-Abfrage. Log-Regel: nie QR-Code, Schlüssel oder Code loggen (nur `mfa_enrolled`, `mfa_verify_failed`). **Notfallweg:** Faktoren des eigenen Kontos im Supabase-Dashboard (Authentication → Users) entfernen und neu einrichten — setzt MFA am Supabase-Konto voraus.
 
 ### AppShell
 
@@ -448,7 +482,7 @@ Namensgebung passiert **ausschließlich im Chat** (kein Eingabefeld auf diesem S
 
 **CrisisResponseCard:**
 - Eigenständige Card statt Chat-Bubble (voller Breite, kein Sprechblasen-Layout, warmer `accent-light`-Ton statt Alarmfarben)
-- `linkify()` erkennt Telefonnummern/URL im Fließtext per Regex und macht sie zu echten `tel:`/`https:`-Links (kein starres Parsen der Modell-Ausgabe)
+- `linkify()` erkennt Telefonnummern/URL im Fließtext per Regex und macht sie zu echten `tel:`/`https:`-Links (kein starres Parsen der Modell-Ausgabe); zweite Linie `safeHref()` lässt nur `tel:` und `https:` zu (S-08). Kein `dangerouslySetInnerHTML` im ganzen Frontend.
 
 #### Legal-Komponenten (`src/components/legal/`)
 
@@ -492,7 +526,7 @@ Exports:
 
 ```
 Exports:
-  messages             — Array<{ role, content, id, isError, messageType }>
+  messages             — Array<{ role, content, id, isError, messageType, status, clientMessageId, serverId, action }>
   isLoading            — Boolean (während Stream läuft)
   conversationId       — UUID | null
 
@@ -501,7 +535,8 @@ Exports:
   startBriefingConversation()
   startEntryContextConversation(entryContext)
   sendMessage(content, inputMode)
-  extractMemoryAndInsight()
+  retryMessage(msg)                    — erneutes Senden einer gescheiterten Nachricht (gleiche clientMessageId)
+  extractMemoryAndInsight()            — { mode: 'extract', conversationId }, der Server liest das Gespräch
   loadConversation(conversationId)     — lädt bestehendes Gespräch aus dem Verlauf, kein countSession()
   setMessages(messages)
 ```
@@ -510,14 +545,17 @@ Exports:
 - `countedConvIdsRef`, `pendingConvRef` — UX-Limitprüfung und Konversationsanlage
 - Kein Coach-Kontext im Client: Akte, Briefing, Resonanzkarte, Gedächtnis und RAG lädt `chat` selbst (S-12)
 
-**Streaming-Ablauf in `sendMessage`:**
-1. User-Nachricht in State + DB speichern
+**Ablauf in `sendMessage` (seit S-12, Paket B Welle 2a — kein Client-Write in `messages`):**
+1. `clientMessageId = crypto.randomUUID()`; Nutzer-Nachricht nur in den State (`status: 'sending'`)
 2. Leere Assistant-Message als Platzhalter einfügen
-3. POST zu `/functions/v1/chat` mit SSE
-4. Meta-Chunk `data: {"meta": {"messageType": "crisis_response"}}` (falls vorhanden) markiert die Nachricht **vor** dem ersten Text-Token
-5. Jedes `data: {"text": "..."}` Token an State anhängen
-6. Nach Stream-Ende: vollständige Nachricht inkl. `message_type` in DB speichern
-7. `logger.info('Stream completed', ...)`
+3. POST `/functions/v1/chat` mit `{ conversationId, message: { clientMessageId, content, inputMode }, requestId }`
+4. Meta-Chunk `{ meta: { userMessageId, assistantMessageId, messageType } }` → Nachricht `status: 'sent'`, `messageType` (z. B. `crisis_response`) am Platzhalter
+5. Jedes `data: {"text": "..."}` an den Platzhalter anhängen (SSE-Zeilen werden gepuffert)
+6. Gespeichert wird **beides vom Server**; der Client speichert nichts
+7. Fehler **vor** dem Meta-Chunk (Netz, 5xx, Rate-Limit, Monatslimit): Nachricht `status: 'failed'` → „Nicht gesendet – nochmal versuchen“ (`retryMessage`, idempotent). Fehler **nach** dem Meta-Chunk: Platzhalter zeigt den Aussetzer-Text, der Server speichert die Antwort trotzdem zu Ende.
+8. `409 client_outdated` (ab Welle 2b): Hinweis „Es gibt eine neue Version der App. Tipp hier, um sie zu laden.“ → `location.reload()`
+
+**Eröffnungen:** `startWellnessConversation`/`startBriefingConversation`/`startEntryContextConversation` laufen über `startStreamedOpening` → `{ conversationId, start: 'wellness' | 'briefing' | 'entry', wellnessCheck?, entryContext? }`. `startNewConversation` zeigt den Pool-Text sofort an und lässt ihn vom Server speichern (`start: 'first' | 'standard'`, `openingIndex`; ohne Modellaufruf, zählt **nicht** als Gespräch).
 
 ---
 
@@ -591,8 +629,8 @@ Zentrale Datei für alle UI-nahen Texte und Konfigurationen.
 | Export | Typ | Inhalt |
 |---|---|---|
 | `DAILY_IMPULSE_QUESTIONS` | Array (14) | Tägliche Reflexionsfragen |
-| `OPENING_MESSAGES` | Array (3) | Standard-Gesprächseröffnungen |
-| `FIRST_OPENING_MESSAGE` | String | Eröffnung beim allerersten Gespräch |
+| `OPENING_MESSAGES` | Array (3) | Standard-Gesprächseröffnungen — **Kopie in `chat/index.ts`**, bei Änderungen beide anpassen |
+| `FIRST_OPENING_MESSAGE` | String | Eröffnung beim allerersten Gespräch — dito |
 | `SCALING_HINTS` | Object {1..10} | Skalierungsfrage je Score |
 | `WELLNESS_SCORES` | Object {1..10} | `{ label, emoji, color }` |
 | `WELLNESS_CONTEXT_CHIPS` | Object | Chips für `low`/`medium`/`high` |
@@ -630,36 +668,51 @@ Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `S
 
 ### `chat` — Haupt-KI-Proxy
 
-**Aufgerufen von:** `useChat.js` bei jedem `sendMessage` und bei allen `start*`-Funktionen.
+**Aufgerufen von:** `useChat.js` bei jedem `sendMessage` und bei allen `start*`-Funktionen, `HowItWorksScreen` (Howto).
 
-**Input:**
+**Input (Gesprächsmodus, seit S-12 Welle 2a):**
 ```json
 {
-  "messages":       [{ "role": "user|assistant", "content": "..." }],
   "conversationId": "uuid",
-  "entryContext":   { "source": "pattern", "topic": "innerer_kritiker" },
-  "wellnessCheck":  { "score": 4, "label": "Nicht so gut", "emoji": "😕", "context": "..." },
+  "message":        { "clientMessageId": "uuid", "content": "...", "inputMode": "text|voice" },
   "requestId":      "abc12345"
 }
 ```
+oder für Eröffnungen (ohne `message`):
+```json
+{
+  "conversationId": "uuid",
+  "start":          "first|standard|wellness|briefing|entry",
+  "openingIndex":   0,
+  "wellnessCheck":  { "score": 4, "label": "Nicht so gut", "emoji": "😕", "context": "..." },
+  "entryContext":   { "source": "pattern", "topic": "innerer_kritiker" }
+}
+```
+Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client, nichts wird gespeichert). Extraktion: `{ "mode": "extract", "extractMemory": true, "conversationId": "uuid" }`.
+
+**Verlauf und Speicherung (S-12):** Im Gesprächsmodus lädt `chat` den Verlauf aus der DB (bis 400 Zeilen, ans Modell die letzten 60; gleiche Rollen hintereinander werden zusammengeführt). Ein mitgeschicktes `messages[]` wird ignoriert (`body_messages_ignored`). Die Nutzer-Nachricht wird **nach** `consume_session` per Upsert auf `(conversation_id, client_message_id)` gespeichert — eine Wiederholung legt nichts doppelt an; ist sie schon beantwortet, kommt die gespeicherte Antwort zurück (`meta.replayed`). Die Antwort bekommt vorab eine ID, wird per `EdgeRuntime.waitUntil` auch nach einem Client-Abbruch zu Ende generiert und gespeichert (D-7, `metadata: { model, client_aborted, stop_reason, stream_failed }`; Fehler → `assistant_insert_failed`). `start: 'first' | 'standard'` speichert nur den Pool-Text (Kopie von `src/lib/prompts.js`), ohne Modellaufruf und ohne `consume_session`. Krisen-Events bekommen die `message_id` der Nutzer-Nachricht.
+
+**Übergang (Welle 2a → 2b):** Das alte Format (`messages[]` ohne `message`/`start`) wird noch beantwortet, aber nichts gespeichert (der alte Client speichert selbst) und der mitgeschickte Verlauf durch den aus der DB ersetzt; jeder Aufruf wird als `legacy_format` geloggt. Ab Welle 2b (`LEGACY_FORMAT_ALLOWED = false`) → `409 client_outdated`.
 
 `memory`, `coachFile`, `briefing`, `ragContext`, `supervisionNote` im Body werden **ignoriert** (S-12). `wellnessCheck` (Score 1–10, Texte gekürzt) und `entryContext` (Quelle aus fester Liste, Texte gekürzt) werden geprüft übernommen – sie steuern nur den eigenen Prompt.
 
 **Serverseitiger Kontext (`loadCoachContext`, parallel zur Krisenerkennung):** `coach_file_entries` (inkl. `linked_value`), `coachee_profile`, `resonance_map`, `user_memory` (nur wenn die Akte leer ist), letztes abgeschlossenes Gespräch ohne das laufende (→ Briefing), `conversation_context` (gespeichertes RAG-Ergebnis) und – nur mit Secret `SUPERVISION_IN_PROMPT=1` – die neueste `supervision_logs.improvement_recs`. Fehlt eine Quelle, läuft das Gespräch ohne diesen Block weiter; protokolliert wird `coach context partially unavailable` mit Tabellenname und Fehlercode. RAG (`_shared/rag.ts`): beim ersten Nutzer-Input eines Gesprächs Embedding (Timeout 2,5 s) + `match_experiences`, Ergebnis in `conversation_context`; danach aus der DB.
 
 **Output:** Server-Sent Events Stream
-`data: {"meta": {"messageType": "crisis_response"}}` (nur bei Krisenfall, vor dem ersten Text-Chunk) → `data: {"text": "Hallo"}` (wiederholt) → `data: [DONE]`
+`data: {"meta": {"messageType": "standard|crisis_response", "userMessageId": "…", "assistantMessageId": "…"}}` (vor dem ersten Text-Chunk; IDs nur im neuen Format) → `data: {"text": "Hallo"}` (wiederholt) → `data: [DONE]`. Standard-Eröffnung: JSON `{ ok, assistantMessageId, content }`.
 
 **Modi:** Gesprächsmodus (Standard, `conversationId` **Pflicht**), `howtoMode` (FAQ, zählt nicht), `extractMemory` (Gedächtnis-Extraktion, zählt nicht). Howto und Extraktion laufen auch bei erreichtem Limit.
 
-**Grenzen:** Body ≤ 200 KB, jede `content` ≤ 8.000 Zeichen, ≤ 400 Einträge (sonst `413`). Ans Modell gehen höchstens die letzten 60 Nachrichten (lange Gespräche werden gekürzt statt abgelehnt).
+**Grenzen:** Body ≤ 200 KB, `message.content` ≤ 8.000 Zeichen (`413`), `clientMessageId` muss eine UUID sein (`400`). Howto/Legacy-`messages[]` ≤ 400 Einträge. Ans Modell gehen höchstens die letzten 60 Nachrichten.
 
 **Vor dem eigentlichen Prompt-Aufbau, in dieser Reihenfolge:**
 0. **Auth + Eigentum** — `requireUser`, Body-Limits, **Rate-Limit** je Modus (`enforceRateLimit`, 429 `rate_limited`, siehe [Abschnitt 9](#9-freemium-logik)), `assertConversationOwner` (400/401/403/413)
-1. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Bei `acute_risk` + Confidence ≥ medium: Insert in `crisis_events` (über `admin`, den echten Service-Role-Client) und `systemPrompt` wird **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`. Läuft **vor** der Limit-Prüfung: Eine Krisenantwort wird auch bei erreichtem Limit ausgeliefert (Entscheidung 18.11.2026).
-2. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'Session limit reached' }` (außer Krisenfall). RPC-Fehler → `500`, kein Durchlassen.
-3. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
-4. **Wirkmechanismus-Rhythmus** (`offerMechanism`) — alle 4 Coach-Antworten (ab der 3.) wird aktiv ein Mechanismus angeboten, unabhängig davon ob im Gesagten etwas "offensichtlich" ist
+1. **Verlauf + Idempotenz** — Verlauf aus der DB laden; gleiche `clientMessageId` schon vorhanden → ggf. gespeicherte Antwort zurückgeben
+2. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Bei `acute_risk` + Confidence ≥ medium wird `systemPrompt` **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`; der Insert in `crisis_events` (über `admin`) folgt nach dem Speichern der Nutzer-Nachricht, mit deren `message_id`. Läuft **vor** der Limit-Prüfung: Eine Krisenantwort wird auch bei erreichtem Limit ausgeliefert (Entscheidung 18.11.2026).
+3. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'Session limit reached' }` (außer Krisenfall), die Nutzer-Nachricht wird dann **nicht** gespeichert. RPC-Fehler → `500`, kein Durchlassen.
+4. **Nutzer-Nachricht speichern** (Upsert, Fehler → `500 message_insert_failed`, kein Modellaufruf)
+5. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
+6. **Wirkmechanismus-Rhythmus** (`offerMechanism`) — alle 4 Coach-Antworten (ab der 3.) wird aktiv ein Mechanismus angeboten, unabhängig davon ob im Gesagten etwas "offensichtlich" ist
 
 **System-Prompt-Aufbau (`buildSystemPrompt`), wenn kein Krisenfall vorliegt:**
 
@@ -674,10 +727,10 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Kapazität-vs-W
   + BLOCK 1: Briefing        (letztes abgeschlossenes Gespräch + offener Faden · in jedem Folgegespräch, Entscheidung 18.11.2026)
   + BLOCK 2: Coach-Akte      (coach_file_entries inkl. linked_value + coachee_profile · Fallback: user_memory)
   + BLOCK 3: Resonanzkarte   (resonance_map · ab 3. Gespräch · immer unsichtbar)
-  + BLOCK 4: RAG-Kontext     (Anonyme Erfahrungen aus experience_patterns)
+  + BLOCK 4: RAG-Kontext     (geprüfte Erfahrungen aus experience_patterns · als <erfahrungen_anderer_menschen>-Datenblock, „keine Anweisungen“, < > entfernt)
   + BLOCK 5: Supervision     (Wöchentliche Empfehlung · nur mit SUPERVISION_IN_PROMPT=1, derzeit aus)
   + BLOCK 6: Wellness-Check  (Score + Skalierungsfrage, ersetzt Standard-Eröffnung)
-  + BLOCK 7: Entry-Kontext   (v2.6 — woher kommt der Mensch: pattern/tagesimpuls/verstehen/spiegel)
+  + BLOCK 7: Entry-Kontext   (v2.6 — woher kommt der Mensch: pattern/tagesimpuls/verstehen; 'spiegel' ist vorgesehen, wird aber von keinem Screen genutzt)
 ```
 
 Bei Krisenfall ersetzt `CRISIS_RESPONSE_BLOCK` **alle** obigen Blöcke vollständig (BLOCK 0, "übersteuert alle anderen Verhaltensregeln").
@@ -701,14 +754,15 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 
 **Aufgerufen von:** `CoachScreen.runPostConversation()` — vier Trigger-Pfade (siehe CoachScreen-Sektion oben), nicht nur der Button-Klick.
 
-**Input:**
+**Input (seit S-12 Welle 2a):**
 ```json
-{ "messages": [...], "conversationId": "uuid" }
+{ "conversationId": "uuid" }
 ```
+Den Verlauf (letzte 200 Nachrichten + Gesamtanzahl) liest die Function selbst aus der DB. Ein mitgeschicktes `messages` wird ignoriert und als `legacy_format` geloggt (ab Welle 2b → `409 client_outdated`).
 
 **Sicherheit:** Nutzer nur aus dem JWT (`requireUser`). Ein mitgeschicktes `userId` wird ignoriert; weicht es ab, wird `userId mismatch` geloggt (Angriffssignal). `conversationId` ist Pflicht und wird **vor** allem anderen auf Eigentum geprüft. IDs aus der Modellausgabe (`entry_id`, `cluster_entry_ids`, `existing_voice_id`) werden nur übernommen, wenn sie zu den eigenen Einträgen/Stimmen gehören; alle Writes filtern zusätzlich auf `user_id` (Schutz gegen Prompt-Injection).
 
-**Überspringt** wenn `messages.length < 3`. Idempotent über `conversations.post_processed_message_count`. Verarbeitet höchstens die letzten 200 Nachrichten.
+**Überspringt** wenn das Gespräch in der DB weniger als 3 Nachrichten hat. Idempotent über `conversations.post_processed_message_count` (Basis: Anzahl in der DB). Verarbeitet höchstens die letzten 200 Nachrichten.
 
 **Ablauf:**
 
@@ -719,7 +773,7 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 | 3 | FILE_UPDATE_PROMPT | coach_file_entries (add/update/resolve), inkl. `linked_value` (Wert/Glaubenssatz hinter dem Muster) |
 | **4b** | VOICE_CLUSTER_PROMPT | inner_voices — prüft erst gegen bestehende (auch unbenannte) Stimmen, sonst neuer Kandidat; Rollback der Stimmen-Zeile bei fehlgeschlagener Verknüpfung |
 | 5 | PROFILE_UPDATE_PROMPT | coachee_profile (upsert) |
-| 6 | ANONYMOUS_SUMMARY_PROMPT | experience_patterns + pattern_references + insights |
+| 6 | ANONYMOUS_SUMMARY_PROMPT | experience_patterns (S-13: nur mit Secret `RAG_LEARNING_ENABLED=1`, `profiles.learning_opt_in` **und** bestandenem Prüfschritt `reviewLearningEntry`; mit `source_user_id`, `review_status = approved`; ohne Embedding kein Eintrag) + pattern_references + insights |
 | 7 | REFLECTION_PROMPT | coach_reflections (inkl. Kapazität-vs-Widerstand-Check, Optimierungs-/Schuld-Framing-Check) |
 | 8 | RESONANCE_UPDATE_PROMPT (ab 3. Gespräch) | resonance_map (upsert) |
 
@@ -781,6 +835,12 @@ Siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster) für das gemeinsame S
 | `admin-feedback` | GET | Alle `user_feedback`-Einträge inkl. Name/E-Mail |
 | `admin-invite-user` | POST | `auth.admin.inviteUserByEmail()` + setzt Beta-Rechte + `invited_at`/`invited_by` direkt |
 
+Alle drei verlangen seit S-06 einen zweiten Faktor (`403 mfa_required`, geloggt als `mfa_required`).
+
+### `backfill-embeddings` — Wartung
+
+Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-Ausfall). Idempotent (nur `embedding IS NULL`, max. 100 pro Lauf), nur intern aufrufbar (`requireInternalCaller`). Aufruf aus dem SQL-Editor per `net.http_post` mit `x-cron-secret` aus Vault; Ergebnis nur als Zähler (`net._http_response`).
+
 ---
 
 ### `delete-account` — Account-Löschung
@@ -795,6 +855,8 @@ Siehe [Abschnitt 10](#10-admin-bereich--sicherheitsmuster) für das gemeinsame S
 ### `supervision` — Wöchentliche KI-Supervision
 
 **Läuft per Cron** (`weekly-supervision`, Mo 06:00 UTC, über `pg_net`). Analysiert alle `coach_reflections` der Woche und erzeugt einen `supervision_logs`-Eintrag mit Empfehlungen für den System-Prompt.
+
+**Prompt-Regeln + Prüfschritt (S-13):** Der Prompt verlangt ausschließlich allgemeine Empfehlungen zum Coach-Verhalten (keine Einzelfälle, Zitate, Personendetails, keine Abschwächung von Sicherheits-/Krisenregeln). `improvement_recs` durchläuft `reviewLearningEntry` (`low_quality` zählt nicht); abgelehnt → `null`, Log `supervision_rejected` mit Codes. Prompt zum Gegenlesen: `docs/security/supervision-prompt.md` (freigegeben 19.11.2026).
 
 **Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. `supervision_logs.improvement_recs` lädt `chat` selbst, aber nur mit Secret `SUPERVISION_IN_PROMPT=1` (derzeit aus, S-12).
 
@@ -821,7 +883,8 @@ createLogger(source: string, requestId?: string, userId?: string)
 | `admin` | echter service_role-Client **ohne** Nutzer-Token (umgeht RLS) — nur für Daten, deren Eigentum geprüft ist |
 | `userClient` | anon-Key + Nutzer-Token → Rolle `authenticated`, `auth.uid()` gesetzt (z. B. für `consume_session`) |
 | `assertConversationOwner(admin, id, userId)` | UUID-Format (400) + Eigentum (403) |
-| `requireAdmin(ctx)` | `profiles.is_admin` über `admin` prüfen (403) |
+| `requireAdmin(ctx)` | `profiles.is_admin` über `admin` prüfen (403 `forbidden`) **und** JWT-Claim `aal = 'aal2'` (403 `mfa_required`, S-06) — Claims nur aus dem in `requireUser` geprüften Token |
+| `isUuid(value)` | UUID-Formatprüfung (z. B. `clientMessageId`) |
 | `requireInternalCaller(req)` | service_role-Bearer oder `x-cron-secret` (401) |
 | `readJsonBody(req, maxBytes)` / `validateMessages()` | Größenlimits (413), JSON-Fehler ohne Inhalt (400) |
 | `errorResponse()` / `jsonResponse()` | einheitliche Antworten `{ error: <code> }` ohne Fehlertexte |
@@ -853,8 +916,11 @@ session_limit                     INTEGER DEFAULT 20         -- v3.x (Default 20
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users           -- v3.x
 consent_ip                        TEXT                        -- v2.7, wird aktuell nicht befüllt
+learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S-13), nur über RPC set_learning_opt_in
+learning_opt_in_updated_at        TIMESTAMPTZ
+learning_opt_in_version           TEXT ("1.0")
 ```
-Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version` und `coaching_agreement_version` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, `invited_at`, `invited_by`, `consent_ip`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version` und `coaching_agreement_version` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
 
 **`conversations`**
 ```
@@ -881,9 +947,12 @@ conversation_id   UUID → conversations
 role              TEXT ('user' | 'assistant')
 content           TEXT
 input_mode        TEXT ('text' | 'voice')
-metadata          JSONB
+metadata          JSONB DEFAULT '{}'   -- Assistant: { model, client_aborted, stop_reason, stream_failed }; Eröffnung: { kind: 'opening', variant }
 message_type      TEXT DEFAULT 'standard' ('standard' | 'crisis_response')  -- v-Krise
+client_message_id UUID                 -- Migration 030, eindeutig je (conversation_id, client_message_id)
+created_at        TIMESTAMPTZ
 ```
+Seit S-12 (Welle 2a) schreibt nur noch `chat` (service_role) Nachrichten. Das Insert-Recht von `authenticated` entfällt mit Migration 031 (Welle 2b). Der eindeutige Index ist bewusst **nicht** partiell, weil PostgREST `ON CONFLICT` sonst nicht auflösen kann; alte Zeilen haben `NULL` und verletzen ihn nicht.
 
 ### Coach-Gedächtnis
 
@@ -969,8 +1038,11 @@ RLS: Nutzer verwalten ihre eigenen Zeilen (`auth.uid() = user_id`) — Namensgeb
 
 ### Lern- & Analyse-Tabellen
 
-**`experience_patterns`** — Anonyme RAG-Datenbank
+**`experience_patterns`** — Lernbasis (pseudonymisiert, S-13)
 ```
+source_user_id UUID → auth.users ON DELETE CASCADE   -- Migration 032, für Rücknahme/Löschung, nie ausgeliefert
+review_status  TEXT DEFAULT 'pending' ('pending' | 'approved' | 'rejected')
+reviewed_at    TIMESTAMPTZ
 embedding    vector(1536)   (pgvector)
 context      TEXT
 pattern      TEXT
@@ -979,6 +1051,7 @@ what_helped  TEXT
 what_blocked TEXT
 outcome      TEXT ('breakthrough' | 'stuck' | 'partial' | 'unknown')
 ```
+Nur Einträge mit Opt-in **und** bestandener Prüfung (siehe `post-conversation` Schritt 6). Bestand ohne Zuordnung wurde mit 032 gelöscht (D-2). Ehrliche Einordnung: **pseudonymisiert**, nicht anonym — in Texten „verallgemeinert, ohne Namen und erkennbare Details“.
 
 **`pattern_references`** — Persönliche Muster aus Gesprächen
 ```
@@ -1056,7 +1129,11 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 **`redeem_invite_code(p_code, p_user_id)`** — `SECURITY DEFINER`, `search_path = ''`, löst einen Invite-Code ein. **Nur für `service_role` ausführbar** (vorher für jeden inkl. anon — Befund K-2).
 
-**`match_experiences()`** — pgvector-Suche, nur für `service_role`.
+**`match_experiences()`** — pgvector-Suche, nur für `service_role` (Aufrufer: `_shared/rag.ts`). Seit 032 nur `review_status = 'approved'`; `source_user_id` ist nicht Teil der Rückgabe.
+
+**`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`.
+
+**`consume_rate_limits(p_user_id, p_rules)`** — `SECURITY DEFINER`, nur `service_role` (Migration 029). Erhöht feste Zeitfenster-Zähler atomar, liefert `null` oder `{ bucket, retry_after }`.
 
 ### Cron-Jobs (pg_cron + pg_net)
 
@@ -1065,6 +1142,7 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 | `reset-monthly-sessions` | `0 0 1 * *` | `sessions_used_this_month = 0` (Migration 023) |
 | `weekly-supervision` | `0 6 * * 1` | `supervision` per `net.http_post` mit `x-cron-secret` aus Vault |
 | `purge-app-logs` | `17 3 * * *` | `app_logs` älter als 30 Tage löschen (Migration 026) |
+| `purge-rate-limits` | `23 3 * * *` | `rate_limit_counters` älter als 2 Tage löschen (Migration 029) |
 
 ### RLS-Prinzip (Least Privilege, Migration 025)
 
@@ -1074,14 +1152,14 @@ Alle Tabellen haben RLS. Policies gelten **nur für `authenticated`**, nie für 
 |---|---|---|
 | `profiles` | SELECT, UPDATE | `id = auth.uid()` + Schutz-Trigger |
 | `conversations` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` + Schutz-Trigger |
-| `messages` | SELECT, INSERT | Konversation gehört dem Nutzer |
+| `messages` | SELECT, INSERT (INSERT entfällt mit Migration 031 / Welle 2b) | Konversation gehört dem Nutzer |
 | `insights` | SELECT, INSERT, UPDATE, DELETE | `user_id = auth.uid()`; `conversation_id` nur eigene |
 | `user_memory` | SELECT, INSERT, UPDATE | `user_id = auth.uid()` |
 | `inner_voices` | SELECT, UPDATE | `user_id = auth.uid()` |
 | `coach_file_entries`, `coachee_profile`, `session_notes`, `pattern_references` | SELECT | `user_id = auth.uid()` |
 | `user_feedback`, `feedback_surveys` | INSERT | `user_id = auth.uid()` |
 | `app_logs` | INSERT | `user_id = auth.uid()` (Migration 026) |
-| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, View `feedback_survey_scores` | **keine** | nur service_role |
+| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, `conversation_context`, `rate_limit_counters`, View `feedback_survey_scores` | **keine** | nur service_role |
 
 Die View `feedback_survey_scores` hat `security_invoker = true`. Neue Tabellen bekommen per Default-Privileg weiterhin Rechte für `authenticated` → **jede neue Tabelle braucht RLS + explizite Policies + gezielte GRANTs**. Edge Functions arbeiten über `_shared/auth.ts` (siehe [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a)).
 
@@ -1114,6 +1192,8 @@ Bewusst **keine** alarmierende Rot-/Orange-Farbgebung für den Krisenfall — di
 | DM Serif Display | 400 | Headlines, Display-Text (`font-display`) |
 | DM Sans | 300, 400, 500 | Body, UI-Text (`font-body`) |
 
+Beide Schriften liegen lokal (`@fontsource/dm-sans`, `@fontsource/dm-serif-display`, Import in `main.jsx`, S-10) — keine Anfrage an Google, die CSP braucht keine Fremd-Origins.
+
 ### Tailwind-Erweiterungen (`tailwind.config.js`)
 
 Alle CSS-Variablen werden als Tailwind-Klassen verfügbar:
@@ -1143,9 +1223,9 @@ navigate('/coach', { state: { wellnessCheck: { score, label, emoji, context } } 
   ↓
 CoachScreen mount: state.wellnessCheck erkannt (VARIANTE 3)
   ↓
-startWellnessConversation(wellnessCheck)
+startWellnessConversation(wellnessCheck) → chat { conversationId, start: 'wellness', wellnessCheck }
   → Kein User-Message sichtbar
-  → Coach antwortet direkt aus Wellness-Block im System-Prompt
+  → Coach antwortet direkt aus Wellness-Block im System-Prompt; der Server speichert die Antwort
 ```
 
 ### Wiederkehr-Begrüßungs-Flow
@@ -1187,7 +1267,7 @@ Vier unabhängige Trigger-Pfade rufen dieselbe Kernfunktion:
   ↓
 messages.length >= 3 UND noch nicht für diesen conversationId verarbeitet (processedRef)?
   → runPostConversation(messages, conversationId)  [fire-and-forget, keepalive: true]
-    → POST /functions/v1/post-conversation
+    → POST /functions/v1/post-conversation { conversationId }  (Verlauf liest der Server aus der DB)
       → serverseitiger Idempotenz-Guard (post_processed_message_count)
       → session_notes, coach_file_entries (inkl. linked_value), coachee_profile,
         inner_voices (Kandidaten-Erkennung/-Verknüpfung), experience_patterns,
@@ -1244,8 +1324,8 @@ acute_risk && confidence ∈ {medium, high}?
   nein:
     → normaler buildSystemPrompt()-Ablauf
   ↓
-useChat.js: Meta-Chunk setzt messageType auf der Assistant-Message,
-  message_type wird beim finalen DB-Insert mitgeschrieben
+useChat.js: Meta-Chunk setzt messageType auf der Assistant-Message;
+  chat speichert die Antwort mit message_type = 'crisis_response', crisis_events.message_id = Nutzer-Nachricht
   ↓
 CoachScreen rendert CrisisResponseCard statt ChatBubble
   → TelefonSeelsorge-Nummern/URL werden per Regex zu tel:/https:-Links
@@ -1314,7 +1394,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistS
 ```
 `callerClient` wird ausschließlich für die eine `getUser()`-Zeile gebraucht. Alle eigentlichen Abfragen/Schreibvorgänge (inkl. `auth.admin.listUsers()`, `auth.admin.inviteUserByEmail()`) laufen über den zweiten Client.
 
-`chat/index.ts` nutzt für die meisten Aufrufe (z. B. `inner_voices`) weiterhin den einfachen Ein-Client-Ansatz — unschädlich, weil diese Calls ausschließlich mit den eigenen Daten des angemeldeten Nutzers arbeiten und die entsprechende RLS-Policy genau das erlaubt. Für `crisis_events` (RLS blockiert *jeden* direkten Zugriff) wird dort zusätzlich ein `serviceClient` nach demselben Zwei-Client-Muster verwendet.
+Seit Paket A gibt es keinen „Ein-Client-Ansatz“ mehr: Alle Functions bekommen beide Clients aus `requireUser()` (`_shared/auth.ts`). `chat` nutzt `userClient` (Rolle `authenticated`) nur dort, wo `auth.uid()` gebraucht wird oder die eigene RLS-Policy genau passt (`consume_session`, `inner_voices`); alles andere — Verlauf, Nachrichten, Kontext, `crisis_events` — läuft über `admin` mit geprüftem Eigentum und `user_id`-Filter.
 
 ### Sicherheitsmuster v2 (Security-Paket A)
 
@@ -1334,11 +1414,25 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 
 `app_logs`: Client darf nur eigene Zeilen einfügen (nichts lesen), `metadata` ≤ 8 KB, Aufbewahrung 30 Tage (`purge-app-logs`).
 
-**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz und anonymen Zugriff. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein.
+**Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
+
+**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, `post-conversation` ignoriert `messages`) und Rate-Limits. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+
+### Browser-Schutz (S-08)
+
+`vercel.json` setzt für alle Pfade: `Strict-Transport-Security` (2 Jahre, inkl. Subdomains), `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (Mikrofon nur `self`, Kamera/Standort/Zahlung/USB aus), `Cross-Origin-Opener-Policy: same-origin`, `X-Frame-Options: DENY` und die CSP — derzeit als **`Content-Security-Policy-Report-Only`** (Beobachtungswoche ab 19.11.2026, danach erzwingend):
+
+```
+default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self';
+img-src 'self' data: blob:; connect-src 'self' https://<projekt>.supabase.co wss://<projekt>.supabase.co;
+worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'
+```
+
+`'unsafe-inline'` nur für Styles (React-`style`-Props, `offline.html`); Skripte strikt `'self'` (`registerSW.js` ist eine eigene Datei). **Jeder neue externe Dienst muss in die CSP.**
 
 ### Admin-Berechtigung
 
-Jede Admin-Function prüft `profiles.is_admin` selbst, **bevor** irgendetwas gelesen/geschrieben wird — ein versteckter Frontend-Screen (`AdminRoute`) ist ausdrücklich kein Ersatz dafür, da jede Anfrage auch direkt gegen die API gerichtet werden könnte. Nicht-Admins erhalten `403 Forbidden`.
+Jede Admin-Function prüft über `requireAdmin()` `profiles.is_admin` **und** den zweiten Faktor (`aal2`), **bevor** irgendetwas gelesen/geschrieben wird — ein versteckter Frontend-Screen (`AdminRoute`) ist ausdrücklich kein Ersatz dafür, da jede Anfrage auch direkt gegen die API gerichtet werden könnte. Nicht-Admins erhalten `403 forbidden`, Admins ohne zweiten Faktor `403 mfa_required`. Neue Admin-Functions (z. B. Datenexport S-16, protokollierte Einsicht S-20) laufen ebenfalls über `requireAdmin`.
 
 `is_admin` wird **nie** über die App gesetzt (Henne-Ei-Problem) — einmaliges manuelles Update im Supabase-SQL-Editor:
 ```sql
@@ -1353,7 +1447,7 @@ update profiles set is_admin = true where id = '<user_id>';
 
 - Plugin: `@vitejs/plugin-react` + `vite-plugin-pwa`
 - PWA Manifest: `name: Friedensstifter`, `theme_color: #2D5A4E`, `display: standalone`
-- Workbox: CacheFirst für Google Fonts
+- Workbox: Precache inkl. lokaler Schriften (`woff2`), keine Runtime-Regeln für Fremd-Origins; `registerType: 'autoUpdate'` (neue Version gilt nach dem nächsten Laden — wichtig für Übergänge wie S-12 Welle 2a/2b)
 - PWA-Icons: 192×192, 512×512 (maskable)
 
 ### Umgebungsvariablen
@@ -1380,7 +1474,7 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 - **Migrationen:** `supabase db push` vor jedem Deployment das DB-Änderungen enthält
 - **Domain:** `app.friedensstifter.coach` (Vercel Custom Domain)
 
-**Manueller Einmal-Schritt (Supabase Dashboard, nicht per Code setzbar):** Invite-E-Mail-Vorlage unter Authentication → Email Templates → "Invite user" auf deutschen Text umstellen, bevor `admin-invite-user` produktiv genutzt wird — sonst kommt der englische Default-Text an.
+**Auth-Mails:** eigener SMTP-Absender `hallo@friedensstifter.coach` über One.com (SPF/DKIM/DMARC gesetzt). Die deutschen Vorlagen (Einladung, Registrierung, Magic Link, Passwort-Reset) liegen als Quelle in `supabase/templates/` und werden **manuell** ins Dashboard (Authentication → Emails → Templates) kopiert.
 
 ### Vor jedem Deployment prüfen
 
@@ -1388,4 +1482,6 @@ CRON_SECRET=                 # nur supervision; derselbe Wert liegt in Vault als
 2. Migrationen ausgeführt: `supabase db push`
 3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `delete-account`, `supervision`
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
-5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller`; Log-Regel beachten
+5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller` und Eintrag in `supabase/config.toml`; Log-Regel beachten
+6. Neue externe Dienste/Origins: in die CSP (`vercel.json`) aufnehmen
+7. Nachrichten schreibt nur der Server — kein `supabase.from('messages').insert` im Frontend
