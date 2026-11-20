@@ -329,7 +329,7 @@ Wochenübersicht (`infoOnly`):
 - `stripe_webhook_ignored`
 - `checkout_session_created`
 
-### 7.3 Für die Anwaltsliste (`docs/konto/anwaltstermin-fragen.md`, R7 ff.; Jerome trägt ein)
+### 7.3 Für die Anwaltsliste (`docs/konto/anwaltstermin-fragen.md`, übernommen als Teil C, Nr. 16–21)
 
 1. **Widerrufsrecht bei sofortigem Beginn:** Ist auf der Bezahlseite eine ausdrückliche Zustimmung nötig (Checkbox per `consent_collection`/`custom_text`)? Welcher Wortlaut?
 2. **Button-Beschriftung:** Erfüllt die Stripe-Seite die Pflicht „zahlungspflichtig bestellen“ (`submit_type: 'auto'` → „Abonnieren“)?

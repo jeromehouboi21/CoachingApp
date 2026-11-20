@@ -21,7 +21,7 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
   | one.com | E-Mail | Dänemark, Systemüberwachung auch aus Indien |
 
   Alle Verträge zur Auftragsverarbeitung (DPAs) liegen vor. Die Auswertung steht in `dpa-auswertung.md`.
-- **Abo:** Ein bezahltes Abo ist geplant, aber noch nicht gebaut. Die Abo-Texte werden erst mit dem Start der Zahlung angezeigt.
+- **Abo:** Ein bezahltes Abo ist geplant, aber noch nicht gebaut. Die Abo-Texte werden erst mit dem Start der Zahlung angezeigt. Details und Fragen in Teil C.
 
 ---
 
@@ -93,6 +93,26 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
 13. **Altersgrenze:** 18+ per Selbstauskunft (Häkchen), Hinweis auf die Nummer gegen Kummer. Ausreichend?
 14. **Schweigepflicht:** Die Vereinbarung sagt, dass der Betreiber keiner gesetzlichen Schweigepflicht unterliegt und die Vertraulichkeit vertraglich ist. Richtig dargestellt?
 15. **Später, mit dem Abo:** Widerrufsbelehrung nach Muster in Ich-Form statt Wir-Form, Kündigungsbutton (§ 312k), Bestellbutton (§ 312j), Häkchen „sofort beginnen“.
+
+---
+
+## C. Abo und Zahlung (Paket Z, ergänzt 20.11.2026)
+
+**Stand:** Das Abo ist geplant (Handoff `docs/Neues_Zielbild/handoff-paket-z-zahlung.md` v1), aber noch nicht gebaut. Zahlungen gehen erst live, wenn diese Fragen geklärt und die Abo-Texte freigegeben sind.
+
+- **Stufen:** „Begleitung“ für 9,90 € im Monat oder 99 € im Jahr, mit 150 eigenen Nachrichten pro Monat. „Begleitung intensiv“ für 19,90 € oder 199 €, mit 800 Nachrichten. „Begleitung intensiv“ bleibt zunächst abgeschaltet.
+- **Monatsgrenze:** Ab 80 % erscheint ein ruhiger Hinweis. Danach gibt es 10 Nachrichten Kulanz. Ist die Grenze erreicht, startet bis zum nächsten Abrechnungstag kein neues Gespräch. Spiegel, Erkenntnisse und Verlauf bleiben sichtbar. Krisenantworten sind nie gesperrt und werden nicht gezählt.
+- **Zahlung:** über die gehostete Bezahlseite von Stripe (Stripe Checkout). Kündigen, Wechseln und Zahlungsart ändern laufen über das Kundenportal von Stripe. Ein Upgrade gilt sofort und wird anteilig verrechnet. Ein Downgrade gilt zum Ende des Abrechnungszeitraums.
+- **An Stripe gehen:** Nutzer-ID und E-Mail-Adresse, keine Namen und keine Gesprächsinhalte. Stripe kommt damit als neuer Empfänger hinzu (DPA noch einzuholen).
+- **Kleinunternehmer** nach § 19 UStG, keine Umsatzsteuer.
+- **Konto löschen:** beendet ein laufendes Abo sofort, ohne anteilige Erstattung. Darauf weist der Löschdialog hin. Scheitert die Kündigung bei Stripe, wird nichts gelöscht.
+
+16. **Widerrufsrecht bei sofortigem Beginn:** Braucht die Bezahlseite eine ausdrückliche Zustimmung, dass die Leistung sofort beginnt und das Widerrufsrecht damit erlischt bzw. Wertersatz anfällt? Stripe bietet dafür ein Häkchen bzw. einen eigenen Hinweistext auf der Bezahlseite. Welcher Wortlaut?
+17. **Bestellbutton (§ 312j BGB):** Die Stripe-Seite beschriftet den Button mit „Abonnieren“. Erfüllt das die Pflicht „zahlungspflichtig bestellen“ oder eine gleich eindeutige Formulierung?
+18. **Keine Erstattung bei Kontolöschung:** Ist es zulässig, dass die Löschung das Abo sofort ohne anteilige Erstattung beendet, besonders beim Jahresabo? Wie muss das in den Abo-Bedingungen stehen?
+19. **Preisangabe:** Reichen die Preise auf der Seite `/begleitung` und auf der Stripe-Bezahlseite? Wo und wie gehört der Hinweis auf § 19 UStG hin (Seite, Bezahlseite, Rechnung)?
+20. **Aufbewahrung der Rechnungen:** Nach einer Kontolöschung bleiben die Rechnungen nur bei Stripe gespeichert (§ 147 AO, § 14b UStG). Reicht das, oder braucht der Betreiber eine eigene Kopie?
+21. **Monatsgrenze in den Bedingungen:** Wie werden Kontingent, Hinweis und Kulanz in den Abo-Bedingungen beschrieben, damit die Leistung klar umrissen ist? Ist eine Grenze bei einem „Begleitung“ genannten Abo als Leistungsbeschreibung ausreichend transparent?
 
 ---
 
