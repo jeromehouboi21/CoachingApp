@@ -14,7 +14,7 @@ export default defineConfig({
       manifest: {
         id: '/',
         name: 'Friedensstifter',
-        short_name: 'Friedensstifter',
+        short_name: 'Frieden',   // P-7 Gerätetest 20.11.2026: „Friedensstifter“ wurde zu „Friedenss…“ gekürzt
         description: 'Fragen, die dich anders denken lassen.',
         lang: 'de',
         dir: 'ltr',
