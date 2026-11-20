@@ -1,11 +1,16 @@
-// Info-Seite „Begleitung“ (U4, E-U4-7). Noch ohne Bezahlung: endet beim Kontakt zu Jerome.
+// Info-Seite „Begleitung“ (U4, E-U4-7). Ohne PAYMENTS_ENABLED: endet beim Kontakt zu Jerome.
+// Paket Z: mit PAYMENTS_ENABLED Preise (plans.js, nur Anzeige), Monat | Jahr, Bezahlseite von Stripe.
+// Freigeschaltet wird nur über den Webhook; nach der Rückkehr wird die Phase nur neu geladen.
 // Grundsatz (UX 5.2): Was über dich entsteht, gehört dir und bleibt sichtbar. Bezahlt wird für
 // neue Gespräche, nicht für den Blick auf die eigenen Daten. Keine Verknappung, kein Druck.
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check } from 'lucide-react'
 import { useAccessState, COACHING_CONTACT_URL } from '../../lib/accessState'
-import { PAYMENTS_ENABLED } from '../../content/legalTexts'
+import { INTENSIV_ENABLED, PAYMENTS_ENABLED } from '../../content/legalTexts'
+import { INTERVAL_LABEL, PLANS } from '../../content/plans'
 import { CheckoutButton, CheckoutReturnNotice, useCheckoutReturn } from '../../components/begleitung/CheckoutButton'
+import { PortalButton } from '../../components/begleitung/PortalButton'
 
 const ALWAYS = [
   'Heute mit Tagesimpuls und „Wie geht’s dir?“',
@@ -15,7 +20,7 @@ const ALWAYS = [
 ]
 
 const COMPANION = [
-  'Neue Gespräche, so oft du möchtest',
+  PAYMENTS_ENABLED ? 'Neue Gespräche, mit einem Monatskontingent eigener Nachrichten' : 'Neue Gespräche, so oft du möchtest',
   'Dein Begleiter lernt weiter mit dir: Gedächtnis und Gesprächsstil',
   'Vorrang bei Terminen mit Jerome',
 ]
@@ -28,10 +33,35 @@ const PHASE_TEXT = {
 
 export function BegleitungScreen() {
   const navigate = useNavigate()
-  const { access } = useAccessState()
+  const { access, refresh } = useAccessState()
   const checkoutResult = useCheckoutReturn()
-  // Stripe-Gerüst: nur mit PAYMENTS_ENABLED und nicht, wenn die Begleitung schon läuft
+  const [interval, setInterval_] = useState('month')
+  const [returnState, setReturnState] = useState(null)   // success | active | slow | cancel
+  const [showPortal, setShowPortal] = useState(false)
+  // Bezahlung nur mit PAYMENTS_ENABLED und nicht, wenn die Begleitung schon läuft (auch Tester, Z-11)
   const showCheckout = PAYMENTS_ENABLED && access?.phase !== 'begleitung'
+  const hasSubscription = PAYMENTS_ENABLED && !!access?.tier
+  const plans = PLANS.filter(p => p.tier !== 'intensiv' || INTENSIV_ENABLED)
+
+  // Nach der Rückkehr von Stripe: Phase alle 3 s neu laden, höchstens 10-mal (Handoff 5.1)
+  useEffect(() => {
+    if (!checkoutResult) return
+    setReturnState(checkoutResult)
+    if (checkoutResult !== 'success') return
+    let tries = 0
+    let stopped = false
+    const timer = window.setInterval(async () => {
+      tries += 1
+      const state = await refresh()
+      if (stopped) return
+      if (state?.phase === 'begleitung' && state?.tier) {
+        setReturnState('active'); stopped = true; window.clearInterval(timer)
+      } else if (tries >= 10) {
+        setReturnState('slow'); stopped = true; window.clearInterval(timer)
+      }
+    }, 3000)
+    return () => { stopped = true; window.clearInterval(timer) }
+  }, [checkoutResult, refresh])
 
   return (
     <div className="min-h-screen bg-bg flex flex-col max-w-lg mx-auto">
@@ -47,7 +77,7 @@ export function BegleitungScreen() {
       </div>
 
       <div className="flex-1 px-5 pb-10">
-        {PAYMENTS_ENABLED && <CheckoutReturnNotice result={checkoutResult} />}
+        {PAYMENTS_ENABLED && <CheckoutReturnNotice result={returnState} />}
         <h1 className="font-display text-[28px] text-ink leading-[1.25] mb-3">
           Was dir gehört,<br />bleibt dir.
         </h1>
@@ -73,6 +103,7 @@ export function BegleitungScreen() {
         <div className="bg-accent-light rounded-xl p-5 mb-6">
           <p className="text-[15px] font-medium text-ink mb-1">Mit Begleitung</p>
           {!PAYMENTS_ENABLED && <p className="text-[13px] text-ink-3 mb-3">Der Preis steht noch nicht fest.</p>}
+          {PAYMENTS_ENABLED && <div className="mb-3" />}
           <ul className="flex flex-col gap-2">
             {COMPANION.map(f => (
               <li key={f} className="flex items-start gap-2 text-[14px] text-ink-2">
@@ -81,12 +112,46 @@ export function BegleitungScreen() {
               </li>
             ))}
           </ul>
-          {showCheckout && (
+          {(hasSubscription || showPortal) && (
             <div className="mt-5">
-              <CheckoutButton />
+              <PortalButton />
             </div>
           )}
         </div>
+
+        {showCheckout && !showPortal && (
+          <div className="mb-6">
+            <div role="radiogroup" aria-label="Laufzeit" className="flex gap-2 mb-4">
+              {['month', 'year'].map(iv => (
+                <button
+                  key={iv}
+                  role="radio"
+                  aria-checked={interval === iv}
+                  onClick={() => setInterval_(iv)}
+                  className={`flex-1 py-2 rounded-full text-[14px] font-medium border transition-colors ${interval === iv
+                    ? 'bg-accent text-white border-accent'
+                    : 'bg-surface text-ink border-[var(--color-border)]'}`}
+                >
+                  {INTERVAL_LABEL[iv]}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-col gap-4">
+              {plans.map(plan => (
+                <div key={plan.tier} className="bg-surface border border-[var(--color-border)] rounded-xl p-5">
+                  <p className="text-[15px] font-medium text-ink">{plan.name}</p>
+                  <p className="text-[22px] font-display text-ink mt-1">
+                    {plan.price[interval]} <span className="text-[14px] font-sans text-ink-3">im {INTERVAL_LABEL[interval]}</span>
+                  </p>
+                  <p className="text-[13px] text-ink-2 mt-1 mb-4">
+                    {plan.messagesPerMonth} eigene Nachrichten im Monat
+                  </p>
+                  <CheckoutButton tier={plan.tier} interval={interval} onAlreadySubscribed={() => setShowPortal(true)} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-surface border border-[var(--color-border)] rounded-xl p-5">
           <p className="text-[14px] text-ink-2 leading-relaxed mb-4">

@@ -7,7 +7,9 @@ import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSqua
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
-import { NOT_EMERGENCY, AI_PROVIDER_RETENTION_NOTE } from '../../content/legalTexts'
+import { NOT_EMERGENCY, AI_PROVIDER_RETENTION_NOTE, PAYMENTS_ENABLED } from '../../content/legalTexts'
+import { PLANS, longDate } from '../../content/plans'
+import { PortalButton } from '../../components/begleitung/PortalButton'
 import { checkMfaResponse } from '../../lib/mfa'
 import { useInstallPrompt } from '../../hooks/useInstallPrompt'
 import { InstallSheet } from '../../components/app/InstallSheet'
@@ -27,7 +29,19 @@ function localDayKey(iso) {
 // U4: Phase in einer ruhigen Zeile (E-U4-5). Begleitung ohne Zahl; Kennenlernen mit „Gespräch n von m“.
 function phaseLine(access) {
   if (!access?.phase) return null
-  if (access.phase === 'begleitung') return 'Begleitung'
+  if (access.phase === 'begleitung') {
+    // Paket Z: mit Abo Stufe und Datum (Handoff 5.3), ohne Abo (Tester, von Hand gesetzt) wie bisher
+    if (!access.tier) return 'Begleitung'
+    const name = PLANS.find(p => p.tier === access.tier)?.name ?? 'Begleitung'
+    const date = longDate(access.period_end)
+    if (!date) return name
+    if (access.cancel_at_period_end) return `${name} · endet am ${date}`
+    if (access.pending_tier) {
+      const next = PLANS.find(p => p.tier === access.pending_tier)?.name ?? 'Begleitung'
+      return `${name} · ab dem ${date} ${next}`
+    }
+    return `${name} · verlängert sich am ${date}`
+  }
   if (access.phase === 'ruhemodus') return 'Ruhemodus – alles, was du erkannt hast, bleibt sichtbar'
   if (typeof access.starts_limit !== 'number') return 'Kennenlernen'
   const current = Math.min(access.starts_used + 1, access.starts_limit)
@@ -120,6 +134,7 @@ export function ProfileScreen() {
 
   // Paket K W4 (Handoff 6.2): Erfolg nur bei 200 + success. Sonst NICHT abmelden, Modal bleibt offen.
   const DELETE_FAILED = 'Dein Konto konnte nicht vollständig gelöscht werden. Ich bin informiert und kümmere mich darum. Du bekommst eine Mail, sobald alles gelöscht ist.'
+  const DELETE_SUBSCRIPTION_FAILED = 'Dein Abo ließ sich gerade nicht beenden, deshalb wurde nichts gelöscht. Probier es später noch einmal oder schreib mir.'
   const handleDeleteAccount = async () => {
     if (deleteInput !== 'LÖSCHEN') return
     setDeleteLoading(true)
@@ -147,7 +162,8 @@ export function ProfileScreen() {
     try { data = await res.json() } catch { /* keine JSON-Antwort */ }
     if (!res.ok || !data?.success) {
       logger.error('delete_account_failed', { status: res.status, code: data?.error ?? 'unknown' })
-      setDeleteError(DELETE_FAILED)
+      // Paket Z (Z-E3): Abo ließ sich nicht beenden → es wurde nichts gelöscht
+      setDeleteError(data?.error === 'subscription_cancel_failed' ? DELETE_SUBSCRIPTION_FAILED : DELETE_FAILED)
       setDeleteLoading(false)
       return
     }
@@ -166,6 +182,9 @@ export function ProfileScreen() {
         )}
         {/* U4 (E-U4-5): ruhige Zeile zur Phase, kein Countdown */}
         {phaseLine(access) && <p className="text-[13px] text-ink-3">{phaseLine(access)}</p>}
+        {PAYMENTS_ENABLED && access?.tier && (
+          <div className="mt-2"><PortalButton variant="link" /></div>
+        )}
       </div>
 
       {/* Stats */}
@@ -324,6 +343,10 @@ export function ProfileScreen() {
                 </li>
               ))}
             </ul>
+            {access?.tier && (
+              // Paket Z (Z-E3), Text zur Freigabe durch Jerome
+              <p className="text-[13px] text-ink-2 mb-3">Dein Abo endet damit sofort. Bereits bezahlte Tage werden nicht erstattet.</p>
+            )}
             <p className="text-[13px] text-ink-2 mb-4">Das lässt sich nicht rückgängig machen.</p>
             <button
               type="button"

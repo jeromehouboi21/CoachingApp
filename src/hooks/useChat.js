@@ -52,6 +52,11 @@ async function isConversationCap(response) {
   }
 }
 
+// Paket Z: Fehler-Body lesen (409 quota_reached, 429 session_limit mit reason 'quota')
+async function readErrorBody(response) {
+  try { return await response.clone().json() } catch { return null }
+}
+
 function outdatedBubble() {
   return { role: 'assistant', content: OUTDATED_MESSAGE, isError: true, action: 'reload', id: `outdated-${Date.now()}` }
 }
@@ -90,11 +95,18 @@ async function readStream(response, { onMeta, onText }) {
 // options.onSessionLimit: wird aufgerufen, wenn der Server mit 429 session_limit antwortet (U4: keine
 //   Kennenlern-Starts mehr → Ruhemodus).
 // options.onConversationCap: 409 conversation_cap (U4) – das Gespräch hat die Kappungsgrenze erreicht.
+// options.onSessionLimit bekommt seit Paket Z { reason, periodEnd } ('quota' = Monatskontingent der Begleitung).
+// options.onQuotaReached: 409 quota_reached (Paket Z) – Monatskontingent inkl. Kulanz aufgebraucht, nichts gespeichert.
+// options.onQuotaNotice: meta.quota aus dem Stream (Paket Z) – Hinweis ab 80 % bzw. in der Kulanz.
 export function useChat(userId, session, options = {}) {
   const onSessionLimitRef = useRef(options.onSessionLimit)
   onSessionLimitRef.current = options.onSessionLimit
   const onConversationCapRef = useRef(options.onConversationCap)
   onConversationCapRef.current = options.onConversationCap
+  const onQuotaReachedRef = useRef(options.onQuotaReached)
+  onQuotaReachedRef.current = options.onQuotaReached
+  const onQuotaNoticeRef = useRef(options.onQuotaNotice)
+  onQuotaNoticeRef.current = options.onQuotaNotice
   // Konversationen, für die der Server bereits eine Sitzung gezählt hat (oder die
   // aus dem Verlauf fortgesetzt werden). Für die clientseitige UX-Prüfung des Limits.
   const countedConvIdsRef = useRef(new Set())
@@ -156,9 +168,10 @@ export function useChat(userId, session, options = {}) {
         return
       }
       if (response.status === 429) {
-        logger.warn('Session limit reached (server)', { requestId })
+        const body = await readErrorBody(response)
+        logger.warn('Session limit reached (server)', { requestId, reason: body?.reason ?? 'starts' })
         setMessages(base)
-        onSessionLimitRef.current?.()
+        onSessionLimitRef.current?.({ reason: body?.reason ?? 'starts', periodEnd: body?.periodEnd ?? null })
         return
       }
       if (await isConversationCap(response)) {
@@ -395,9 +408,10 @@ export function useChat(userId, session, options = {}) {
         return
       }
       if (response.status === 429) {
-        logger.warn('Session limit reached (server)', { requestId, conversationId: activeConvId })
+        const body = await readErrorBody(response)
+        logger.warn('Session limit reached (server)', { requestId, conversationId: activeConvId, reason: body?.reason ?? 'starts' })
         markFailed()
-        onSessionLimitRef.current?.()
+        onSessionLimitRef.current?.({ reason: body?.reason ?? 'starts', periodEnd: body?.periodEnd ?? null })
         return
       }
       if (await isConversationCap(response)) {
@@ -406,6 +420,16 @@ export function useChat(userId, session, options = {}) {
         setMessages(prev => prev.filter(m => m.id !== placeholderId && m.id !== userLocalId))
         onConversationCapRef.current?.(content)
         return
+      }
+      if (response.status === 409) {
+        const body = await readErrorBody(response)
+        if (body?.error === 'quota_reached') {
+          // Nicht gespeichert und nicht gebucht: Nutzer-Blase und Platzhalter entfernen
+          logger.info('quota_reached', { requestId, conversationId: activeConvId })
+          setMessages(prev => prev.filter(m => m.id !== placeholderId && m.id !== userLocalId))
+          onQuotaReachedRef.current?.({ periodEnd: body?.periodEnd ?? null, content })
+          return
+        }
       }
       if (await isClientOutdated(response)) {
         logger.warn('client_outdated', { requestId })
@@ -429,6 +453,7 @@ export function useChat(userId, session, options = {}) {
             ? { ...m, serverId: meta.assistantMessageId ?? m.serverId, messageType: meta.messageType ?? m.messageType }
             : m)))
           if (meta.replayed) logger.info('Reply restored from server', { requestId })
+          if (meta.quota) onQuotaNoticeRef.current?.(meta.quota)
         },
         onText: (text) => {
           accepted = true

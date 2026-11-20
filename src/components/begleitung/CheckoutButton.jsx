@@ -1,4 +1,4 @@
-// Stripe Checkout (Gerüst): Button „Weiter zur Bezahlung“ und Hinweis nach der Rückkehr.
+// Stripe Checkout (Paket Z): Button „Weiter zur Bezahlung“ und Hinweis nach der Rückkehr.
 // Erscheint nur mit PAYMENTS_ENABLED (src/content/legalTexts.js); der Server sperrt zusätzlich
 // über das Secret PAYMENTS_ENABLED (create-checkout-session). Das Frontend entscheidet nichts.
 //
@@ -16,12 +16,15 @@ const logger = createLogger('CheckoutButton')
 
 const RETURN_TEXT = {
   success: 'Danke. Sobald Stripe die Zahlung bestätigt, ist deine Begleitung aktiv. Das dauert meist nur einen Moment.',
+  active: 'Danke. Deine Begleitung ist jetzt aktiv.',
+  slow: 'Die Bestätigung dauert etwas länger. Schau gleich noch einmal vorbei.',
   cancel: 'Die Bezahlung wurde abgebrochen. Es wurde nichts berechnet.',
 }
 
 const ERROR_TEXT = {
   limit: 'Gerade kamen mehrere Versuche kurz hintereinander. Probier es in einer Stunde noch einmal.',
   failed: 'Die Bezahlseite ließ sich gerade nicht öffnen. Probier es später noch einmal oder schreib mir.',
+  subscribed: 'Du hast schon ein Abo. Ändern kannst du es über „Abo verwalten“.',
 }
 
 /** Liest ?checkout=success|cancel einmal aus und entfernt den Parameter (inkl. session_id) aus der Adresse. */
@@ -41,6 +44,7 @@ export function useCheckoutReturn() {
   return result
 }
 
+/** result: 'success' | 'active' | 'slow' | 'cancel' | null */
 export function CheckoutReturnNotice({ result }) {
   if (!result) return null
   return (
@@ -50,8 +54,9 @@ export function CheckoutReturnNotice({ result }) {
   )
 }
 
-export function CheckoutButton() {
-  const [state, setState] = useState('idle')   // idle | busy | limit | failed
+/** tier: 'begleitung'|'intensiv', interval: 'month'|'year'. Freigeschaltet wird nur über den Webhook. */
+export function CheckoutButton({ tier, interval, onAlreadySubscribed }) {
+  const [state, setState] = useState('idle')   // idle | busy | limit | failed | subscribed
 
   const start = async () => {
     setState('busy')
@@ -61,11 +66,21 @@ export function CheckoutButton() {
       const res = await fetch(functionUrl('create-checkout-session'), {
         method: 'POST',
         headers: functionHeaders(session.access_token),
-        body: '{}',
+        body: JSON.stringify({ tier, interval }),
       })
       if (res.status === 429) {
         setState('limit')
         return
+      }
+      if (res.status === 409) {
+        let code = 'unknown'
+        try { code = (await res.clone().json())?.error ?? code } catch { /* Antwort ohne JSON */ }
+        if (code === 'already_subscribed') {
+          logger.info('checkout_already_subscribed')
+          setState('subscribed')
+          onAlreadySubscribed?.()
+          return
+        }
       }
       if (!res.ok) {
         await checkMfaResponse(res)   // 403 mfa_required → Code-Abfrage (S-06b)
@@ -100,7 +115,7 @@ export function CheckoutButton() {
       <p className="text-[12px] text-ink-3 mt-2 leading-relaxed">
         Bezahlt wird auf einer sicheren Seite von Stripe. Du kannst dort jederzeit zurück, ohne dass etwas berechnet wird.
       </p>
-      {(state === 'limit' || state === 'failed') && (
+      {(state === 'limit' || state === 'failed' || state === 'subscribed') && (
         <p role="alert" className="text-[13px] text-ink-2 mt-3 leading-relaxed">{ERROR_TEXT[state]}</p>
       )}
     </div>

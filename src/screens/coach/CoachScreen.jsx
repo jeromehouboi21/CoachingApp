@@ -16,6 +16,7 @@ import { ContinueRatingSheet } from '../../components/coach/ContinueRatingSheet'
 import { createConfirmedInsight } from '../../lib/insightActions'
 import { RestModeSheet } from '../../components/access/RestModeSheet'
 import { ConversationCapNotice } from '../../components/access/ConversationCapNotice'
+import { QuotaNotice } from '../../components/access/QuotaNotice'
 import { useAccessState, isLastTrialStart, seenOnce, markSeen, TRIAL_LAST_HINT_KEY } from '../../lib/accessState'
 import { ProfileButton } from '../../components/layout/ProfileButton'
 import { supabase } from '../../lib/supabase'
@@ -102,9 +103,21 @@ export function CoachScreen() {
   const canStart = access ? access.can_start !== false : true
   const [showRestSheet, setShowRestSheet] = useState(false)
   const [capReached, setCapReached] = useState(false)
+  // Paket Z: Monatskontingent der Begleitung. restQuota → Textzweig im Ruhemodus-Sheet,
+  // quotaNotice → Hinweiszeile im Gespräch ({ kind: 'warn'|'grace'|'reached', remaining, periodEnd })
+  const [restQuota, setRestQuota] = useState(null)
+  const [quotaNotice, setQuotaNotice] = useState(null)
+  function openRestSheet(info) {
+    if (info?.reason === 'quota') setRestQuota({ periodEnd: info.periodEnd ?? access?.quota_resets_at ?? null, tier: access?.tier ?? null })
+    else if (!info && access?.quota_reached) setRestQuota({ periodEnd: access.quota_resets_at ?? null, tier: access.tier ?? null })
+    else setRestQuota(null)
+    setShowRestSheet(true)
+  }
   const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startEntryContextConversation, sendMessage, retryMessage, extractMemoryAndInsight, loadConversation, resumeWithOpening, isConversationCounted } = useChat(user?.id, session, {
-    onSessionLimit: () => { setShowRestSheet(true); refreshAccess(); refreshProfile() },
+    onSessionLimit: (info) => { openRestSheet(info); refreshAccess(); refreshProfile() },
     onConversationCap: () => { setCapReached(true); refreshAccess() },
+    onQuotaReached: ({ periodEnd }) => { setQuotaNotice({ kind: 'reached', remaining: 0, periodEnd }); refreshAccess() },
+    onQuotaNotice: (q) => setQuotaNotice({ kind: q?.grace ? 'grace' : 'warn', remaining: q?.remaining ?? 0, periodEnd: q?.periodEnd ?? null }),
   })
   const bottomRef = useRef(null)
   const hasStartedRef = useRef(false)
@@ -127,7 +140,7 @@ export function CoachScreen() {
   // ausblenden, auch wenn dieselbe Nachricht erneut gerendert wird.
   const [handledVoiceIds, setHandledVoiceIds] = useState(new Set())
   // Kappungshinweis gilt nur für das Gespräch, in dem er ausgelöst wurde
-  useEffect(() => { setCapReached(false) }, [conversationId])
+  useEffect(() => { setCapReached(false); setQuotaNotice(null) }, [conversationId])
 
   // Übergangstext 1: vor dem letzten Kennenlern-Gespräch, einmal pro Gerät (E-U4-9).
   // Sichtbar im Einstieg UND oben in einem frisch begonnenen Gespräch (auch über „Neues Gespräch“),
@@ -144,7 +157,7 @@ export function CoachScreen() {
   const startNewOrRest = (isFirst = false) => {
     if (!canStart) {
       setMode('entry')
-      setShowRestSheet(true)
+      openRestSheet()
       return false
     }
     startNewConversation(isFirst)
@@ -227,7 +240,7 @@ export function CoachScreen() {
     if (wc && !canStart) {
       fetchEntryData().catch(() => {})
       setMode('entry')
-      setShowRestSheet(true)
+      openRestSheet()
       return
     }
     if (wc) {
@@ -246,7 +259,7 @@ export function CoachScreen() {
 
         if (entryCtx && entryCtx.source !== 'direct' && !canStart) {
           setMode('entry')
-          setShowRestSheet(true)
+          openRestSheet()
           return
         }
         if (entryCtx && entryCtx.source !== 'direct') {
@@ -289,7 +302,7 @@ export function CoachScreen() {
     // darf weitergehen. Maßgeblich ist der Server (429 → onSessionLimit).
     const alreadyCounted = isConversationCounted(conversationId)
     if (!canStart && !alreadyCounted && !conversationHasOwnMessage(messages)) {
-      setShowRestSheet(true)
+      openRestSheet()
       return
     }
     setShowQuickReplies(false)
@@ -393,7 +406,7 @@ export function CoachScreen() {
   }
 
   const handleEntryNew = () => {
-    if (!canStart) { setShowRestSheet(true); return }
+    if (!canStart) { openRestSheet(); return }
     setMode('chat')
     setShowQuickReplies(true)
     startNewConversation(false)
@@ -499,12 +512,12 @@ export function CoachScreen() {
           busy={entryBusy}
           onResume={handleEntryResume}
           onNew={handleEntryNew}
-          onWellness={() => (canStart ? navigate('/wellness') : setShowRestSheet(true))}
+          onWellness={() => (canStart ? navigate('/wellness') : openRestSheet())}
           onAll={() => navigate('/coach/verlauf')}
           trialHint={showTrialHint}
           lastStartLabel={access?.starts_limit === 3 ? 'dritte' : 'letzte'}
         />
-        {showRestSheet && <RestModeSheet onClose={() => setShowRestSheet(false)} />}
+        {showRestSheet && <RestModeSheet quota={restQuota} onClose={() => setShowRestSheet(false)} />}
         {ratingSheet && <ContinueRatingSheet insight={ratingSheet.insight} onDone={finishRating} />}
       </div>
     )
@@ -605,6 +618,11 @@ export function CoachScreen() {
         </div>
       )}
 
+      {/* Monatskontingent der Begleitung (Paket Z) */}
+      {quotaNotice && (
+        <QuotaNotice kind={quotaNotice.kind} remaining={quotaNotice.remaining} periodEnd={quotaNotice.periodEnd} tier={access?.tier ?? null} />
+      )}
+
       {/* Kappungshinweis (U4, Übergangstext 4) */}
       {capReached && (
         <ConversationCapNotice
@@ -615,7 +633,7 @@ export function CoachScreen() {
 
       {/* Chat Input */}
       <div className="sticky bottom-0">
-        <ChatInput onSend={handleSend} disabled={isLoading || capReached} />
+        <ChatInput onSend={handleSend} disabled={isLoading || capReached || quotaNotice?.kind === 'reached'} />
       </div>
 
       {/* Gesprächs-Abschluss Modal */}
@@ -629,7 +647,7 @@ export function CoachScreen() {
       )}
 
       {/* Ruhemodus-Hinweis (U4, Übergangstext 3) */}
-      {showRestSheet && <RestModeSheet onClose={() => setShowRestSheet(false)} />}
+      {showRestSheet && <RestModeSheet quota={restQuota} onClose={() => setShowRestSheet(false)} />}
 
       {/* Einschätzung nach einem Weiterarbeiten-Gespräch (U5a) */}
       {ratingSheet && <ContinueRatingSheet insight={ratingSheet.insight} onDone={finishRating} />}

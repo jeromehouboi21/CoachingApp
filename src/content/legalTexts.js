@@ -49,6 +49,7 @@ export const AGREEMENT_VERSION = '2.0'
 // Build-Prüfung erst geprüft, wenn der Schalter an ist.
 export const PAYMENTS_ENABLED = false        // Abo, Bestellung, Kündigung, Widerruf, Zahlungsdienstleister
 export const VOICE_MISTRAL_ENABLED = false   // Spracheingabe über Mistral (CODE-1: bis dahin aus)
+export const INTENSIV_ENABLED = false       // „Begleitung intensiv“ (Paket Z, Z-2: erst nach Tranche Prompt-Caching)
 
 // ---------------------------------------------------------------------------
 // Stammdaten: einmal hier pflegen, alle Texte unten übernehmen sie.
