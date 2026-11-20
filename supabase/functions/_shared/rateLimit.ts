@@ -33,6 +33,8 @@ export const RATE_LIMITS = {
                   { bucket: 'mfa_recover_day', limit: 10, window_seconds: DAY }],
   // Stripe Checkout (Gerüst, PAYMENTS_ENABLED), fail-closed
   checkout:      [{ bucket: 'checkout_hour', limit: 10, window_seconds: HOUR }],
+  // Kundenportal (Paket Z), fail-closed
+  portal:        [{ bucket: 'portal_hour', limit: 10, window_seconds: HOUR }],
 } satisfies Record<string, RateRule[]>;
 
 export class RateLimitError extends HttpError {

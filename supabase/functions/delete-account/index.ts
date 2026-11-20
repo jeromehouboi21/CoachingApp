@@ -7,6 +7,7 @@ import { createLogger, describeError } from '../_shared/logger.ts';
 import { HttpError, requireUser, errorResponse, jsonResponse } from '../_shared/auth.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { sendMail } from '../_shared/mailer.ts';
+import { paymentsEnabled, stripeClient, stripeErrorInfo } from '../_shared/stripe.ts';
 
 const CORS_HEADERS = corsHeaders('POST, GET, OPTIONS');
 
@@ -45,6 +46,36 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Schritt 0 (Paket Z, Z-E3): Laufendes Abo bei Stripe sofort beenden, ohne Erstattung.
+    // Scheitert das, wird NICHTS gelöscht (sonst liefe die Abbuchung ohne Konto weiter).
+    // Den Stripe-Kunden nicht löschen (Rechnungen bleiben bei Stripe, Aufbewahrungspflicht).
+    const { data: sub, error: subError } = await supabase.from('subscriptions')
+      .select('stripe_subscription_id, status').eq('user_id', userId).maybeSingle();
+    if (subError) {
+      logger.error('subscription_cancel_failed', { step: 'read', code: subError.code ?? null });
+      return jsonResponse({ error: 'subscription_cancel_failed' }, CORS_HEADERS, 502);
+    }
+    if (sub?.stripe_subscription_id && sub.status !== 'canceled') {
+      const stripe = paymentsEnabled() ? stripeClient() : null;
+      if (!stripe) {
+        logger.error('subscription_cancel_failed', { step: 'config', subscriptionId: sub.stripe_subscription_id });
+        return jsonResponse({ error: 'subscription_cancel_failed' }, CORS_HEADERS, 502);
+      }
+      try {
+        await stripe.subscriptions.cancel(sub.stripe_subscription_id, { prorate: false, invoice_now: false });
+        logger.info('subscription_cancelled_for_deletion', { subscriptionId: sub.stripe_subscription_id });
+      } catch (err: unknown) {
+        const info = stripeErrorInfo(err);
+        // Schon beendet bzw. bei Stripe nicht mehr vorhanden → kein Hindernis für die Löschung
+        if (info.code === 'resource_missing') {
+          logger.info('subscription_cancelled_for_deletion', { subscriptionId: sub.stripe_subscription_id, already: true });
+        } else {
+          logger.error('subscription_cancel_failed', { step: 'stripe', subscriptionId: sub.stripe_subscription_id, ...info });
+          return jsonResponse({ error: 'subscription_cancel_failed' }, CORS_HEADERS, 502);
+        }
+      }
+    }
+
     // Schritt 1: Conversation IDs zuerst separat laden
     const { data: conversations, error: convError } = await supabase
       .from('conversations')
@@ -61,6 +92,8 @@ Deno.serve(async (req) => {
     }
 
     // Dann der Rest parallel
+    // subscriptions, message_quota_periods und message_charges hängen per ON DELETE CASCADE
+    // an profiles bzw. conversations (Migration 042).
     const tables = ['insights', 'pattern_references', 'user_feedback', 'coach_file_entries', 'coachee_profile',
       'session_notes', 'resonance_map', 'user_memory'];
     const results = await Promise.all(tables.map((t) => supabase.from(t).delete().eq('user_id', userId)));

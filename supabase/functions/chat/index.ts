@@ -1518,7 +1518,11 @@ Deno.serve(async (req) => {
       if (!session?.allowed) {
         if (!crisisDetected) {
           logger.warn('session limit reached, request blocked', { conversationId: convId, used: session?.used, limit: session?.limit });
-          return new Response(JSON.stringify({ error: 'session_limit', phase: session?.phase ?? null }), {
+          return new Response(JSON.stringify({
+            error: 'session_limit', phase: session?.phase ?? null,
+            // Paket Z: Kontingent der Begleitung aufgebraucht → Datum statt „Kennenlernen vorbei“
+            ...(session?.reason === 'quota' ? { reason: 'quota', periodEnd: session?.period_end ?? null } : {}),
+          }), {
             status: 429,
             headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
           });
@@ -1528,6 +1532,44 @@ Deno.serve(async (req) => {
         logger.info('Session counted', { conversationId: convId, used: session.used, limit: session.limit });
       }
     }
+
+    // 10b. Paket Z: eigene Nachricht im Monatskontingent buchen (nur Begleitung mit Abo, Handoff 4.4).
+    //      Krisenantwort wird nie blockiert und nicht gebucht (Z-E1). Wiederholungen bucht das Journal
+    //      nicht doppelt. fail-closed: ohne Prüfung keine Nachricht ohne Buchung.
+    let quotaCharged = false;
+    let quotaMeta: { remaining: number; grace: boolean; periodEnd: string | null } | null = null;
+    if (newMessage && convId && isCoaching && !crisisDetected) {
+      const { data: quota, error: quotaError } = await admin.rpc('consume_message', {
+        p_user_id: user.id, p_conversation_id: convId, p_client_message_id: newMessage.clientMessageId,
+      });
+      if (quotaError) {
+        logger.error('quota_check_failed', { conversationId: convId, code: quotaError.code });   // überwacht
+        throw new HttpError(503, 'quota_check_failed');
+      }
+      if (quota?.allowed === false) {
+        logger.info('quota_reached', { conversationId: convId });
+        return jsonResponse({ error: 'quota_reached', periodEnd: quota?.period_end ?? null }, CORS_HEADERS, 409);
+      }
+      quotaCharged = quota?.charged === true;
+      if (quotaCharged && (quota?.warn === true || quota?.grace === true)) {
+        quotaMeta = {
+          remaining: typeof quota?.remaining === 'number' ? quota.remaining : 0,
+          grace: quota?.grace === true,
+          periodEnd: quota?.period_end ?? null,
+        };
+        if (quota?.warn === true) logger.info('quota_warned', { conversationId: convId, remaining: quotaMeta.remaining });
+      }
+    }
+    // Zurückbuchen, wenn die Nachricht nicht beantwortet werden konnte (Handoff 4.4 Nr. 3)
+    const refundQuota = async (reason: string) => {
+      if (!quotaCharged || !newMessage || !convId) return;
+      quotaCharged = false;
+      const { error: refundError } = await admin.rpc('refund_message', {
+        p_conversation_id: convId, p_client_message_id: newMessage.clientMessageId,
+      });
+      if (refundError) logger.error('quota_refund_failed', { conversationId: convId, reason, code: refundError.code });
+      else logger.info('quota_refunded', { conversationId: convId, reason });
+    };
 
     // 11. Nutzer-Nachricht speichern (nur neues Format; Retry legt keine zweite an)
     if (newMessage && convId && !existingUserMessage) {
@@ -1541,6 +1583,7 @@ Deno.serve(async (req) => {
       }, { onConflict: 'conversation_id,client_message_id', ignoreDuplicates: true }).select('id, created_at');
       if (insertError) {
         logger.error('user_message_insert_failed', { conversationId: convId, code: insertError.code });
+        await refundQuota('insert_failed');
         throw new HttpError(500, 'message_insert_failed');
       }
       let row: { id: string; created_at: string } | undefined = inserted?.[0];
@@ -1552,6 +1595,7 @@ Deno.serve(async (req) => {
       }
       if (!row) {
         logger.error('user_message_insert_failed', { conversationId: convId, code: 'not_found_after_upsert' });
+        await refundQuota('insert_failed');
         throw new HttpError(500, 'message_insert_failed');
       }
       userMessageId = row.id;
@@ -1658,7 +1702,10 @@ Deno.serve(async (req) => {
 
     logger.info('Anthropic API call started', { requestId: safeRequestId, model: COACH_MODEL, messageCount: apiMessages.length });
     const streamStart = Date.now();
-    const stream = await anthropic.messages.stream({
+    // deno-lint-ignore no-explicit-any
+    let stream: any;
+    try {
+    stream = await anthropic.messages.stream({
       model: COACH_MODEL,
       // Der Pflichttext im Krisenfall braucht mehr Raum und darf nicht abgeschnitten werden.
       max_tokens: crisisDetected ? COACH_CRISIS_MAX_TOKENS : COACH_MAX_TOKENS,
@@ -1672,6 +1719,10 @@ Deno.serve(async (req) => {
             ? '[Hinweis: Der Mensch hat dieses Gespräch wieder geöffnet und noch nichts geschrieben. Beginne nach dem Block FORTSETZUNG.]'
             : undefined),
     });
+    } catch (streamStartError: unknown) {
+      await refundQuota('stream_start_failed');
+      throw streamStartError;
+    }
 
     const encoder = new TextEncoder();
     let clientGone = false;
@@ -1695,6 +1746,8 @@ Deno.serve(async (req) => {
             send(`data: ${JSON.stringify({ meta: {
               messageType,
               ...(persist ? { userMessageId, assistantMessageId: assistantId } : {}),
+              // Paket Z: nur beim Hinweis ab 80 % bzw. in der Kulanz, sonst kein Zähler
+              ...(quotaMeta ? { quota: quotaMeta } : {}),
             } })}\n\n`);
           }
 
@@ -1751,6 +1804,7 @@ Deno.serve(async (req) => {
               }
             } else {
               logger.warn('assistant_empty', { conversationId: convId, streamFailed });
+              await refundQuota('assistant_empty');
             }
           }
 

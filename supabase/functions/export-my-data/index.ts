@@ -19,7 +19,7 @@ const IN_CHUNK = 100;            // Gesprächs-IDs pro .in()-Abfrage (URL-Länge
 type Filter = 'user_id' | 'source_user_id' | 'id' | 'conversation_id';
 interface ExportTable {
   table: string;
-  group: 'konto' | 'gespraeche' | 'spiegel_akte' | 'coach_notizen' | 'sicherheit_support' | 'lernbasis';
+  group: 'konto' | 'abo' | 'gespraeche' | 'spiegel_akte' | 'coach_notizen' | 'sicherheit_support' | 'lernbasis';
   filter: Filter;
   /** Stabile Sortierung für das seitenweise Lesen */
   order: string[];
@@ -30,6 +30,9 @@ interface ExportTable {
 export const EXPORT_TABLES: ExportTable[] = [
   { table: 'profiles',            group: 'konto',              filter: 'id',              order: ['id'] },
   { table: 'mfa_recovery_codes',  group: 'konto',              filter: 'user_id',         order: ['created_at', 'id'] },   // ohne code_hash
+  { table: 'subscriptions',         group: 'abo',                filter: 'user_id',         order: ['user_id'] },
+  { table: 'message_quota_periods', group: 'abo',                filter: 'user_id',         order: ['period_start'] },
+  { table: 'message_charges',       group: 'abo',                filter: 'user_id',         order: ['charged_at', 'client_message_id'] },
   { table: 'conversations',       group: 'gespraeche',         filter: 'user_id',         order: ['created_at', 'id'] },
   { table: 'messages',            group: 'gespraeche',         filter: 'conversation_id', order: ['created_at', 'id'] },
   { table: 'insights',            group: 'spiegel_akte',       filter: 'user_id',         order: ['created_at', 'id'] },
@@ -55,6 +58,7 @@ export const EXCLUDED_TABLES: Record<string, string> = {
   supervision_logs: 'Wochen-Zähler und allgemeine Empfehlungen ohne Personenbezug.',
   security_alerts: 'Zusammengefasste Alarme ohne Bezug zu einzelnen Personen.',
   invite_codes: 'Einladungscodes ohne Bezug zu einzelnen Personen.',
+  stripe_events: 'Technische Ereignis-IDs von Stripe zur Vermeidung doppelter Verarbeitung, ohne Bezug zu einzelnen Personen.',
 };
 
 // Spalten, die nie in die Datei gehören: Vektoren, Hashes, IDs anderer Menschen
@@ -62,6 +66,7 @@ const DROP_COLUMNS = new Set(['embedding', 'code_hash', 'invited_by']);
 
 const GROUP_INFO: Record<string, string> = {
   konto: 'Dein Konto: E-Mail-Adresse, Anlage- und Anmeldezeitpunkte, eingerichtete zweite Faktoren (ohne Geheimnisse), wann Wiederherstellungscodes erzeugt und verwendet wurden (ohne die Codes) und dein Profil mit Einwilligungen.',
+  abo: 'Dein Abo, falls du eines hast: Stufe, Laufzeit, Status und Daten, die Kennungen bei Stripe, deine Monatskontingente und wann eine Nachricht gezählt wurde (ohne Inhalte). Rechnungen und Zahlungsdaten liegen bei Stripe.',
   gespraeche: 'Alle deine Gespräche mit dem Coach, mit jeder Nachricht von dir und vom Coach.',
   spiegel_akte: 'Was im Spiegel steht und was der Coach sich über dich merkt: Erkenntnisse, Akte-Einträge, Personenprofil, erkannte Muster und Innere Stimmen.',
   coach_notizen: 'Die Notizen, die der Coach im Hintergrund führt: Gesprächsnotizen, Resonanzkarte und seine Selbstreflexion zu deinen Gesprächen.',
@@ -148,7 +153,7 @@ Deno.serve(async (req) => {
         },
         zweite_faktoren: factors,
       },
-      gespraeche: {}, spiegel_akte: {}, coach_notizen: {}, sicherheit_support: {}, lernbasis: {},
+      abo: {}, gespraeche: {}, spiegel_akte: {}, coach_notizen: {}, sicherheit_support: {}, lernbasis: {},
     };
 
     let rowCount = 1 + factors.length;

@@ -41,7 +41,21 @@ export const RULES: Rule[] = [
   // Stripe Checkout (Gerüst):
   { id: 'checkout_failed',         codes: ['checkout_session_failed', 'checkout_not_configured'], windowMin: 60, threshold: 3, label: 'Bezahlseite ließ sich nicht öffnen' },
   // nur in der Wochenübersicht:
-  { id: 'checkout_usage',          codes: ['checkout_session_created', 'checkout_disabled'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Bezahlseite geöffnet bzw. noch abgeschaltet' },
+  // Paket Z (Zahlung und Abo):
+  { id: 'stripe_webhook_signature_invalid', codes: ['stripe_webhook_signature_invalid'], windowMin: 60, threshold: 5, label: 'Webhook mit ungültiger Stripe-Signatur' },
+  { id: 'stripe_webhook_failed',   codes: ['stripe_webhook_failed'],   windowMin: 60,    threshold: 1,  label: 'Stripe-Ereignis nicht verarbeitet' },
+  { id: 'stripe_webhook_unmatched', codes: ['stripe_webhook_unmatched'], windowMin: 60,  threshold: 1,  label: 'Stripe-Abo ohne zugeordnetes Konto' },
+  { id: 'stripe_webhook_not_configured', codes: ['stripe_webhook_not_configured'], windowMin: 60, threshold: 1, label: 'Webhook ohne Secret bzw. Schlüssel' },
+  { id: 'quota_check_failed',      codes: ['quota_check_failed'],      windowMin: 60,    threshold: 1,  label: 'Monatskontingent nicht prüfbar' },
+  { id: 'quota_refund_failed',     codes: ['quota_refund_failed'],     windowMin: 60,    threshold: 1,  label: 'Nachricht nicht zurückgebucht' },
+  { id: 'subscription_cancel_failed', codes: ['subscription_cancel_failed'], windowMin: 60, threshold: 1, label: 'Abo bei Kontolöschung nicht gekündigt' },
+  { id: 'portal_session_failed',   codes: ['portal_session_failed'],   windowMin: 60,    threshold: 3,  label: 'Kundenportal ließ sich nicht öffnen' },
+  { id: 'subscription_events',     codes: ['subscription_started', 'subscription_changed', 'subscription_renewed', 'subscription_ended'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Abos: begonnen, gewechselt, verlängert, beendet' },
+  { id: 'payment_failed',          codes: ['payment_failed'],          windowMin: 10080, threshold: 0, infoOnly: true, label: 'Zahlung gescheitert (Stripe versucht es erneut)' },
+  { id: 'quota_events',            codes: ['quota_warned', 'quota_reached', 'quota_refunded'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Monatskontingent: Hinweis, Grenze, Zurückbuchung' },
+  { id: 'stripe_webhook_ignored',  codes: ['stripe_webhook_ignored', 'stripe_webhook_orphan_ended'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Stripe-Ereignisse ohne Wirkung' },
+  { id: 'portal_usage',            codes: ['portal_session_created'],  windowMin: 10080, threshold: 0, infoOnly: true, label: 'Kundenportal geöffnet' },
+  { id: 'checkout_usage',         codes: ['checkout_session_created', 'checkout_disabled'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Bezahlseite geöffnet bzw. noch abgeschaltet' },
   // Paket P (PWA): nur Codes aus dem Browser (origin client)
   { id: 'pwa_client_error',        codes: ['pwa_register_failed', 'pwa_update_failed', 'pwa_install_prompt_failed'], windowMin: 1440, threshold: 10, origin: 'client', label: 'Fehler bei App-Installation oder Update' },
   { id: 'pwa_usage',               codes: ['pwa_launched_standalone', 'pwa_update_applied', 'pwa_install_choice'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Installierte App: Starts, Updates, Installationen' },
