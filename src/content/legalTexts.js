@@ -16,13 +16,31 @@
 //   CODE-4  chat prüft die Zustimmung (Version 2.0) serverseitig (B11)
 //   CODE-5  Abschnitte mit paymentOnly erst anzeigen, wenn die Zahlung live ist (B7)
 //
-// Die Build-Prüfung (scripts/security/check-content.mjs)
-//   - bricht jeden Produktions-Build ab, solange LEGAL_TEXTS_APPROVED nicht true ist,
-//   - bricht ab, wenn LEGAL_TEXTS_APPROVED true ist und noch eine [eckige Klammer] im Text steht.
+// Freigabe in drei Stufen (LEGAL_TEXTS_STATUS), geprüft von scripts/security/check-content.mjs:
+//   'entwurf'      – Produktion gesperrt, Klammern erlaubt (nur Vorschau-Builds)
+//   'vorlaeufig'   – Produktion erlaubt; angezeigte Texte ohne [Klammern], PRELIMINARY_NOTICE sichtbar;
+//                    offene Fragen an den Anwalt stehen in LEGAL_REVIEW_OPEN (nicht im Text)
+//   'freigegeben'  – zusätzlich LEGAL_REVIEW_OPEN leer, Kennzeichnung verschwindet
 // allLegalStrings() sammelt alle Texte dieser Datei automatisch ein.
-// LEGAL_TEXTS_APPROVED setzt nur Jerome (J-K4). Claude Code ändert diesen Wert nie.
+// LEGAL_TEXTS_STATUS setzt nur Jerome. Claude Code ändert diesen Wert nie.
 
-export const LEGAL_TEXTS_APPROVED = false
+export const LEGAL_TEXTS_STATUS = 'entwurf'   // 'entwurf' | 'vorlaeufig' | 'freigegeben'
+
+// Sichtbare Kennzeichnung, solange die Texte nicht 'freigegeben' sind (Screen 3, Vereinbarung,
+// Datenschutzerklärung). Text von Jerome freigegeben am 20.11.2026.
+export const PRELIMINARY_NOTICE = 'Vorläufige Fassung vom 20.11.2026. Die anwaltliche Prüfung steht noch aus. Ändert sich danach etwas, zeige ich dir die neue Fassung und du entscheidest erneut.'
+export const SHOW_PRELIMINARY_NOTICE = LEGAL_TEXTS_STATUS !== 'freigegeben'
+
+// Offene Fragen an den Anwalt (docs/konto/anwaltstermin-fragen.md). Stehen bewusst NICHT im
+// angezeigten Text. Erst wenn diese Liste leer ist, darf der Status 'freigegeben' werden.
+export const LEGAL_REVIEW_OPEN = [
+  { id: 'R1', where: 'DATA_RECIPIENTS Anthropic', question: 'Anthropic DPA, Schedule 1 B.3 „Special categories: None“ – trägt der Vertrag die Übermittlung von Gesundheits- und Gefühlsdaten?', ref: 'Fragenliste Nr. 1' },
+  { id: 'R2', where: 'DATA_RECIPIENTS OpenAI', question: 'OpenAI DPA, Schedule 1 Nr. 5 „No sensitive data is intended“ – darf die erste Nachricht an OpenAI gehen (nur mit Lernbasis)?', ref: 'Fragenliste Nr. 2' },
+  { id: 'R3', where: 'CONSENT_ART9_CHECKBOX', question: 'Darf das allgemeine Lernen (Supervision) Teil der Pflicht-Einwilligung sein? Art. 7 Abs. 4 DSGVO', ref: 'Fragenliste Nr. 3' },
+  { id: 'R4', where: 'Vereinbarung, Krisen-Eintrag', question: 'Rechtsgrundlage (Art. 9 Abs. 2 lit. f) und Dauer (drei Jahre) des Krisen-Eintrags; Löschung mit dem Konto', ref: 'Fragenliste Nr. 4' },
+  { id: 'R5', where: 'Vereinbarung, Haftung', question: 'Haftungsbeschränkung beim kostenlosen Kennenlernen zulässig?', ref: 'Fragenliste Nr. 5' },
+  { id: 'R6', where: 'gesamte Fassung', question: 'Weitere Punkte zur Bestätigung (Pflicht-Einwilligung, Betreiberzugang, neue Fassung, Bestandsnutzer, Vercel, one.com, KI-Hinweis, 18+, Schweigepflicht)', ref: 'Fragenliste Nr. 6–14' },
+]
 
 export const CONSENT_VERSION = '2.0'
 export const AGREEMENT_VERSION = '2.0'
@@ -45,7 +63,7 @@ export const OPERATOR = {
 // Frist aus dem Supabase-Dashboard (Database → Backups) plus Puffer, siehe B10.
 // Supabase: tägliche Sicherung, 7 Tage aufbewahrt (Dashboard → Database → Backups, 20.11.2026) + Puffer.
 // Point-in-Time-Recovery ist NICHT aktiv. Wird das Add-on eingeschaltet, diese Frist neu prüfen.
-const BACKUP_DELETION = 'spätestens nach 14 Tagen'
+export const BACKUP_DELETION = 'spätestens nach 14 Tagen'
 
 // App-Routen (B3). Die Ziele müssen existieren.
 export const LEGAL_LINKS = {
@@ -96,7 +114,7 @@ export const AGREEMENT_SUMMARY = {
 // ---------------------------------------------------------------------------
 export const AGREEMENT_CHECKBOX = 'Ich habe die Coaching-Vereinbarung gelesen und stimme ihr zu.'
 
-export const CONSENT_ART9_CHECKBOX = 'Ich willige ausdrücklich ein, dass die App meine Gespräche speichert und auswertet, auch die darin enthaltenen Angaben zu meiner seelischen Gesundheit und zu anderen sensiblen Lebensbereichen. Das ist nötig, damit der Begleiter mich über mehrere Gespräche hinweg begleiten, mir meinen Spiegel und meine Erkenntnisse zeigen und Hinweise auf eine Krise erkennen kann. Außerdem darf die KI aus meinen Gesprächen allgemein lernen, was im Coaching hilft, ohne Zitate und ohne Angaben zu mir. Dafür werden die Inhalte auch an KI-Anbieter in den USA übermittelt. [Prüfen: Darf das allgemeine Lernen (Supervision) Teil dieser Einwilligung sein, ohne die der Begleiter nicht nutzbar ist? Art. 7 Abs. 4 DSGVO]'
+export const CONSENT_ART9_CHECKBOX = 'Ich willige ausdrücklich ein, dass die App meine Gespräche speichert und auswertet, auch die darin enthaltenen Angaben zu meiner seelischen Gesundheit und zu anderen sensiblen Lebensbereichen. Das ist nötig, damit der Begleiter mich über mehrere Gespräche hinweg begleiten, mir meinen Spiegel und meine Erkenntnisse zeigen und Hinweise auf eine Krise erkennen kann. Außerdem darf die KI aus meinen Gesprächen allgemein lernen, was im Coaching hilft, ohne Zitate und ohne Angaben zu mir. Dafür werden die Inhalte auch an KI-Anbieter in den USA übermittelt.'   // Prüfpunkt R3
 
 export const CONSENT_WITHDRAWAL = `Du kannst diese Einwilligung jederzeit mit Wirkung für die Zukunft widerrufen, indem du dein Konto löschst oder mir an ${OPERATOR.email} schreibst. Ohne Einwilligung lässt sich der Begleiter nicht weiter nutzen. Deine Daten werden dann gelöscht, ${BACKUP_DELETION} auch aus den Sicherungskopien. Was bis zum Widerruf verarbeitet wurde, bleibt rechtmäßig.`
 
@@ -184,7 +202,7 @@ export const AGREEMENT_FULL = [
       'Ich lese deine Gespräche nicht. Ausnahmen: Du bittest mich darum, ein technischer Fehler erfordert meinen Eingriff, ich bin gesetzlich dazu verpflichtet, oder es geht um einen Krisenausschnitt (siehe unten). Technisch habe ich über die Verwaltung der Datenbank Zugriff auf alle gespeicherten Daten. Diese Zugriffe werden derzeit nicht gesondert protokolliert.',
       // A5
       'Erkennt die App in einem Gespräch Hinweise auf eine akute Krise, zeigt sie dir Hilfsangebote und speichert einen kurzen Ausschnitt deiner Nachricht (höchstens 300 Zeichen). Diesen sehe ich mir später an, um zu prüfen, ob die Krisenerkennung richtig angeschlagen hat, und um sie zu verbessern. Ich kann dabei nicht in Echtzeit reagieren. Der Ausschnitt wird nach meiner Sichtung gelöscht, spätestens nach 90 Tagen.',
-      'Dass es einen solchen Hinweis gab (Zeitpunkt und Einstufung, ohne deinen Text), bleibt bis zum Ende des dritten Jahres danach gespeichert. So kann ich nachweisen, dass die App Hilfsangebote gezeigt hat. Löschst du dein Konto, wird auch dieser Eintrag sofort gelöscht. [Prüfen: Rechtsgrundlage Art. 9 Abs. 2 lit. f DSGVO und Dauer]',
+      'Dass es einen solchen Hinweis gab (Zeitpunkt und Einstufung, ohne deinen Text), bleibt bis zum Ende des dritten Jahres danach gespeichert. So kann ich nachweisen, dass die App Hilfsangebote gezeigt hat. Löschst du dein Konto, wird auch dieser Eintrag sofort gelöscht.',   // Prüfpunkt R4
       // A3
       'Ich nutze deine Inhalte, damit der Begleiter für dich funktioniert. Dazu gehört, dass die App deine Gespräche auswertet, um dir deinen Spiegel und deine Erkenntnisse zu zeigen. Für Werbung nutze ich sie nicht, und ich verkaufe sie nicht.',
       'Damit der Begleiter insgesamt besser wird, hält die KI nach jedem Gespräch kurz fest, was geholfen hat und was gefehlt hat, ohne Namen, Zitate und andere Angaben, die dich erkennbar machen. Einmal pro Woche fasst sie diese Notizen aus allen Gesprächen zu allgemeinen Empfehlungen zusammen, die in die Antworten des Begleiters für alle einfließen. Die Notizen werden mit deinem Konto gelöscht, spätestens nach 12 Monaten. Die Empfehlungen werden nach 24 Monaten gelöscht.',
@@ -194,7 +212,11 @@ export const AGREEMENT_FULL = [
       // A4
       'Nutzt die App die Lernbasis, geht die erste Nachricht eines Gesprächs zusätzlich an OpenAI (USA). Daraus wird ein Zahlenwert berechnet, mit dem die App passende Erfahrungen findet. Hast du der Lernbasis zugestimmt, gehen auch die aufbereiteten Erfahrungen aus deinen Gesprächen an OpenAI.',
       'Die Übermittlung in die USA ist über die EU-Standardvertragsklauseln abgesichert, die in den Verträgen mit Anthropic und OpenAI vereinbart sind. In den USA gilt dennoch ein anderes Datenschutzniveau als in der EU, und Behörden können dort unter bestimmten Voraussetzungen auf Daten zugreifen.',
-      'Beide KI-Anbieter nutzen deine Inhalte nach ihren Vertragsbedingungen nicht, um ihre KI-Modelle zu trainieren. Sie speichern sie höchstens befristet, zum Beispiel um Missbrauch zu erkennen. [Prüfen: Die DPAs regeln nur die Zweckbindung (Anthropic B.2/B.3, OpenAI 1.2), weder Training noch Speicherfristen ausdrücklich. Beides steht in den Commercial Terms bzw. Datenrichtlinien von Anthropic und OpenAI – diese Dokumente in docs/DPA/ ablegen.]',
+      'Beide KI-Anbieter nutzen deine Inhalte nach ihren Vertragsbedingungen nicht, um ihre KI-Modelle zu trainieren. Sie speichern sie höchstens befristet, zum Beispiel um Missbrauch zu erkennen.',
+      // Belegt 20.11.2026: Anthropic Commercial Terms (gültig ab 17.06.2025) B: „Anthropic may not train models on
+      // Customer Content“; privacy.claude.com Art. 7996866: API-Daten nach 30 Tagen gelöscht, bei Verstoß gegen die
+      // Usage Policy bis 2 Jahre. OpenAI „Your data“ (developers.openai.com): kein Training, Missbrauchs-Logs bis 30 Tage,
+      // auch /v1/embeddings.
       // A2 / CODE-1: nur mit VOICE_MISTRAL_ENABLED (Text in VOICE_MISTRAL_NOTE)
       ...(VOICE_MISTRAL_ENABLED ? [VOICE_MISTRAL_NOTE] : []),
       'Welche Dienstleister welche Daten wozu erhalten, steht vollständig in der Datenschutzerklärung.',
@@ -258,7 +280,7 @@ export const AGREEMENT_FULL = [
     points: [
       'Ich hafte unbeschränkt bei Vorsatz und grober Fahrlässigkeit, bei einer Verletzung von Leben, Körper oder Gesundheit und nach dem Produkthaftungsgesetz.',
       'Bei leichter Fahrlässigkeit hafte ich nur, wenn ich eine wesentliche Vertragspflicht verletze. Das ist eine Pflicht, deren Erfüllung die Nutzung des Begleiters überhaupt erst möglich macht und auf die du dich deshalb verlassen darfst. Die Haftung ist dann auf den typischen, vorhersehbaren Schaden begrenzt.',
-      'Für kostenlose Leistungen hafte ich nur bei Vorsatz und grober Fahrlässigkeit sowie bei einer Verletzung von Leben, Körper oder Gesundheit. [Prüfen: Zulässigkeit beim kostenlosen Kennenlernen]',
+      'Für kostenlose Leistungen hafte ich nur bei Vorsatz und grober Fahrlässigkeit sowie bei einer Verletzung von Leben, Körper oder Gesundheit.',   // Prüfpunkt R5
     ],
   },
   {
@@ -368,11 +390,11 @@ export const WITHDRAWAL_FORM = {
 export const DATA_RECIPIENTS = [
   {
     // Quelle: Anthropic DPA, wirksam ab 24.02.2025 (docs/DPA/Anthropic DPA.pdf)
-    name: 'Anthropic',
-    location: 'USA',
+    name: 'Anthropic (Vertragspartner für die EU: Anthropic Ireland, Limited)',
+    location: 'Irland (Vertragspartner), Verarbeitung in den USA',
     purpose: 'Antworten des Begleiters; Auswertung für Spiegel, Erkenntnisse, Krisenerkennung, Reflexionen und Supervision; Prüfung der Lernbasis-Einträge',
     data: 'Gesprächsinhalte und Kontext aus früheren Gesprächen',
-    safeguard: 'Auftragsverarbeitungsvertrag (Anthropic DPA vom 24.02.2025) mit EU-Standardvertragsklauseln (Modul 2, Abschnitt I). [Prüfen: Das DPA nennt unter Schedule 1 B.3 „Special categories of personal data: None“ – die App übermittelt aber Gesundheits- und Gefühlsdaten. Vertragspartner (Anthropic PBC oder Anthropic Ireland) laut Commercial Terms klären.]',
+    safeguard: 'Auftragsverarbeitungsvertrag (Anthropic DPA vom 24.02.2025) mit EU-Standardvertragsklauseln (Modul 2, Abschnitt I). Vertragspartner für Kunden in der EU: Anthropic Ireland, Limited (Commercial Terms).',   // Prüfpunkt R1
   },
   {
     // Quelle: OpenAI DPA v.010126 (docs/DPA/OpenAI DPA.pdf)
@@ -380,7 +402,7 @@ export const DATA_RECIPIENTS = [
     location: 'Irland (Vertragspartner), Verarbeitung auch in den USA',
     purpose: 'Berechnung von Zahlenwerten (Vektoren), um passende Erfahrungen aus der Lernbasis zu finden; nur solange die Lernbasis genutzt wird',
     data: 'Erste Nachricht eines Gesprächs (bis 2.000 Zeichen); mit Zustimmung zur Lernbasis zusätzlich aufbereitete Erfahrungen',
-    safeguard: 'Auftragsverarbeitungsvertrag (OpenAI DPA v.010126). Weitergabe in die USA über EU-Standardvertragsklauseln oder einen Angemessenheitsbeschluss (Ziffer 4.1). [Prüfen: Laut Schedule 1 Nr. 5 sind keine sensiblen Daten vorgesehen – die erste Nachricht kann aber Gesundheitsangaben enthalten.]',
+    safeguard: 'Auftragsverarbeitungsvertrag (OpenAI DPA v.010126). Weitergabe in die USA über EU-Standardvertragsklauseln oder einen Angemessenheitsbeschluss (Ziffer 4.1).',   // Prüfpunkt R2
   },
   {
     // Quelle: Supabase DPA Version 1 vom 01.08.2026 (docs/DPA/Supabase DPA.pdf)

@@ -1,5 +1,6 @@
 import { Avatar } from '../ui/Avatar'
 import { getAgreementSections, AGREEMENT_SIGNATURE } from '../../content/legalTexts'
+import { PreliminaryNotice } from './PreliminaryNotice'
 
 /**
  * Der volle Text der Coaching-Vereinbarung (seit Paket K W3 aus src/content/legalTexts.js, v2.0).
@@ -10,6 +11,7 @@ import { getAgreementSections, AGREEMENT_SIGNATURE } from '../../content/legalTe
 export function CoachingAgreementContent() {
   return (
     <div className="flex flex-col gap-6 text-[14px] text-ink-2 leading-[1.7]">
+      <PreliminaryNotice />
       {getAgreementSections().map(section => (
         <section key={section.heading}>
           <p className="text-[13px] text-ink-3 uppercase tracking-[0.05em] font-medium mb-2">{section.heading}</p>

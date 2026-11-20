@@ -9,6 +9,7 @@ import {
 } from '../../content/legalTexts'
 import { CoachingAgreementContent } from './CoachingAgreementContent'
 import { LegalSheet } from './LegalSheet'
+import { PreliminaryNotice } from './PreliminaryNotice'
 
 export function ConsentStep({ title = AGREEMENT_SUMMARY.title, intro = AGREEMENT_SUMMARY.intro, onAccept, busy = false, error = '', onDecline, header = null, note = null }) {
   const [agreement, setAgreement] = useState(false)
@@ -20,7 +21,8 @@ export function ConsentStep({ title = AGREEMENT_SUMMARY.title, intro = AGREEMENT
       {header}
 
       <h1 className="font-display text-[26px] text-ink leading-[1.25] mb-2">{title}</h1>
-      <p className="text-[14px] text-ink-2 leading-relaxed mb-6">{intro}</p>
+      <p className="text-[14px] text-ink-2 leading-relaxed mb-4">{intro}</p>
+      <PreliminaryNotice className="mb-6" />
       {note && <p className="text-[13px] text-ink-2 bg-surface-2 rounded-lg px-4 py-3 leading-relaxed mb-6">{note}</p>}
 
       <ul className="flex flex-col gap-3 mb-5">
