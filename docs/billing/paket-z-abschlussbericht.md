@@ -115,7 +115,7 @@ Test 27 prüft den Export als B, auch mit der neuen Gruppe `abo`. Er sollte an e
 ## 5. Beobachtungen
 
 1. **Stripe-Kunde bleibt nach der Kontolöschung bestehen.** Abo und Rechnungen enden bzw. bleiben wie vorgesehen. Bei Stripe bleiben aber auch E-Mail-Adresse, hinterlegte Karte und `user_id` in den Metadaten. Den Kunden zusätzlich zu löschen (`customers.del`) würde Karte und Adresse entfernen; Rechnungen behält Stripe wegen der Aufbewahrungspflichten ohnehin. **Vorschlag:**
-   - Frage auf die Anwaltsliste.
+   - Frage auf die Anwaltsliste. **Erledigt:** Frage 22 in `docs/konto/anwaltstermin-fragen.md`.
    - Wenn gewünscht, als eigener kleiner Schritt in `delete-account` nach der Kündigung.
 2. **Kundenportal und Bezahlseite auf Englisch.** Stripe folgt der Browsersprache. Für den Live-Gang `locale: 'de'` in Checkout und Portal setzen (ein Parameter je Function).
 3. **Sprachprinzip im Coach.** In einer Antwort stand „Du musst es auch nicht genau wissen“. Der Prompt ist unverändert; das ist ein Thema für eine spätere Prompt-Tranche.
