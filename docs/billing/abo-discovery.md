@@ -161,7 +161,7 @@ Auf dem Branch `feature/stripe-checkout-geruest` (nicht gemergt) liegen:
 
 - **Z-E1 Krisenantwort an der Monatsgrenze:** wird nie blockiert und **nicht gebucht**.
 - **Z-E2 Stufe im Plan:** Variante a. `plan = 'premium'` bleibt der eine Abo-Plan, die Stufe (`begleitung` | `intensiv`) steht in `subscriptions.tier`. Der CHECK auf `plan` bleibt unverändert.
-- **Z-E3 Konto löschen mit laufendem Abo:** offen. Vorschlag: Die Löschung beendet das Abo bei Stripe sofort, ohne Erstattung, mit Hinweis im Löschdialog. Scheitert die Kündigung, bricht die Löschung ab. Die Alternative „erst kündigen, dann löschen“ ist auch möglich (DSGVO-Frage beim Anwalt).
+- **Z-E3 Konto löschen mit laufendem Abo:** Die Löschung beendet das Abo bei Stripe **sofort, ohne Erstattung** der restlichen bezahlten Tage. Der Löschdialog weist vorher darauf hin (z. B. „Dein Abo endet damit sofort.“). `delete-account` kündigt zuerst bei Stripe. Scheitert das, bricht die Löschung ab (fail-closed, fester Log-Code, Monitoring-Regel), damit ein gelöschtes Konto nie weiter belastet wird. Keine Sperre „erst kündigen“. Für die Anwaltsliste: Ist „keine Erstattung bei Löschung“ zulässig, und wie muss es in Vereinbarung bzw. Abo-Bedingungen stehen?
 
 ## Beobachtungen
 
