@@ -77,7 +77,13 @@ Lokal getestet (`npm run dev`, `PAYMENTS_ENABLED` vorübergehend an, `SITE_URL` 
 **Zu Test 12:** Ob das Kontingent neu beginnt, lässt sich mit der Testuhr nicht prüfen, weil die Datenbank mit der echten Zeit rechnet. Geprüft wurde `current_quota_period(anker, '2026-12-21')`, Ergebnis 20.12.2026–20.01.2027, dazu der PGlite-Test (25 Fälle) beim Bau.
 
 **Angriffstest:** `npm run security:test` → 193 Tests, **189 PASS, 0 FAIL, 4 SKIP**.
-Offen: Zuordnung der 4 SKIP-Zeilen. Erwartung: Z1–Z7 sind PASS, denn Webhook-Secret und `PAYMENTS_ENABLED=1` sind gesetzt.
+Z1–Z7 sind PASS. Die 4 SKIP sind bekannte Fälle außerhalb von Paket Z:
+- K8: A und B haben bereits zugestimmt
+- 15: `supervision` wird nicht aufgerufen
+- 27: Export-Tageslimit erreicht
+- 34–38: MFA-Lauf nur mit `ATTACK_TEST_MFA=1`
+
+Test 27 prüft den Export als B, auch mit der neuen Gruppe `abo`. Er sollte an einem der nächsten Tage einmal nachgeholt werden.
 
 **Löschtest:** Test 10 gilt als Löschtest mit Abo (Entscheidung Jerome, 20.11.2026). Der Skriptlauf mit `DELETION_TEST_SUBSCRIPTION=1` hätte dasselbe geprüft und ein neues Konto C mit Sandbox-Abo gebraucht.
 
