@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041)
+> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041)
 
 ---
 
@@ -33,7 +33,7 @@
 | Backend | Supabase (Auth + PostgreSQL + Edge Functions) |
 | KI | Anthropic Claude API · `claude-sonnet-5-5` (Streaming, Haupt-Coach, seit 19.11.2026) · `claude-haiku-4-5-20251001` (Post-Processing, Klassifikation) · Modell-IDs nur in `_shared/models.ts` |
 | Hosting | Vercel · Domain: `app.friedensstifter.coach` |
-| PWA | `vite-plugin-pwa` (Workbox) |
+| PWA | `vite-plugin-pwa` 0.20.5 (Workbox, `registerType: 'prompt'`, nur Precache) · Icons über `npm run pwa:icons` |
 | Logging | `app_logs`-Tabelle (serverseitig) + Browser-Console (clientseitig) |
 
 **Schlüsselprinzipien:**
@@ -63,7 +63,10 @@ CoachingApp/
 │   │   ├── useAdminMfa.js               ← Zweiter Faktor für den Admin-Bereich + AdminMfaContext (nutzt lib/mfa.js)
 │   │   ├── useMemory.js                 ← Legacy Coach-Gedächtnis (user_memory)
 │   │   ├── useStreak.js                 ← Tage-in-Folge (streak_count), seit U1 nirgends angezeigt
-│   │   └── useVoiceInput.js             ← Web Speech API (de-DE)
+│   │   ├── useVoiceInput.js             ← Web Speech API (de-DE); Mikrofon derzeit aus (VOICE_MISTRAL_ENABLED)
+│   │   ├── useInstallPrompt.js          ← Paket P: Installationsweg je Gerät (prompt · ios_manual · open_in_browser · installed · unsupported)
+│   │   ├── useOnline.js                 ← Paket P: online/offline
+│   │   └── useChatBusy.js               ← Paket P: „Coach antwortet gerade“ (aus lib/chatActivity.js)
 │   │
 │   ├── lib/
 │   │   ├── supabase.js                  ← Supabase-Client (anon key)
@@ -74,6 +77,8 @@ CoachingApp/
 │   │   ├── mfa.js                       ← Zweiter Faktor: Stand, Einrichten, Prüfen, mfa-recovery, globaler Fehlerpfad (S-06b)
 │   │   ├── passwordPolicy.js            ← 12 Zeichen, PASSWORD_MESSAGES, mapAuthError (Paket K W1)
 │   │   ├── passwordRecovery.js          ← erkennt den Reset-Link vor dem Supabase-Client (erster Import in main.jsx, W1)
+│   │   ├── installPrompt.js             ← Paket P: fängt beforeinstallprompt vor dem ersten Rendern ab (Import in main.jsx)
+│   │   ├── chatActivity.js              ← Paket P: globaler Merker „Antwort läuft“ (von useChat gesetzt)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
 │   │
 │   ├── content/                         ← Inhalte mit Freigabe-/Belegpflicht (Paket K)
@@ -99,7 +104,7 @@ CoachingApp/
 │   │   │   └── ProfileButton.jsx        ← Avatar oben rechts → /profile (Heute, Gespräch, Spiegel)
 │   │   ├── coach/                       ← Chat-spezifische Komponenten
 │   │   │   ├── ChatBubble.jsx
-│   │   │   ├── ChatInput.jsx            ← Textarea + Mikrofon-Button
+│   │   │   ├── ChatInput.jsx            ← Textarea, KI-Hinweis, Senden offline gesperrt; Mikrofon nur mit VOICE_MISTRAL_ENABLED
 │   │   │   ├── QuickReplies.jsx
 │   │   │   ├── TypingIndicator.jsx
 │   │   │   ├── ConversationEndModal.jsx
@@ -113,6 +118,7 @@ CoachingApp/
 │   │   │   ├── MfaEnrollFlow.jsx        ← QR-Code, Schlüssel, Code bestätigen
 │   │   │   ├── RecoveryCodesView.jsx    ← 10 Wiederherstellungscodes, einmalig
 │   │   │   └── RecoveryForm.jsx         ← Anmelden mit Wiederherstellungscode
+│   │   ├── app/                         ← Paket P: UpdateBanner, OfflineBar (beide in main.jsx neben <App />), InstallCard (Heute), InstallSheet, ShareIcon
 │   │   ├── auth/                        ← PasswordField (Sichtbar-Schalter), ForgotPasswordForm (W1)
 │   │   ├── WhyMemoryBlock.jsx           ← Baustein „Warum sich die App etwas merkt“ (Wie es funktioniert, /start/2)
 │   │   └── legal/
@@ -130,7 +136,8 @@ CoachingApp/
 │       │   ├── StartFlow.jsx            ← Schritte 1–4, Zustimmung nur im Zustand (kein localStorage)
 │       │   ├── StartExpect.jsx · StartWhyMemory.jsx · StartAccount.jsx · StartDots.jsx
 │       │   ├── ConsentGateScreen.jsx    ← Sperre ohne Zustimmung v2.0 (18+ → Zustimmung; Eingeladene → Passwort)
-│       │   └── InvitedSetPassword.jsx
+│       │   ├── InvitedSetPassword.jsx
+│       │   └── ProfileMissingScreen.jsx ← angemeldet, aber Profil fehlt/lädt nicht (W4-Befund)
 │       ├── home/
 │       │   └── HomeScreen.jsx           ← Dashboard mit Tool-Kacheln (Coach/Wellness/Stimmen/Verstehen → Spiegel)
 │       ├── coach/
@@ -239,13 +246,19 @@ CoachingApp/
 ├── scripts/security/deletion-test.mjs   ← Löschtest (npm run security:deletion-test, Testkonto C)
 ├── scripts/security/secret-scan.mjs     ← gitleaks über die ganze Historie (npm run security:secrets, nur Fundorte)
 ├── scripts/security/check-build.mjs     ← postbuild: dist/ auf Schlüssel prüfen, Build bricht ab
+├── scripts/security/check-content.mjs   ← postbuild: Sicherheitsseite (Belege) und Rechtstexte (LEGAL_TEXTS_STATUS) prüfen
+├── scripts/security/check-sw.mjs        ← postbuild (Paket P): Service Worker ohne Laufzeit-Routen/Fremd-Origins, Manifest vollständig
+├── scripts/security/k7-signup-test.mjs  ← K7: Signup mit fremder Zustimmungsversion (npm run security:k7, TEST_K7_EMAIL)
+├── scripts/pwa/build-icons.mjs          ← Paket P: Icons aus assets/icon-master.svg („F.“ aus DM Serif Display) – npm run pwa:icons
+├── assets/icon-master.svg               ← Master-Motiv der App-Icons (1024², volle Fläche)
 ├── scripts/share-zip.mjs                ← ZIP zum Teilen nur aus HEAD (npm run share:zip)
 ├── .gitleaks.toml                       ← Allowlist öffentlicher Werte (Projekt-URL)
 ├── docs/security/                       ← Discovery, Handoffs, Lösungsdesign, Abschlussberichte
 ├── vercel.json                          ← SPA-Rewrite, Cache-, Security-Header, CSP
 ├── tailwind.config.js                   ← Custom Colors via CSS-Variablen
-├── vite.config.js                       ← PWA-Manifest, Workbox (keine Fremd-Origins)
-├── index.html                           ← viewport-fit=cover (Schriften kommen aus dem Build)
+├── vite.config.js                       ← PWA-Manifest, Workbox: nur Precache, runtimeCaching leer, PDFs nicht umgeleitet
+├── index.html                           ← viewport-fit=cover, apple-touch-icon, Titel „Frieden“ für den Home-Bildschirm
+├── public/                              ← favicon.svg, apple-touch-icon-180.png, icons/pwa-192/512/maskable-512.png, supabase-dpa.pdf
 ├── CLAUDE.md                            ← Technische Dokumentation für Claude Code
 └── ARCHITECTURE.md                      ← dieses Dokument
 ```
@@ -566,7 +579,9 @@ Bestandsnutzer ohne `age_confirmed_at` sehen einmalig `AgeConfirmSheet` (in `App
 
 **ChatInput:**
 - Textarea mit dynamischer Höhe (38–120 px)
-- Mikrofon-Button togglet `useVoiceInput`; während der Aufnahme erscheint Interim-Text in der Box
+- **Seit Paket K:** Mikrofon ausgeblendet, solange `VOICE_MISTRAL_ENABLED = false`; darunter dauerhaft „Du schreibst mit einer KI.“ (`CHAT_AI_NOTICE`)
+- **Seit Paket P:** offline ist Senden gesperrt (`useOnline`), der getippte Text bleibt stehen
+- Mikrofon-Button (wenn aktiv) togglet `useVoiceInput`; während der Aufnahme erscheint Interim-Text in der Box
 - Erster Tipp auf das Mikrofon (einmal pro Gerät, `localStorage` `fs_voice_hint_v1`, S-11): Hinweis „Kurz zur Spracheingabe“ (Browser-Spracherkennung, ggf. Google/Apple) mit „Verstanden, Mikrofon starten“ / „Lieber tippen“
 - `useVoiceInput` hört geduldig zu: `continuous` + stiller Neustart nach Pausen, Mikrofon aus nach 60 s ohne Sprache oder bei Berechtigungsfehlern; beim Senden wird die Aufnahme beendet
 - Send-Button (`ArrowUp`-Icon) nur aktiv wenn `!isLoading && content.trim()`
@@ -1721,7 +1736,7 @@ upgrade-insecure-requests
 
 **Wenn etwas nicht lädt:** In der Browser-Konsole steht `Refused to load … because it violates the following Content Security Policy directive …` — die genannte Quelle bewusst prüfen und ggf. in `vercel.json` ergänzen. Der Angriffstest prüft die Header (`HDR`).
 
-`'unsafe-inline'` nur für Styles (React-`style`-Props, `offline.html`); Skripte strikt `'self'` (`registerSW.js` ist eine eigene Datei). **Jeder neue externe Dienst muss in die CSP.**
+`'unsafe-inline'` nur für Styles (React-`style`-Props); Skripte strikt `'self'`, kein Inline-Script in `index.html` (Angriffstest #47). Der Service Worker wird seit Paket P über `useRegisterSW` registriert, `registerSW.js` gibt es nicht mehr. **Jeder neue externe Dienst muss in die CSP.**
 
 ### Admin-Berechtigung
 
@@ -1739,9 +1754,17 @@ update profiles set is_admin = true where id = '<user_id>';
 ### Vite-Konfiguration
 
 - Plugin: `@vitejs/plugin-react` + `vite-plugin-pwa`
-- PWA Manifest: `name: Friedensstifter`, `theme_color: #2D5A4E`, `display: standalone`
-- Workbox: Precache inkl. lokaler Schriften (`woff2`), keine Runtime-Regeln für Fremd-Origins; `registerType: 'autoUpdate'` (neue Version gilt nach dem nächsten Laden — wichtig für Übergänge wie S-12 Welle 2a/2b). **Achtung (Befund C-5):** Der erste Aufruf nach einem Deploy läuft noch mit dem alten Bundle. Ändert ein Deploy Frontend und Datenbank-Regeln zusammen, kann die alte App kurz falsch reagieren (C-5: alte App ohne Code-Abfrage → Onboarding, Schreibversuche von der RLS abgelehnt). Nach dem Deploy einmal neu laden.
-- PWA-Icons: 192×192, 512×512 (maskable)
+- PWA-Manifest (Paket P): `id /`, `name: Friedensstifter`, `short_name: Frieden` (Gerätetest: „Friedensstifter“ wurde gekürzt), `lang de`, `start_url`/`scope /`, `display: standalone`, `theme_color #2D5A4E`, `background_color #F5F3EF`; Icons `pwa-192` + `pwa-512` (`any`) und `pwa-maskable-512` (`maskable`). iOS: `apple-touch-icon-180.png` und `apple-mobile-web-app-title` „Frieden“ in `index.html`.
+- **Service Worker speichert nie Nutzerdaten:** nur Precache statischer Build-Dateien (`js, css, html, woff2, svg, png, ico, webmanifest`), `runtimeCaching: []`, `cleanupOutdatedCaches`, `navigateFallback /index.html` mit Ausnahme für `.pdf`. `scripts/security/check-sw.mjs` bricht den Build ab, sobald eine Laufzeit-Route oder eine Fremd-Origin (Supabase, Mistral, OpenAI, Anthropic …) im Worker steht. Neue Caching-Regeln nur nach Freigabe durch Jerome.
+- **Update-Ablauf (P-2):** `registerType: 'prompt'`, `injectRegister: false`. `UpdateBanner` (in `main.jsx`) registriert über `useRegisterSW`, prüft stündlich und bei jeder Rückkehr in den Vordergrund (`reg.update()`) und zeigt „Es gibt eine neue Version …“ mit „Jetzt aktualisieren“ / „Später“; gesperrt, solange eine Antwort läuft. Bei `409 client_outdated` löst `useChat` das Event `fs:client-outdated` aus → automatisch aktualisieren. Der allererste Wechsel von der alten `autoUpdate`-Fassung passierte einmalig ohne Hinweis.
+- **Achtung (Befund C-5, gilt weiter):** Ein bereits geöffneter Tab läuft bis zum Aktualisieren mit dem alten Bundle. Ändert ein Deploy Frontend und Datenbank-Regeln zusammen, kann die alte App kurz falsch reagieren. Nach dem Deploy einmal neu laden bzw. den Hinweis antippen.
+- **Installation (P-3):** `src/lib/installPrompt.js` fängt `beforeinstallprompt` ab. `useInstallPrompt` liefert den Weg je Gerät. `InstallCard` erscheint auf Heute **einmal** ab dem 2. Gespräch (`message_count >= 3`, wie `todayState`), nie während einer Antwort; „Später“/„So geht's“ setzen `fs_install_hint_v1`. Dauerhaft: Profil → „Friedensstifter auf den Startbildschirm“ (solange nicht installiert). `InstallSheet` zeigt Knopf (Android/Desktop), Anleitung mit Teilen-Symbol (iPhone) bzw. den Umweg über Safari/Chrome (In-App-Browser). Start der installierten App wird einmal pro Gerät als `pwa_launched_standalone` gezählt.
+- **Anmeldung in der installierten App (P-4):** Mail-Links öffnen auf dem iPhone Safari, nicht die App. Deshalb zeigt `AuthScreen` nach „Link per E-Mail“ im App-Modus ein Code-Feld (`verifyOtp`, `type: 'email'`); die Vorlage `magic_link.html` enthält dafür zusätzlich `{{ .Token }}` (im Dashboard übernommen). Danach greift wie gewohnt die Code-Abfrage des zweiten Faktors.
+- **Offline (P-5):** `OfflineBar` (in `main.jsx`) zeigt eine ruhige Zeile; Senden ist gesperrt, nichts wird offline gespeichert.
+- **Sichere Ränder:** Hilfsklassen in `globals.css`: `h-app` (100vh → 100dvh), `pt-safe-header`, `pb-safe-cta`, `pb-shell` (`env(safe-area-inset-*)`); genutzt in `CoachScreen`, `HowItWorksScreen`, `LandingScreen`, `AppShell`.
+- **Header (`vercel.json`):** `/sw.js` und `/manifest.webmanifest` mit `Cache-Control: public, max-age=0, must-revalidate` (Manifest zusätzlich `Content-Type: application/manifest+json`), `index.html` ohne Cache, `/assets/*` ein Jahr `immutable`. Angriffstest #45–#48.
+- **Monitoring:** `monitorRules.ts` `pwa_client_error` (Register-/Update-/Install-Fehler, Schwelle 10/Tag, origin client) und `pwa_usage` (Starts, Updates, Installationen, nur Wochenübersicht).
+- Bestandsaufnahme und Bauentscheidungen: `docs/pwa/paket-p-discovery.md`.
 
 ### Umgebungsvariablen
 
