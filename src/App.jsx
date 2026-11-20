@@ -26,6 +26,7 @@ import { MfaChallengeScreen } from './screens/auth/MfaChallengeScreen'
 import { PasswordChangeScreen } from './screens/account/PasswordChangeScreen'
 import { PasswordResetScreen } from './screens/account/PasswordResetScreen'
 import { SecurityInfoScreen } from './screens/legal/SecurityInfoScreen'
+import { ProfileMissingScreen } from './screens/start/ProfileMissingScreen'
 
 function LoadingScreen() {
   return (
@@ -89,6 +90,19 @@ export default function App() {
 
   // Paket K W3: erst entscheiden, wenn das Profil dieses Nutzers geladen ist (kein Aufblitzen nach Login/Registrierung)
   if (user && !profileReady) return <LoadingScreen />
+
+  // W4-Befund: angemeldet, aber kein Profil (Ladefehler oder unvollständiges Konto) → nicht in die
+  // Zustimmung schicken, die hier nicht gespeichert werden kann. Rechtliches bleibt erreichbar.
+  if (user && !profile) {
+    return (
+      <Routes>
+        <Route path="/impressum" element={<ImpressumScreen />} />
+        <Route path="/datenschutz" element={<DatenschutzScreen />} />
+        <Route path="/sicherheit" element={<SecurityInfoScreen />} />
+        <Route path="*" element={<ProfileMissingScreen onSignOut={signOut} />} />
+      </Routes>
+    )
+  }
 
   // Paket K W3 (Handoff 5.5): angemeldet ohne Zustimmung v2.0 → Sperre vor der App.
   // Reihenfolge: Code-Abfrage (oben) → 18+ → Zustimmung (beides im ConsentGateScreen).

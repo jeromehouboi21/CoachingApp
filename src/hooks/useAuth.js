@@ -124,7 +124,18 @@ export function useAuth() {
       .eq('id', userId)
       .single()
     if (error) {
-      logger.error('Failed to load profile', error)
+      // W4-Befund: Kein Profil (PGRST116) kann heißen, dass das Konto inzwischen gelöscht ist, die
+      // gespeicherte Sitzung im Browser aber noch gilt (Zugangstoken bis zu 1 h). getUser() fragt den
+      // Server; kennt er den Nutzer nicht mehr, wird nur diese Sitzung beendet → Landing.
+      if (error.code === 'PGRST116') {
+        const { error: userError } = await supabase.auth.getUser()
+        if (userError) {
+          console.warn('[useAuth] stale_session_signed_out', userError.code ?? userError.status ?? 'unknown')   // kein app_logs-Insert möglich (Profil fehlt)
+          await supabase.auth.signOut({ scope: 'local' })
+          return
+        }
+      }
+      logger.error('Failed to load profile', { code: error.code ?? 'unknown' })
     }
     setProfile(data)
     setProfileFor(userId)
