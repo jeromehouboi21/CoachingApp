@@ -119,3 +119,21 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - **Links im „Lieber nicht“-Sheet** zeigen vorläufig alle auf `https://friedensstifter.coach/`; Buch- und Kontaktseite trägt Jerome ein.
 - `admin-invite-user` leitet weiter auf `/onboarding`; das bleibt als Weiterleitung bestehen, ein Function-Deploy ist dafür nicht nötig.
 - `docs/architecture.md:41` nennt noch `src/screens/onboarding/` – Update mit der Doku nach Verifikation.
+
+## 2.3 Antworten für W4 (20.11.2026)
+
+| Frage | Befund |
+|---|---|
+| 14 Konto löschen | Modal direkt in `ProfileScreen.jsx` (kein eigenes Bauteil). `handleDeleteAccount` zeigte bei Fehlern den rohen Code (z. B. `delete_incomplete`) und ging bei `403 mfa_required` nicht über den globalen Pfad. Function `delete-account`: Gespräche (IDs) → Nachrichten → 8 Tabellen per `user_id` → Gespräche → Profil → bei Fehlern `delete_incomplete` (500, Auth-Konto bleibt) → `auth.admin.deleteUser` → `auth_delete_failed`. Beide Codes sind in `monitorRules.ts` mit Schwelle 1. Weitere Tabellen hängen per CASCADE an `auth.users` bzw. `conversations` (u. a. `experience_patterns`, `crisis_events`, `coach_reflections`, `mfa_recovery_codes`). |
+| 15 `experience_patterns.source_user_id` | `ON DELETE CASCADE` (Migration 032, Zeile 17). Die Zeile „deine Beiträge zur Lernbasis, falls du sie erlaubt hast“ gilt. |
+| 16 Export | gemergt (C-4). `DataExportSheet({ onClose })` in `src/components/profile/`. |
+
+## W4 – Bauentscheidungen
+
+- **W4-1 Mail nach der Löschung** (Handoff 6.1): Adresse nur im Speicher, Versand über `_shared/mailer.ts` (One.com). Logs nur `account_deleted_mail_ok` / `account_deleted_mail_failed` mit Code, ohne Nutzer-ID. Der Mailer wandelt Umlaute in ASCII um (denomailer 1.6.0) – die Mail lautet also „geloescht“. Bekannte Einschränkung aus Paket C.
+- **W4-2 `AI_PROVIDER_RETENTION_NOTE`** in `legalTexts.js` mit dem am 20.11.2026 freigegebenen und belegten Satz (statt Leerstelle).
+- **W4-3 Netzfehler** (keine Antwort vom Server) bekommt einen eigenen Hinweis („Die Verbindung ist abgebrochen …“), weil unklar ist, ob die Löschung lief. Alle anderen Antworten ≠ 200 zeigen den Text aus Handoff 6.2. Abgemeldet wird nur bei Erfolg.
+- **W4-4 Erreichbarkeit:** `/sicherheit` zeigt in der Gruppe „Was mit deinen Daten passiert, wenn du gehst“ für Angemeldete „Konto löschen ›“ (Sitzung lokal geprüft, kein Datenbankaufruf). Die Zustimmungs-Sperre (W3) öffnet das Modal direkt (`state.openDelete`).
+- **W4-5 Wertungsfarbe:** Die Überschrift im Modal ist nicht mehr korallenrot (Zielbild: keine Wertungsfarben); der Lösch-Button bleibt als Warnfarbe.
+- **W4-6 Ablauf** für unvollständige Löschungen in `ablaeufe-rechte.md` Abschnitt 6, weil der Fehlertext eine Mail verspricht.
+

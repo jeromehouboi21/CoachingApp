@@ -39,6 +39,7 @@ export const RULES: Rule[] = [
   { id: 'mfa_recovery_failed',     codes: ['mfa_recovery_failed'],     windowMin: 60,    threshold: 5,  label: 'Falsche Wiederherstellungscodes' },
   { id: 'mfa_reset_failed',        codes: ['mfa_reset_failed'],        windowMin: 60,    threshold: 1,  label: 'Zweiter Faktor ließ sich nicht entfernen' },
   // nur in der Wochenübersicht:
+  { id: 'account_deleted_mail_failed', codes: ['account_deleted_mail_failed'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Löschbestätigung nicht zugestellt' },
   { id: 'consent_required',        codes: ['consent_required'],        windowMin: 10080, threshold: 0, infoOnly: true, label: 'Anfragen ohne Zustimmung v2.0' },
   { id: 'user_mfa_required',       codes: ['user_mfa_required'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Nutzer-Anfragen ohne zweiten Faktor' },
   { id: 'mfa_codes_generated',     codes: ['mfa_codes_generated'],     windowMin: 10080, threshold: 0, infoOnly: true, label: 'Neue Wiederherstellungscodes erzeugt' },

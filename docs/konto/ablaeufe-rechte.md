@@ -42,6 +42,20 @@ Die Coaching-Vereinbarung verspricht einige Dinge, die nicht die App erledigt, s
 
 - Supabase → Authentication → Users: Nutzer sperren (im Dashboard prüfen, ob angeboten, sonst löschen). Bei Angriffen zusätzlich der Notfallplan (`docs/security/notfallplan.md`).
 
+## 6. Löschung unvollständig (Alarm `delete_incomplete` / `auth_delete_failed`)
+
+Das Löschfenster verspricht: „Ich bin informiert und kümmere mich darum. Du bekommst eine Mail, sobald alles gelöscht ist.“
+
+- **Wann:** sobald die Alarm-Mail kommt (Regel `delete_incomplete`, Schwelle 1).
+- **Schritte:**
+  1. Im Log (`app_logs`, Code `delete_incomplete`) steht, welcher Schritt fehlschlug (`failedSteps`), und die Nutzer-ID. Inhalte stehen dort nicht.
+  2. Ursache beheben bzw. die Löschung über Supabase → Authentication → Users → Delete user abschließen. Die CASCADE-Ketten löschen den Rest.
+  3. Prüfen: `supabase/security/deletion-check.sql` mit der Nutzer-ID → überall 0.
+  4. Der Person eine kurze Mail schicken, dass alles gelöscht ist. Die Adresse findest du vor dem Löschen unter Authentication → Users. Kein Inhalt aus dem Konto.
+- **Festhalten:** Datum, Nutzer-ID, Ursache, Erledigung.
+
+Nicht zugestellte Bestätigungsmails nach einer erfolgreichen Löschung erscheinen nur in der Wochenübersicht (`account_deleted_mail_failed`). Die Löschung ist dann trotzdem vollständig. Eine Adresse für eine zweite Mail gibt es nicht mehr.
+
 ## Offen
 
 - Fristen eintragen (auch in `legalTexts.js`: `RECONSENT.pendingText`, „Wann die Vereinbarung endet“).

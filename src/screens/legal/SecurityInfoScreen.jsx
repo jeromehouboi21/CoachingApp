@@ -1,10 +1,23 @@
 // „Wie wir deine Daten schützen“ (Paket K, W2; Konzept 4.2). Route /sicherheit, öffentlich, ohne Datenbankaufrufe.
 // Zeigt nur Einträge mit status 'live' aus src/content/securityMeasures.js – ruhige Liste,
 // keine Häkchen, keine Wertungsfarben. SecurityInfoSheet: gleiche Inhalte im Sheet (Einstieg, W3).
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, X } from 'lucide-react'
 import { SECURITY_PAGE_AS_OF, SECURITY_GROUPS, SECURITY_MEASURES, SECURITY_HONESTY } from '../../content/securityMeasures'
+import { supabase } from '../../lib/supabase'
+
+// Angemeldet? Nur aus der lokalen Sitzung, ohne Datenbankaufruf (Seite bleibt öffentlich, W2).
+function useHasSession() {
+  const [has, setHas] = useState(false)
+  useEffect(() => {
+    let alive = true
+    supabase.auth.getSession().then(({ data }) => { if (alive) setHas(!!data?.session) })
+    return () => { alive = false }
+  }, [])
+  return has
+}
 
 function asOfLabel(ym) {
   const [y, m] = String(ym).split('-').map(Number)
@@ -14,6 +27,7 @@ function asOfLabel(ym) {
 
 export function SecurityInfoContent({ onNavigate }) {
   const honesty = SECURITY_HONESTY.filter(h => h.status === 'live')
+  const loggedIn = useHasSession()
   return (
     <div>
       <h1 className="font-display text-[26px] text-ink leading-[1.25] mb-1">Wie wir deine Daten schützen</h1>
@@ -37,6 +51,12 @@ export function SecurityInfoContent({ onNavigate }) {
                 </li>
               ))}
             </ul>
+            {/* Paket K W4: Löschweg verlinken, nur für Angemeldete */}
+            {g.key === 'gehen' && loggedIn && (
+              <button onClick={() => onNavigate('/profile', { state: { openDelete: true } })} className="text-[13px] text-accent hover:underline mt-3">
+                Konto löschen ›
+              </button>
+            )}
           </section>
         )
       })}
@@ -69,7 +89,7 @@ export function SecurityInfoScreen() {
           <ChevronLeft size={16} />
           Zurück
         </button>
-        <SecurityInfoContent onNavigate={(to) => navigate(to)} />
+        <SecurityInfoContent onNavigate={(to, opts) => navigate(to, opts)} />
       </div>
     </div>
   )
@@ -85,7 +105,7 @@ export function SecurityInfoSheet({ onClose }) {
         <button onClick={onClose} aria-label="Schließen" className="absolute right-4 top-4 p-1 text-ink-3 hover:text-ink-2">
           <X size={18} />
         </button>
-        <SecurityInfoContent onNavigate={(to) => { onClose(); navigate(to) }} />
+        <SecurityInfoContent onNavigate={(to, opts) => { onClose(); navigate(to, opts) }} />
       </div>
     </div>,
     document.body,

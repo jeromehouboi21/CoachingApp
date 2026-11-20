@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { useAccessState } from '../../lib/accessState'
@@ -7,7 +7,8 @@ import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSqua
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
-import { NOT_EMERGENCY } from '../../content/legalTexts'
+import { NOT_EMERGENCY, AI_PROVIDER_RETENTION_NOTE } from '../../content/legalTexts'
+import { checkMfaResponse } from '../../lib/mfa'
 import { SecurityCard } from '../../components/profile/SecurityCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
@@ -69,7 +70,9 @@ export function ProfileScreen() {
   const [editName, setEditName] = useState('')
   const [showBetaModal, setShowBetaModal] = useState(false)
   const [showExportSheet, setShowExportSheet] = useState(false)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const location = useLocation()
+  // W4: „Konto löschen“ aus /sicherheit oder der Zustimmungs-Sperre öffnet das Modal direkt
+  const [showDeleteModal, setShowDeleteModal] = useState(() => !!location.state?.openDelete)
   const [deleteInput, setDeleteInput] = useState('')
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -110,28 +113,41 @@ export function ProfileScreen() {
     navigate('/landing')
   }
 
+  // Paket K W4 (Handoff 6.2): Erfolg nur bei 200 + success. Sonst NICHT abmelden, Modal bleibt offen.
+  const DELETE_FAILED = 'Dein Konto konnte nicht vollständig gelöscht werden. Ich bin informiert und kümmere mich darum. Du bekommst eine Mail, sobald alles gelöscht ist.'
   const handleDeleteAccount = async () => {
     if (deleteInput !== 'LÖSCHEN') return
     setDeleteLoading(true)
     setDeleteError('')
+    let res
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Nicht eingeloggt')
-      const res = await fetch(
-        functionUrl('delete-account'),
-        {
-          method: 'POST',
-          headers: functionHeaders(session.access_token),
-        }
-      )
-      const data = await res.json()
-      if (!res.ok || !data.success) throw new Error(data.error || 'Fehler beim Löschen')
-      await signOut()
-      navigate('/landing')
+      if (!session?.access_token) {
+        setDeleteError('Deine Anmeldung ist abgelaufen. Melde dich bitte neu an und versuch es noch einmal.')
+        setDeleteLoading(false)
+        return
+      }
+      res = await fetch(functionUrl('delete-account'), { method: 'POST', headers: functionHeaders(session.access_token) })
     } catch (err) {
-      setDeleteError(err.message)
+      logger.warn('delete_request_failed', { errorType: err?.name ?? 'Error' })
+      setDeleteError('Die Verbindung ist abgebrochen. Versuch es bitte noch einmal.')
       setDeleteLoading(false)
+      return
     }
+    if (await checkMfaResponse(res)) {   // 403 mfa_required → globale Code-Abfrage (S-06b)
+      setDeleteLoading(false)
+      return
+    }
+    let data = null
+    try { data = await res.json() } catch { /* keine JSON-Antwort */ }
+    if (!res.ok || !data?.success) {
+      logger.error('delete_account_failed', { status: res.status, code: data?.error ?? 'unknown' })
+      setDeleteError(DELETE_FAILED)
+      setDeleteLoading(false)
+      return
+    }
+    await signOut()
+    navigate('/landing')
   }
 
   return (
@@ -281,41 +297,53 @@ export function ProfileScreen() {
       {/* Datenexport (S-16) */}
       {showExportSheet && <DataExportSheet onClose={() => setShowExportSheet(false)} />}
 
-      {/* Konto löschen Modal */}
+      {/* Konto löschen Modal (Paket K W4, Konzept 6.3) */}
       {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
-          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6">
-            <h3 className="font-display text-[22px] text-coral mb-2">Konto wirklich löschen?</h3>
-            <p className="text-[14px] text-ink-2 mb-4">
-              Damit werden unwiderruflich gelöscht:
-            </p>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4" role="dialog" aria-modal="true" aria-label="Konto löschen">
+          <div className="bg-surface rounded-t-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="font-display text-[22px] text-ink mb-2">Konto wirklich löschen?</h3>
+            <p className="text-[14px] text-ink-2 mb-3">Damit werden endgültig gelöscht:</p>
             <ul className="flex flex-col gap-1 mb-4">
               {[
-                'Alle deine Gespräche',
-                'Dein persönliches Coaching-Profil',
-                'Alle erkannten Muster und Erkenntnisse',
+                'alle deine Gespräche',
+                'deine Erkenntnisse, Muster und deine Entwicklung',
+                'die Notizen deines Begleiters über dich',
+                'deine Beiträge zur Lernbasis, falls du sie erlaubt hast',
+                'dein Feedback',
               ].map(item => (
                 <li key={item} className="flex items-start gap-2 text-[14px] text-ink-2">
-                  <span className="text-coral mt-0.5">·</span>
+                  <span className="text-ink-3 mt-0.5">·</span>
                   {item}
                 </li>
               ))}
             </ul>
-            <p className="text-[13px] text-ink-3 mb-5">Diese Aktion kann nicht rückgängig gemacht werden.</p>
-            <label className="block text-[13px] text-ink-2 mb-2">
+            <p className="text-[13px] text-ink-2 mb-4">Das lässt sich nicht rückgängig machen.</p>
+            <button
+              type="button"
+              onClick={() => { setShowDeleteModal(false); setShowExportSheet(true) }}
+              className="text-[14px] text-accent hover:underline mb-5 text-left"
+            >
+              Möchtest du vorher deine Daten herunterladen? ›
+            </button>
+            <label htmlFor="delete-confirm" className="block text-[13px] text-ink-2 mb-2">
               Zur Bestätigung tippe: <strong className="text-ink">LÖSCHEN</strong>
             </label>
             <input
+              id="delete-confirm"
               value={deleteInput}
               onChange={e => setDeleteInput(e.target.value)}
               placeholder="LÖSCHEN"
-              className="w-full border border-[var(--color-border)] rounded-xl px-4 py-3 text-[15px] text-ink bg-bg mb-2 focus:outline-none focus:border-coral transition-colors"
+              autoComplete="off"
+              className="w-full border border-[var(--color-border)] rounded-xl px-4 py-3 text-[15px] text-ink bg-bg mb-3 focus:outline-none focus:border-coral transition-colors"
             />
-            {deleteError && <p className="text-[13px] text-coral mb-3">{deleteError}</p>}
-            <p className="text-[11px] text-ink-3 mb-5">
-              Inhalte, die an die KI-Anbieter übertragen wurden, löschen diese in der Regel nach 30 Tagen.
-            </p>
+            {deleteError && <p role="alert" className="text-[13px] text-ink-2 bg-surface-2 rounded-lg px-4 py-3 mb-3">{deleteError}</p>}
             <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium"
+              >
+                Abbrechen
+              </button>
               <button
                 onClick={handleDeleteAccount}
                 disabled={deleteInput !== 'LÖSCHEN' || deleteLoading}
@@ -323,13 +351,10 @@ export function ProfileScreen() {
               >
                 {deleteLoading ? 'Wird gelöscht…' : 'Konto endgültig löschen'}
               </button>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="w-full border border-[var(--color-border)] text-ink py-3 rounded-full font-medium"
-              >
-                Abbrechen
-              </button>
             </div>
+            {AI_PROVIDER_RETENTION_NOTE && (
+              <p className="text-[12px] text-ink-3 mt-4">{AI_PROVIDER_RETENTION_NOTE}</p>
+            )}
           </div>
         </div>
       )}

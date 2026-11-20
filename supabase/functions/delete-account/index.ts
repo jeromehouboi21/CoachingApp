@@ -6,8 +6,22 @@
 import { createLogger, describeError } from '../_shared/logger.ts';
 import { HttpError, requireUser, errorResponse, jsonResponse } from '../_shared/auth.ts';
 import { corsHeaders } from '../_shared/cors.ts';
+import { sendMail } from '../_shared/mailer.ts';
 
 const CORS_HEADERS = corsHeaders('POST, GET, OPTIONS');
+
+// Paket K W4: Bestätigung nach erfolgreicher Löschung, ohne Inhalte aus dem Konto.
+// Der Mailer wandelt Umlaute in ASCII um (bekannte Einschränkung von denomailer 1.6.0).
+const DELETED_MAIL_SUBJECT = 'Dein Konto wurde gelöscht';
+const DELETED_MAIL_TEXT = [
+  'Hallo,',
+  'dein Konto bei Friedensstifter und alle dazugehörigen Daten wurden gelöscht.',
+  'Danke, dass du die App ausprobiert hast.',
+  '',
+  'Warst du das nicht? Antworte auf diese Mail.',
+  '',
+  'Jerome · friedensstifter.coach',
+].join(String.fromCharCode(10));   // Zeilenumbruch
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -19,6 +33,8 @@ Deno.serve(async (req) => {
   try {
     const { user, admin: supabase } = await requireUser(req);
     const userId = user.id;
+    // Nur im Speicher der Function, für die Bestätigung nach der Löschung. Nie loggen, nie speichern.
+    const email = typeof user.email === 'string' ? user.email : '';
     logger = createLogger('delete-account', undefined, userId);
 
     const failures: string[] = [];
@@ -72,7 +88,17 @@ Deno.serve(async (req) => {
     }
 
     // Ohne user_id loggen: Das Profil existiert nicht mehr (FK app_logs.user_id → profiles).
-    createLogger('delete-account').info('Account deleted', { tableCount: tables.length + 3 });
+    const doneLogger = createLogger('delete-account');
+    doneLogger.info('Account deleted', { tableCount: tables.length + 3 });
+
+    // Bestätigung erst NACH erfolgreicher Löschung (Handoff 6.1). Scheitert die Mail, bleibt die
+    // Löschung gültig: kein erneuter Versuch, keine Speicherung der Adresse, nur der Code im Log.
+    const mail = email
+      ? await sendMail(email, DELETED_MAIL_SUBJECT, DELETED_MAIL_TEXT)
+      : { ok: false, code: 'recipient_missing' };
+    if (mail.ok) doneLogger.info('account_deleted_mail_ok');
+    else doneLogger.warn('account_deleted_mail_failed', { code: mail.code ?? 'unknown' });
+
     return jsonResponse({ success: true }, CORS_HEADERS);
 
   } catch (error: unknown) {

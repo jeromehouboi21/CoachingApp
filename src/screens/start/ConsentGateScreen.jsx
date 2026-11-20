@@ -91,7 +91,7 @@ export function ConsentGateScreen({ profile, user, consentState, acceptConsentV2
         : <ExistingDeclineSheet
             onClose={() => setDeclineOpen(false)}
             onExport={() => { setDeclineOpen(false); setExportOpen(true) }}
-            onDelete={goToProfile}
+            onDelete={() => navigate('/profile', { state: { ageDeferred: true, openDelete: true } })}
             onSignOut={async () => { await signOut(); navigate('/landing', { replace: true }) }}
           />)}
       {exportOpen && <DataExportSheet onClose={() => setExportOpen(false)} />}

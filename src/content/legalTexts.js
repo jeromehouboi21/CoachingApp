@@ -76,6 +76,11 @@ export const LEGAL_LINKS = {
 // ---------------------------------------------------------------------------
 export const CHAT_AI_NOTICE = 'Du schreibst mit einer KI.'
 
+// Löschfenster im Profil (Paket K W4). Von Jerome freigegeben 20.11.2026; belegt: Anthropic Privacy Center
+// (30 Tage, bei Verstoß gegen die Usage Policy länger), OpenAI „Your data“ (Missbrauchs-Logs bis 30 Tage).
+// Leer lassen = Zeile wird nicht angezeigt.
+export const AI_PROVIDER_RETENTION_NOTE = 'Inhalte, die an die KI-Anbieter übertragen wurden, löschen diese in der Regel nach 30 Tagen.'
+
 // ---------------------------------------------------------------------------
 // Notfall-Hinweis: Vereinbarung, Profil (B4). Nummern passend zur Krisenantwort im Chat.
 // ---------------------------------------------------------------------------
@@ -469,7 +474,7 @@ export function activeDataRecipients() {
 export function allLegalStrings() {
   const recipients = activeDataRecipients().map(({ requires, ...r }) => r)
   return collectStrings([
-    OPERATOR, LEGAL_LINKS, CHAT_AI_NOTICE, NOT_EMERGENCY,
+    OPERATOR, LEGAL_LINKS, CHAT_AI_NOTICE, AI_PROVIDER_RETENTION_NOTE, NOT_EMERGENCY,
     AGREEMENT_SUMMARY, AGREEMENT_CHECKBOX, CONSENT_ART9_CHECKBOX, CONSENT_WITHDRAWAL,
     LEARNING_OPT_IN, DECLINE_NEW, RECONSENT, SUBSCRIPTION.freeTier,
     getAgreementSections(), AGREEMENT_SIGNATURE, recipients,
