@@ -77,7 +77,7 @@ Live seit Paket K neu bzw. geändert: „Passwort geändert → Mail“ (K W1), 
   - K4–K6 PASS
   - K8 PASS: `chat` ohne Zustimmung gibt `403 consent_required`
   - S13-d PASS
-  - **K7** (Signup mit `consent_version: '9.9'`) ist manuell und **noch nicht gelaufen**, siehe Abschnitt 7.
+  - **K7** (Signup mit `consent_version: '9.9'`): PASS am 20.11.2026 über `npm run security:k7`. Das Profil hatte keine Zustimmung, das Wegwerfkonto wurde wieder gelöscht.
   - S12-b: ein FAIL war ein Zeitproblem im Test (Antwort von S12-a kam verspätet an), behoben.
 - **Löschtest:** ohne und mit zweitem Faktor 15 Schritte, 0 FAIL. `deletion-check.sql` zeigt alle 32 Prüfpunkte auf 0, die Bestätigungsmail kam an.
 - **Manuell (Jerome):**
@@ -103,7 +103,7 @@ Die Datenschutzerklärung ist seit W3 auf Version 2.0 (vorläufig). Noch nicht e
 - [ ] Anbieterfrist (R-3) auf der Sicherheitsseite: Text aus Abschnitt 6 freigeben. In `legalTexts.js` ist sie bereits eingetragen.
 - [ ] Vorschläge aus Abschnitt 6 für die Datenschutzerklärung freigeben
 - [ ] Website-Seite „Sicherheit“ (K-7) im Website-Projekt anstoßen
-- [ ] **K7 manuell:** Registrierung, bei der `consent_version: '9.9'` mitgeschickt wird. Erwartet: Das Profil hat keine Zustimmung, die App fragt nach. Auf Wunsch baue ich dafür ein kleines Testskript.
+- [x] **K7:** `npm run security:k7` (eigenes Skript, braucht `TEST_K7_EMAIL`), PASS am 20.11.2026
 - [ ] Unterauftragnehmer-Listen bei Supabase und Vercel abonnieren (Einspruchsfrist 5 Tage)
 - [ ] Prüfen, dass das Absender-Postfach (`ALERT_EMAIL_FROM`) gelesen wird, denn die Löschmail lädt zum Antworten ein
 - [ ] `docs/DPA/Supabase DPA.pdf` ist lokal geändert und nicht committet: neue Fassung oder zurücksetzen?
@@ -116,4 +116,5 @@ Die Datenschutzerklärung ist seit W3 auf Version 2.0 (vorläufig). Noch nicht e
 - **Krisen-Eintrag** wird mit dem Konto gelöscht, obwohl er als Nachweis gedacht ist (Prüfpunkt R4).
 - **Wiederholte Nachricht (S12):** Kommt eine Antwort sehr spät an, könnte eine wiederholte Nachricht theoretisch die Antwort auf eine andere Nachricht zurückbekommen. Im normalen Betrieb sendet die App nacheinander. Nur beobachtet.
 - **Mailer** kann keine Umlaute (denomailer 1.6.0). Für Nutzer-Mails wäre ein Wechsel oder eine MIME-Kodierung sinnvoll, als eigene Aufgabe.
+- **E-Mail-Bestätigung bei der Registrierung ist aus** (Befund K7: `signUp` liefert sofort eine Sitzung). Neue Konten sind damit ohne bestätigte Adresse nutzbar. Ob das so gewollt ist, entscheidet Jerome (Supabase → Authentication → Sign In / Providers → Email → „Confirm email“). Wird sie eingeschaltet, zeigt `/start/4` „Bestätige deine E-Mail“, und `security:k7` nutzt den SQL-Weg.
 - `admin-invite-user` leitet weiterhin auf `/onboarding`, das auf `/start/1` weiterleitet. Funktioniert, ließe sich bei Gelegenheit direkt umstellen.
