@@ -30,7 +30,7 @@ export function LandingScreen() {
         <div className="bg-accent-light rounded-lg p-5 mb-8 flex gap-3">
           <Lock size={20} color="var(--color-accent)" className="flex-none mt-0.5" />
           <p className="text-[14px] text-ink-2 leading-[1.6]">
-            Was du hier teilst, gehört nur dir. Keine Weitergabe an Dritte. Keine Werbung. Kein Training von KI-Modellen mit deinen Daten.
+            Was du hier teilst, gehört dir. Keine Werbung, kein Verkauf deiner Daten, kein Training von KI-Modellen damit.
           </p>
         </div>
 
@@ -38,8 +38,8 @@ export function LandingScreen() {
         <div className="mb-8">
           <div className="flex flex-col gap-3">
             {[
-              'Ein KI-Coach, der zuhört und Fragen stellt — nie Ratschläge gibt',
-              'Ein persönlicher Spiegel: Was du über dich lernst, bleibt bei dir',
+              'Ein KI-Coach, der zuhört und Fragen stellt, statt Ratschläge zu geben',
+              'Ein persönlicher Spiegel: Was du über dich lernst, sehen andere Nutzer nicht',
               'Entwickelt von Jerome Houboi, zertifiziertem Systemischen Coach',
             ].map((text, i) => (
               <div key={i} className="flex gap-3 items-start">

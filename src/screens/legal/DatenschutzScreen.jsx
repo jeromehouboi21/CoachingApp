@@ -1,5 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
+import { PreliminaryNotice } from '../../components/legal/PreliminaryNotice'
+import { activeDataRecipients, BACKUP_DELETION } from '../../content/legalTexts'
 
 function Section({ title, children }) {
   return (
@@ -27,7 +29,8 @@ export function DatenschutzScreen() {
         </button>
 
         <h1 className="font-display text-[24px] text-ink mb-1">Datenschutzerklärung</h1>
-        <p className="text-[12px] text-ink-3 mb-8">Version 1.0 · Stand: März 2026</p>
+        <p className="text-[12px] text-ink-3 mb-3">Version 2.0 · Stand: 20.11.2026</p>
+        <PreliminaryNotice className="mb-8" />
 
         <div className="flex flex-col gap-8 text-[14px] text-ink-2 leading-relaxed">
 
@@ -51,9 +54,12 @@ export function DatenschutzScreen() {
               <li>· E-Mail-Adresse (Registrierung und Authentifizierung)</li>
               <li>· Anzeigename (optional, selbst gewählt)</li>
               <li>· Gesprächsinhalte mit dem KI-Coach</li>
+              <li>· Was der Begleiter sich aus deinen Gesprächen merkt (Gedächtnis, Erkenntnisse, Muster)</li>
               <li>· Erkenntnisse und Reflexionen, die du selbst eingibst</li>
-              <li>· Nutzungsstatistiken (Gesprächszähler, Streak)</li>
-              <li>· IP-Adresse zum Zeitpunkt der Einwilligung (Nachweispflicht gem. Art. 7 DSGVO)</li>
+              <li>· Nutzungszähler (z. B. Anzahl der Gespräche, Reflexionstage)</li>
+              <li>· Zeitpunkt und Version deiner Zustimmung zur Coaching-Vereinbarung und deiner Einwilligung (Nachweis nach Art. 7 Abs. 1 DSGVO)</li>
+              <li>· Bei Hinweisen auf eine akute Krise: ein kurzer Ausschnitt deiner Nachricht (Einzelheiten in der Coaching-Vereinbarung)</li>
+              <li>· Technische Protokolle ohne Gesprächsinhalte (z. B. Kennungen, Zeitpunkte, Fehlercodes)</li>
             </ul>
           </Section>
 
@@ -78,56 +84,48 @@ export function DatenschutzScreen() {
               <li>· Bereitstellung des KI-Coaching-Dienstes (Art. 6 Abs. 1 lit. b DSGVO)</li>
               <li>· Personalisierung des Coaching-Erlebnisses durch Coach-Gedächtnis (Einwilligung, Art. 6 Abs. 1 lit. a DSGVO)</li>
               <li>· Verarbeitung sensibler Gesprächsdaten (Art. 9 Abs. 2 lit. a DSGVO)</li>
-              <li>· Sicherstellung der technischen Funktionsfähigkeit (Art. 6 Abs. 1 lit. f DSGVO)</li>
+              <li>· Allgemeine Verbesserung des Begleiters aus allen Gesprächen, ohne Angaben zu einzelnen Personen (Teil deiner Einwilligung, Art. 9 Abs. 2 lit. a DSGVO; Einzelheiten in der Coaching-Vereinbarung)</li>
+              <li>· Lernbasis: nur mit gesonderter, freiwilliger Einwilligung im Profil (Art. 9 Abs. 2 lit. a DSGVO)</li>
+              <li>· Sicherstellung der technischen Funktionsfähigkeit und Sicherheit (Art. 6 Abs. 1 lit. f DSGVO)</li>
             </ul>
             <p>
               Deine Daten werden nicht für Werbezwecke genutzt und nicht an Dritte verkauft.
             </p>
           </Section>
 
-          <Section title="5. Datenverarbeitung durch Dritte">
-            <p className="text-ink font-medium">Supabase (Datenbankinfrastruktur)</p>
+          <Section title="5. Datenverarbeitung durch Dienstleister">
             <p>
-              Wir nutzen Supabase als Datenbankinfrastruktur und Authentifizierungsdienst.
-              Supabase-Server befinden sich in der EU (Frankfurt/Ireland). Mit Supabase wurde ein
-              Auftragsverarbeitungsvertrag (AVV) gemäß Art. 28 DSGVO geschlossen
-              (Referenz: YZIGG-Q82S3-WUMOL-FX5BT, unterzeichnet am 22.03.2026).
+              Folgende Dienstleister verarbeiten Daten in unserem Auftrag. Sie sind über Verträge zur
+              Auftragsverarbeitung (Art. 28 DSGVO) an unsere Weisungen gebunden. Übermittlungen in Länder
+              außerhalb der EU sind über die EU-Standardvertragsklauseln abgesichert. In diesen Ländern gilt
+              dennoch ein anderes Datenschutzniveau, und Behörden können dort unter bestimmten Voraussetzungen
+              auf Daten zugreifen.
             </p>
-            <p>
-              Supabase-Datenschutzrichtlinie:{' '}
-              <a href="https://supabase.com/privacy" target="_blank" rel="noopener noreferrer" className="text-accent underline">
-                supabase.com/privacy
-              </a>
-            </p>
-
-            <p className="text-ink font-medium mt-3">Anthropic (KI-Verarbeitung)</p>
-            <p>
-              Gesprächsinhalte werden zur KI-Verarbeitung an Anthropic übermittelt (Claude API).
-              Anthropic verarbeitet diese Daten nicht zum Training von KI-Modellen und speichert sie
-              nicht dauerhaft. Es gilt die Zero Data Retention Policy von Anthropic.
-            </p>
-            <p>
-              Anthropic-Datenschutzrichtlinie:{' '}
-              <a href="https://www.anthropic.com/privacy" target="_blank" rel="noopener noreferrer" className="text-accent underline">
-                anthropic.com/privacy
-              </a>
-            </p>
-
-            <p className="text-ink font-medium mt-3">Vercel (Hosting)</p>
-            <p>
-              Die Web-App wird über Vercel gehostet. Vercel speichert keine Inhalte, sondern liefert
-              nur den Anwendungscode aus.
+            {activeDataRecipients().map(r => (
+              <div key={r.name} className="mt-2">
+                <p className="text-ink font-medium">{r.name}</p>
+                <p><span className="text-ink-3">Ort:</span> {r.location}</p>
+                <p><span className="text-ink-3">Zweck:</span> {r.purpose}</p>
+                <p><span className="text-ink-3">Daten:</span> {r.data}</p>
+                <p><span className="text-ink-3">Absicherung:</span> {r.safeguard}</p>
+              </div>
+            ))}
+            <p className="mt-2">
+              Mit Supabase besteht ein Auftragsverarbeitungsvertrag (Referenz: YZIGG-Q82S3-WUMOL-FX5BT,
+              unterzeichnet am 22.03.2026).
             </p>
           </Section>
 
           <Section title="6. Speicherdauer">
             <p>
-              Deine Daten werden so lange gespeichert, wie dein Konto besteht. Nach Kontolöschung
-              werden alle personenbezogenen Daten innerhalb von 30 Tagen endgültig gelöscht.
+              Deine Daten werden so lange gespeichert, wie dein Konto besteht. Löschst du dein Konto,
+              werden deine Daten sofort aus der App entfernt und {BACKUP_DELETION} auch aus den
+              Sicherungskopien gelöscht.
             </p>
             <p>
-              Logs und anonymisierte Nutzungsdaten (ohne Personenbezug) können für bis zu 90 Tage
-              zur Fehlerbehebung gespeichert werden.
+              Technische Protokolle ohne Gesprächsinhalte werden nach 30 Tagen gelöscht. Weitere Fristen,
+              etwa für Krisen-Ausschnitte und für Notizen zur Verbesserung des Begleiters, stehen in der
+              Coaching-Vereinbarung.
             </p>
           </Section>
 
@@ -184,7 +182,7 @@ export function DatenschutzScreen() {
           <div className="bg-surface border border-[var(--color-border)] rounded-xl p-4 mt-2">
             <p className="text-[12px] text-ink-3">
               Auftragsverarbeitungsvertrag mit Supabase:{' '}
-              <a href="/public/supabase-dpa.pdf" target="_blank" rel="noopener noreferrer" className="text-accent underline">
+              <a href="/supabase-dpa.pdf" target="_blank" rel="noopener noreferrer" className="text-accent underline">
                 Supabase DPA (PDF) →
               </a>
             </p>

@@ -244,7 +244,7 @@ export function ProfileScreen() {
         </button>
       </div>
 
-      <p className="text-[11px] text-ink-3 text-center mt-6">Alles, was du hier teilst, bleibt bei dir.</p>
+      <p className="text-[11px] text-ink-3 text-center mt-6">Was du hier teilst, sieht kein anderer Nutzer.</p>
 
       {/* Profil bearbeiten Modal */}
       {showEditModal && (
@@ -313,7 +313,7 @@ export function ProfileScreen() {
             />
             {deleteError && <p className="text-[13px] text-coral mb-3">{deleteError}</p>}
             <p className="text-[11px] text-ink-3 mb-5">
-              Deine Daten bei Anthropic (API-Logs) werden nach 30 Tagen automatisch von Anthropic gelöscht.
+              Inhalte, die an die KI-Anbieter übertragen wurden, löschen diese in der Regel nach 30 Tagen.
             </p>
             <div className="flex flex-col gap-3">
               <button

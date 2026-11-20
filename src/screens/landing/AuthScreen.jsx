@@ -79,7 +79,7 @@ export function AuthScreen() {
       <div className="flex-1">
         <h1 className="font-display text-[26px] text-ink mb-2">Dein persönlicher Raum</h1>
         <p className="text-[14px] text-ink-2 mb-8">
-          Alles, was du hier teilst, bleibt bei dir. Keine Weitergabe. Keine Werbung.
+          Was du hier teilst, sehen andere Nutzer nicht. Keine Werbung.
         </p>
 
         {mode === 'forgot' ? (
@@ -183,8 +183,8 @@ export function AuthScreen() {
             <div className="bg-accent-light rounded-xl p-4 mb-5">
               <ul className="flex flex-col gap-2">
                 {[
-                  'Deine Gespräche werden nur für dich gespeichert.',
-                  'Keine Weitergabe an Dritte — niemals.',
+                  'Deine Gespräche sieht kein anderer Nutzer.',
+                  'Dienstleister wie der KI-Anbieter verarbeiten deine Daten nur in meinem Auftrag.',
                   'Keine Werbung, kein Tracking deines Verhaltens.',
                   'Deine Daten werden nicht zum Training von KI-Modellen verwendet.',
                   'Du kannst dein Konto und alle Daten jederzeit löschen.',
