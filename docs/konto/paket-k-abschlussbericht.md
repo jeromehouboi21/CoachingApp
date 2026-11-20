@@ -116,5 +116,5 @@ Die Datenschutzerklärung ist seit W3 auf Version 2.0 (vorläufig). Noch nicht e
 - **Krisen-Eintrag** wird mit dem Konto gelöscht, obwohl er als Nachweis gedacht ist (Prüfpunkt R4).
 - **Wiederholte Nachricht (S12):** Kommt eine Antwort sehr spät an, könnte eine wiederholte Nachricht theoretisch die Antwort auf eine andere Nachricht zurückbekommen. Im normalen Betrieb sendet die App nacheinander. Nur beobachtet.
 - **Mailer** kann keine Umlaute (denomailer 1.6.0). Für Nutzer-Mails wäre ein Wechsel oder eine MIME-Kodierung sinnvoll, als eigene Aufgabe.
-- **E-Mail-Bestätigung bei der Registrierung ist aus** (Befund K7: `signUp` liefert sofort eine Sitzung). Neue Konten sind damit ohne bestätigte Adresse nutzbar. Ob das so gewollt ist, entscheidet Jerome (Supabase → Authentication → Sign In / Providers → Email → „Confirm email“). Wird sie eingeschaltet, zeigt `/start/4` „Bestätige deine E-Mail“, und `security:k7` nutzt den SQL-Weg.
+- **E-Mail-Bestätigung bei der Registrierung war aus** (Befund K7: `signUp` lieferte sofort eine Sitzung). **Erledigt 20.11.2026:** Jerome hat „Confirm email“ eingeschaltet. `/start/4` zeigt seitdem „Bestätige deine E-Mail“, `security:k7` nutzt den SQL-Weg.
 - `admin-invite-user` leitet weiterhin auf `/onboarding`, das auf `/start/1` weiterleitet. Funktioniert, ließe sich bei Gelegenheit direkt umstellen.

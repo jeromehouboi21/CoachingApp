@@ -1795,6 +1795,7 @@ Diese Werte stehen nicht im Repository und werden von Jerome im Dashboard gepfle
 
 | Einstellung | Wert | Gegenstück im Code |
 |---|---|---|
+| Authentication → Email → Confirm email | **an** (seit 20.11.2026) | `/start/4` zeigt „Bestätige deine E-Mail“; Einladungscode wartet in `localStorage` (`pendingInviteCode`) bis zum ersten Login; `security:k7` nutzt dann den SQL-Weg |
 | Authentication → Passwort-Mindestlänge | 12 | `PASSWORD_MIN_LENGTH` in `src/lib/passwordPolicy.js` |
 | Require current password when updating | an | `mapAuthError` (`current_password_required`, `current_password_invalid`), Angriffstest K1/K2 |
 | Redirect-URLs | u. a. `https://app.friedensstifter.coach/passwort-neu` | `ForgotPasswordForm`, `PasswordResetScreen` |
