@@ -193,8 +193,8 @@ export const AGREEMENT_FULL = [
       'Technische Dienstleister verarbeiten deine Daten nur in meinem Auftrag und sind vertraglich an meine Weisungen gebunden. Damit der Begleiter antworten kann, gehen deine Gesprächsinhalte verschlüsselt an Anthropic (USA). Zur Verarbeitung liegen sie dort lesbar vor.',
       // A4
       'Nutzt die App die Lernbasis, geht die erste Nachricht eines Gesprächs zusätzlich an OpenAI (USA). Daraus wird ein Zahlenwert berechnet, mit dem die App passende Erfahrungen findet. Hast du der Lernbasis zugestimmt, gehen auch die aufbereiteten Erfahrungen aus deinen Gesprächen an OpenAI.',
-      'Die Übermittlung in die USA ist abgesichert über [Prüfen: EU-U.S. Data Privacy Framework und/oder EU-Standardvertragsklauseln, je Anbieter]. In den USA gilt dennoch ein anderes Datenschutzniveau als in der EU, und Behörden können dort unter bestimmten Voraussetzungen auf Daten zugreifen.',
-      'Beide KI-Anbieter nutzen deine Inhalte nach ihren Vertragsbedingungen nicht, um ihre KI-Modelle zu trainieren. Sie speichern sie höchstens befristet, zum Beispiel um Missbrauch zu erkennen. [Prüfen: aktuelle Fristen laut DPA von Anthropic und OpenAI]',
+      'Die Übermittlung in die USA ist über die EU-Standardvertragsklauseln abgesichert, die in den Verträgen mit Anthropic und OpenAI vereinbart sind. In den USA gilt dennoch ein anderes Datenschutzniveau als in der EU, und Behörden können dort unter bestimmten Voraussetzungen auf Daten zugreifen.',
+      'Beide KI-Anbieter nutzen deine Inhalte nach ihren Vertragsbedingungen nicht, um ihre KI-Modelle zu trainieren. Sie speichern sie höchstens befristet, zum Beispiel um Missbrauch zu erkennen. [Prüfen: Die DPAs regeln nur die Zweckbindung (Anthropic B.2/B.3, OpenAI 1.2), weder Training noch Speicherfristen ausdrücklich. Beides steht in den Commercial Terms bzw. Datenrichtlinien von Anthropic und OpenAI – diese Dokumente in docs/DPA/ ablegen.]',
       // A2 / CODE-1: nur mit VOICE_MISTRAL_ENABLED (Text in VOICE_MISTRAL_NOTE)
       ...(VOICE_MISTRAL_ENABLED ? [VOICE_MISTRAL_NOTE] : []),
       'Welche Dienstleister welche Daten wozu erhalten, steht vollständig in der Datenschutzerklärung.',
@@ -367,32 +367,36 @@ export const WITHDRAWAL_FORM = {
 // ---------------------------------------------------------------------------
 export const DATA_RECIPIENTS = [
   {
+    // Quelle: Anthropic DPA, wirksam ab 24.02.2025 (docs/DPA/Anthropic DPA.pdf)
     name: 'Anthropic',
     location: 'USA',
     purpose: 'Antworten des Begleiters; Auswertung für Spiegel, Erkenntnisse, Krisenerkennung, Reflexionen und Supervision; Prüfung der Lernbasis-Einträge',
     data: 'Gesprächsinhalte und Kontext aus früheren Gesprächen',
-    safeguard: '[Prüfen: DPF-Zertifizierung auf dataprivacyframework.gov und Standardvertragsklauseln im DPA]',
+    safeguard: 'Auftragsverarbeitungsvertrag (Anthropic DPA vom 24.02.2025) mit EU-Standardvertragsklauseln (Modul 2, Abschnitt I). [Prüfen: Das DPA nennt unter Schedule 1 B.3 „Special categories of personal data: None“ – die App übermittelt aber Gesundheits- und Gefühlsdaten. Vertragspartner (Anthropic PBC oder Anthropic Ireland) laut Commercial Terms klären.]',
   },
   {
-    name: 'OpenAI',
-    location: 'USA',
+    // Quelle: OpenAI DPA v.010126 (docs/DPA/OpenAI DPA.pdf)
+    name: 'OpenAI (Vertragspartner für die EU: OpenAI Ireland Ltd.)',
+    location: 'Irland (Vertragspartner), Verarbeitung auch in den USA',
     purpose: 'Berechnung von Zahlenwerten (Vektoren), um passende Erfahrungen aus der Lernbasis zu finden; nur solange die Lernbasis genutzt wird',
     data: 'Erste Nachricht eines Gesprächs (bis 2.000 Zeichen); mit Zustimmung zur Lernbasis zusätzlich aufbereitete Erfahrungen',
-    safeguard: '[Prüfen: DPF-Zertifizierung und Standardvertragsklauseln im DPA]',
+    safeguard: 'Auftragsverarbeitungsvertrag (OpenAI DPA v.010126). Weitergabe in die USA über EU-Standardvertragsklauseln oder einen Angemessenheitsbeschluss (Ziffer 4.1). [Prüfen: Laut Schedule 1 Nr. 5 sind keine sensiblen Daten vorgesehen – die erste Nachricht kann aber Gesundheitsangaben enthalten.]',
   },
   {
-    name: 'Supabase',
-    location: 'Rechenzentrum in Irland (EU), Anbieter mit Sitz in den USA',
+    // Quelle: Supabase DPA Version 1 vom 01.08.2026 (docs/DPA/Supabase DPA.pdf)
+    name: 'Supabase (Vertragspartner: Supabase Pte. Ltd., Singapur)',
+    location: 'Rechenzentrum in Irland (EU, Region eu-west-1); Vertragspartner in Singapur, Betreuung weltweit',
     purpose: 'Datenbank, Anmeldung, Serverfunktionen',
     data: 'Alle in der App gespeicherten Daten',
-    safeguard: '[Prüfen: DPA und Übermittlungsgrundlage für Zugriffe aus den USA]',
+    safeguard: 'Auftragsverarbeitungsvertrag (Supabase DPA vom 01.08.2026) mit EU-Standardvertragsklauseln (Modul 2, Ziffer 12). Speicherung und Verarbeitung im Wesentlichen in der gewählten Region (Ziffer 6.1). Besondere Kategorien wie Gesundheitsdaten sind im Vertrag ausdrücklich vorgesehen (Anlage 3).',
   },
   {
-    name: 'Vercel',
+    // Quelle: Vercel DPA vom 17.03.2026, gültig ab 31.03.2026 (docs/DPA/Vercel DPA.pdf)
+    name: 'Vercel Inc.',
     location: 'USA',
     purpose: 'Auslieferung der App',
     data: 'Technische Zugriffsdaten wie IP-Adresse, keine Gesprächsinhalte',   // geprüft: App spricht direkt mit Supabase
-    safeguard: '[Prüfen: DPF-Zertifizierung und DPA]',
+    safeguard: 'Auftragsverarbeitungsvertrag (Vercel DPA vom 17.03.2026) mit EU-Standardvertragsklauseln (Modul 2). Nutzungs- und Zugriffsdaten verarbeitet Vercel teilweise als eigener Verantwortlicher (Ziffer 4.b). [Prüfen: Das DPA gilt nur für Pro- und Enterprise-Pläne – auf welchem Plan läuft das Projekt?]',
   },
   {
     requires: 'mistral',
