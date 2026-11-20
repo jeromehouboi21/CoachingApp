@@ -25,9 +25,7 @@
    - Die erste Nachricht eines Gesprächs geht an OpenAI, sobald die Lernbasis an ist (CODE-2). Sie kann Gesundheitsangaben enthalten.
    - Solange `RAG_LEARNING_ENABLED` aus ist bzw. es keine freigegebenen Einträge gibt, bekommt OpenAI nichts. Seit Migration 041 ist die Lernbasis leer.
    - **Empfehlung:** Lernbasis aus lassen, bis das geklärt ist.
-3. **Vercel: Das DPA gilt nur für Pro- und Enterprise-Pläne** (Einleitung).
-   - Läuft das Projekt auf dem kostenlosen Hobby-Plan, gibt es keinen Auftragsverarbeitungsvertrag.
-   - Nach den Nutzungsbedingungen von Vercel ist der Hobby-Plan außerdem nur für private, nicht kommerzielle Nutzung gedacht. Bitte im Vercel-Dashboard nachsehen.
+3. ~~**Vercel: Das DPA gilt nur für Pro- und Enterprise-Pläne** (Einleitung).~~ **Geklärt 20.11.2026:** Das Team läuft auf dem Pro-Plan (aktiv). Das DPA gilt, kommerzielle Nutzung ist erlaubt. Den Plan nicht auf Hobby zurückstufen.
 4. **Vercel als eigener Verantwortlicher:** Nutzungs- und Zugriffsdaten (z. B. IP-Adressen) verarbeitet Vercel teilweise selbst als Verantwortlicher (Ziffer 4.b, Schedule 1 Nr. 2.b). Das gehört so in die Datenschutzerklärung.
 
 ## Was die Verträge nicht regeln

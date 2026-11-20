@@ -396,7 +396,7 @@ export const DATA_RECIPIENTS = [
     location: 'USA',
     purpose: 'Auslieferung der App',
     data: 'Technische Zugriffsdaten wie IP-Adresse, keine Gesprächsinhalte',   // geprüft: App spricht direkt mit Supabase
-    safeguard: 'Auftragsverarbeitungsvertrag (Vercel DPA vom 17.03.2026) mit EU-Standardvertragsklauseln (Modul 2). Nutzungs- und Zugriffsdaten verarbeitet Vercel teilweise als eigener Verantwortlicher (Ziffer 4.b). [Prüfen: Das DPA gilt nur für Pro- und Enterprise-Pläne – auf welchem Plan läuft das Projekt?]',
+    safeguard: 'Auftragsverarbeitungsvertrag (Vercel DPA vom 17.03.2026) mit EU-Standardvertragsklauseln (Modul 2). Nutzungs- und Zugriffsdaten verarbeitet Vercel teilweise als eigener Verantwortlicher (Ziffer 4.b).',   // DPA gilt nur für Pro/Enterprise – Team auf Pro-Plan, von Jerome bestätigt 20.11.2026
   },
   {
     requires: 'mistral',
