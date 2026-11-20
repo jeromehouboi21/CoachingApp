@@ -18,7 +18,7 @@
 | Backend | Supabase (Auth + PostgreSQL + Edge Functions) |
 | KI | Anthropic Claude API · `claude-sonnet-5-5` (Streaming, seit 19.11.2026, `thinking: between_tools`, effort `medium`) · `claude-haiku-4-5-20251001` (Post-Processing) · IDs nur in `_shared/models.ts` |
 | Hosting | Vercel · Domain: `app.friedensstifter.coach` |
-| PWA | `vite-plugin-pwa` (Workbox) |
+| PWA | `vite-plugin-pwa` (Workbox) · seit Paket P installierbar, Update per Hinweis (`registerType: 'prompt'`), nur Precache |
 
 ---
 
@@ -469,6 +469,7 @@ perfektionismus_blockade → Perfektionismus-Blockade
 - **Zustimmung v2.0 ist Pflicht für Verarbeitung:** `chat` und `post-conversation` rufen `requireConsent` (`_shared/consent.ts`) → `403 consent_required`, DB-Fehler `503` (fail-closed). Neue Functions, die Gesprächsinhalte verarbeiten, ebenso.
 - **Sicherheitsaussagen** nur über `src/content/securityMeasures.js` mit Beleg (Build-Prüfung `check-content.mjs`, im `postbuild`). Nach jeder Security-Welle den Status der Einträge prüfen (`geplant` → `live` erst nach Abnahme) und `SECURITY_PAGE_AS_OF` hochsetzen.
 - **Passwörter (Paket K W1):** Mindestlänge 12 – im Supabase-Dashboard und in `src/lib/passwordPolicy.js` gleich halten; Fehlertexte nur über `mapAuthError`/`PASSWORD_MESSAGES` (Codes `current_password_required`, `current_password_invalid`). Dashboard: „Require current password when updating“ an, Redirect-URL `/passwort-neu`. Mailvorlagen liegen in `supabase/templates/` (Quelle fürs Dashboard, nicht automatisch übertragen). Passwort-Link: `src/lib/passwordRecovery.js` ist der erste Import in `main.jsx`.
+- **Service Worker (Paket P):** Der Service Worker speichert nie API-Antworten oder Nutzerdaten, nur statische Build-Dateien (Precache). `runtimeCaching` bleibt leer; `scripts/security/check-sw.mjs` (postbuild) bricht sonst den Build ab. Neue Caching-Regeln nur nach Freigabe durch Jerome. Updates kommen über den Hinweis (`UpdateBanner`), automatisch nur bei `409 client_outdated` (Event `fs:client-outdated`). Icons nur über `npm run pwa:icons` aus `assets/icon-master.svg` erzeugen. Name auf dem Startbildschirm: „Frieden“ (`short_name`, `apple-mobile-web-app-title`).
 - Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 
 ### Sicherheitsmuster (Security-Paket A, Pflicht)
@@ -501,7 +502,7 @@ Beide Logger (`src/lib/logger.ts`, `supabase/functions/_shared/logger.ts`) schic
 - **Angriffstest:** `npm run security:test` → alle PASS (Testkonten in `.env.security.local`, Vorlage `.env.security.example`; `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein)
 - Header prüfen: `curl -sI https://app.friedensstifter.coach` (HSTS, CSP, Permissions-Policy …) — die CSP ist seit 19.11.2026 **erzwingend**; neue externe Quellen sonst blockiert
 - **Löschtest** bei Änderungen an Tabellen mit Personenbezug oder an der Löschlogik: `npm run security:deletion-test` (frisches Testkonto C) + `supabase/security/deletion-check.sql` → überall 0
-- **Nach dem Deploy einmal neu laden** (PWA `autoUpdate`: der erste Aufruf läuft noch mit dem alten Bundle). Bei Änderungen an Frontend **und** RLS/Functions gleichzeitig: Reihenfolge Frontend → Functions → Migration (Befund C-5)
+- **Nach dem Deploy einmal neu laden** bzw. den Hinweis „Es gibt eine neue Version“ antippen (ein offener Tab läuft bis dahin mit dem alten Bundle). Bei Änderungen an Frontend **und** RLS/Functions gleichzeitig: Reihenfolge Frontend → Functions → Migration (Befund C-5)
 
 ---
 
