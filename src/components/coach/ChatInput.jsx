@@ -13,13 +13,19 @@ function markVoiceHintSeen() {
   try { localStorage.setItem(VOICE_HINT_KEY, '1') } catch { /* ohne Speicher: Hinweis kommt beim nächsten Mal wieder */ }
 }
 
-export function ChatInput({ onSend, disabled }) {
+// restore = { text, key } | null: abgelehnten Text zurück ins Feld (Paket Z, Monatsgrenze), nur wenn das Feld leer ist
+export function ChatInput({ onSend, disabled, restore = null }) {
   // Paket P (P-5): offline nicht senden, der getippte Text bleibt stehen
   const online = useOnline()
   const [value, setValue] = useState('')
   const [interimText, setInterimText] = useState('')
   const [showVoiceHint, setShowVoiceHint] = useState(false)
   const textareaRef = useRef(null)
+
+  useEffect(() => {
+    if (!restore?.text) return
+    setValue(prev => (prev ? prev : restore.text))
+  }, [restore?.key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTranscript = useCallback((text) => {
     setValue(prev => (prev ? prev + ' ' + text : text).trim())

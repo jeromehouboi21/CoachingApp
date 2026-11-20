@@ -107,6 +107,7 @@ export function CoachScreen() {
   // quotaNotice → Hinweiszeile im Gespräch ({ kind: 'warn'|'grace'|'reached', remaining, periodEnd })
   const [restQuota, setRestQuota] = useState(null)
   const [quotaNotice, setQuotaNotice] = useState(null)
+  const [restoreDraft, setRestoreDraft] = useState(null)
   function openRestSheet(info) {
     if (info?.reason === 'quota') setRestQuota({ periodEnd: info.periodEnd ?? access?.quota_resets_at ?? null, tier: access?.tier ?? null })
     else if (!info && access?.quota_reached) setRestQuota({ periodEnd: access.quota_resets_at ?? null, tier: access.tier ?? null })
@@ -116,7 +117,8 @@ export function CoachScreen() {
   const { messages, isLoading, conversationId, startNewConversation, startWellnessConversation, startEntryContextConversation, sendMessage, retryMessage, extractMemoryAndInsight, loadConversation, resumeWithOpening, isConversationCounted } = useChat(user?.id, session, {
     onSessionLimit: (info) => { openRestSheet(info); refreshAccess(); refreshProfile() },
     onConversationCap: () => { setCapReached(true); refreshAccess() },
-    onQuotaReached: ({ periodEnd }) => { setQuotaNotice({ kind: 'reached', remaining: 0, periodEnd }); refreshAccess() },
+    // Eingabe bleibt offen (Krisennachrichten gehen immer durch, Z-E1); abgelehnter Text kommt zurück ins Feld
+    onQuotaReached: ({ periodEnd, content }) => { setQuotaNotice({ kind: 'reached', remaining: 0, periodEnd }); setRestoreDraft({ text: content ?? '', key: Date.now() }); refreshAccess() },
     onQuotaNotice: (q) => setQuotaNotice({ kind: q?.grace ? 'grace' : 'warn', remaining: q?.remaining ?? 0, periodEnd: q?.periodEnd ?? null }),
   })
   const bottomRef = useRef(null)
@@ -636,7 +638,7 @@ export function CoachScreen() {
 
       {/* Chat Input */}
       <div className="sticky bottom-0">
-        <ChatInput onSend={handleSend} disabled={isLoading || capReached || quotaNotice?.kind === 'reached'} />
+        <ChatInput onSend={handleSend} disabled={isLoading || capReached} restore={restoreDraft} />
       </div>
 
       {/* Gesprächs-Abschluss Modal */}
