@@ -25,6 +25,8 @@ export default defineConfig({
       workbox: {
         // Schriften liegen lokal (S-10) und werden über globPatterns (woff2) vorgeladen
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Dateien wie /supabase-dpa.pdf direkt laden, nicht von der App-Navigation abfangen lassen
+        navigateFallbackDenylist: [/\.pdf$/],
       }
     })
   ]
