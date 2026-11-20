@@ -99,7 +99,7 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
 
 ## C. Abo und Zahlung (Paket Z, ergänzt 20.11.2026)
 
-**Stand:** Das Abo ist geplant (Handoff `docs/Neues_Zielbild/handoff-paket-z-zahlung.md` v1), aber noch nicht gebaut. Zahlungen gehen erst live, wenn diese Fragen geklärt und die Abo-Texte freigegeben sind.
+**Stand:** Das Abo ist gebaut und in der Stripe-Sandbox getestet (20.11.2026, Bericht `docs/billing/paket-z-abschlussbericht.md`). Zahlungen gehen erst live, wenn diese Fragen geklärt und die Abo-Texte freigegeben sind.
 
 - **Stufen:** „Begleitung“ für 9,90 € im Monat oder 99 € im Jahr, mit 150 eigenen Nachrichten pro Monat. „Begleitung intensiv“ für 19,90 € oder 199 €, mit 800 Nachrichten. „Begleitung intensiv“ bleibt zunächst abgeschaltet.
 - **Monatsgrenze:** Ab 80 % erscheint ein ruhiger Hinweis. Danach gibt es 10 Nachrichten Kulanz. Ist die Grenze erreicht, startet bis zum nächsten Abrechnungstag kein neues Gespräch. Spiegel, Erkenntnisse und Verlauf bleiben sichtbar. Krisenantworten sind nie gesperrt und werden nicht gezählt.
@@ -114,6 +114,13 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
 19. **Preisangabe:** Reichen die Preise auf der Seite `/begleitung` und auf der Stripe-Bezahlseite? Wo und wie gehört der Hinweis auf § 19 UStG hin (Seite, Bezahlseite, Rechnung)?
 20. **Aufbewahrung der Rechnungen:** Nach einer Kontolöschung bleiben die Rechnungen nur bei Stripe gespeichert (§ 147 AO, § 14b UStG). Reicht das, oder braucht der Betreiber eine eigene Kopie?
 21. **Monatsgrenze in den Bedingungen:** Wie werden Kontingent, Hinweis und Kulanz in den Abo-Bedingungen beschrieben, damit die Leistung klar umrissen ist? Ist eine Grenze bei einem „Begleitung“ genannten Abo als Leistungsbeschreibung ausreichend transparent?
+22. **Stripe-Kunde bei Kontolöschung:**
+    - **Was die App tut:** Die Kontolöschung beendet das Abo bei Stripe sofort. Den Kunden selbst löscht sie nicht. Bei Stripe bleiben E-Mail-Adresse, die hinterlegte Karte (bei Stripe gespeichert, nicht bei uns) und die Nutzer-ID als Verweis gespeichert, ebenso Rechnungen und Zahlungen.
+    - **Technisch möglich:** Die Löschung könnte den Kunden bei Stripe zusätzlich löschen. Dann sind Karte, Adresse und Verweis entfernt. Rechnungen und Zahlungen behält Stripe weiterhin, wegen eigener Pflichten (Rolle als eigener Verantwortlicher, siehe oben).
+    - **Frage:**
+      - Verlangt Art. 17 DSGVO, den Stripe-Kunden bei der Kontolöschung zu löschen, oder darf er bestehen bleiben?
+      - Falls er bleiben darf: Wie lange, und wie gehört das in die Datenschutzerklärung und die Bestätigungsmail der Löschung?
+      - Steht das Löschen des Kunden im Konflikt mit der Aufbewahrung der Rechnungen (Frage 20)?
 
 ---
 
