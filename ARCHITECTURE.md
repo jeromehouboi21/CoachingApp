@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041)
+> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041) · **Paket Z Zahlung & Abo** (20.11.2026: Stripe Checkout, Webhook, Kundenportal, Monatskontingent mit Kulanz, Kontolöschung beendet das Abo, Migration 042; deployt und in der Stripe-Sandbox getestet (J-Z2), **Bezahlung noch aus** (`PAYMENTS_ENABLED = false`), live erst mit J-Z3; Bericht: `docs/billing/paket-z-abschlussbericht.md`)
 
 ---
 
@@ -18,7 +18,7 @@
 6. [Datenbank-Schema](#6-datenbank-schema)
 7. [Design System](#7-design-system)
 8. [Wichtige Flows](#8-wichtige-flows)
-9. [Freemium-Logik](#9-freemium-logik)
+9. [Kennenlernen · Ruhemodus · Begleitung](#9-kennenlernen--ruhemodus--begleitung-seit-u4-migration-038)
 10. [Admin-Bereich & Sicherheitsmuster](#10-admin-bereich--sicherheitsmuster)
 11. [Build & Deployment](#11-build--deployment)
 
@@ -33,6 +33,7 @@
 | Backend | Supabase (Auth + PostgreSQL + Edge Functions) |
 | KI | Anthropic Claude API · `claude-sonnet-5-5` (Streaming, Haupt-Coach, seit 19.11.2026) · `claude-haiku-4-5-20251001` (Post-Processing, Klassifikation) · Modell-IDs nur in `_shared/models.ts` |
 | Hosting | Vercel · Domain: `app.friedensstifter.coach` |
+| Zahlung | Stripe (`npm:stripe@23.1.0`, API-Version `2026-10-28.endive`) · gehostete Bezahlseite + Kundenportal, kein Stripe-Skript im Frontend · bisher nur Sandbox (Paket Z) |
 | PWA | `vite-plugin-pwa` 0.20.5 (Workbox, `registerType: 'prompt'`, nur Precache) · Icons über `npm run pwa:icons` |
 | Logging | `app_logs`-Tabelle (serverseitig) + Browser-Console (clientseitig) |
 
@@ -84,6 +85,7 @@ CoachingApp/
 │   ├── content/                         ← Inhalte mit Freigabe-/Belegpflicht (Paket K)
 │   │   ├── legalTexts.js                ← Rechtstexte v2.0, LEGAL_TEXTS_STATUS, LEGAL_REVIEW_OPEN, DATA_RECIPIENTS, Schalter
 │   │   ├── securityMeasures.js          ← Aussagen der Sicherheitsseite mit Status und Beleg
+│   │   ├── plans.js                     ← Paket Z: Stufen und Preise NUR zur Anzeige, shortDate/longDate
 │   │   └── whyMemory.js                 ← „Warum sich die App etwas merkt“ (W2)
 │   │
 │   ├── styles/
@@ -118,6 +120,8 @@ CoachingApp/
 │   │   │   ├── MfaEnrollFlow.jsx        ← QR-Code, Schlüssel, Code bestätigen
 │   │   │   ├── RecoveryCodesView.jsx    ← 10 Wiederherstellungscodes, einmalig
 │   │   │   └── RecoveryForm.jsx         ← Anmelden mit Wiederherstellungscode
+│   │   ├── access/                      ← U4/Paket Z: RestModeSheet (Ruhemodus, Zweig Monatskontingent), QuotaNotice, ConversationCapNotice
+│   │   ├── begleitung/                  ← Paket Z: CheckoutButton (+ Rückkehr-Hinweis), PortalButton
 │   │   ├── app/                         ← Paket P: UpdateBanner, OfflineBar (beide in main.jsx neben <App />), InstallCard (Heute), InstallSheet, ShareIcon
 │   │   ├── auth/                        ← PasswordField (Sichtbar-Schalter), ForgotPasswordForm (W1)
 │   │   ├── WhyMemoryBlock.jsx           ← Baustein „Warum sich die App etwas merkt“ (Wie es funktioniert, /start/2)
@@ -162,7 +166,7 @@ CoachingApp/
 │       ├── howto/
 │       │   └── HowItWorksScreen.jsx     ← FAQ-Chat (ohne AppShell)
 │       ├── begleitung/
-│       │   └── BegleitungScreen.jsx     ← Info-Seite Begleitung (U4, ersetzt PremiumScreen)
+│       │   └── BegleitungScreen.jsx     ← Begleitung (U4); mit PAYMENTS_ENABLED Monat|Jahr, Preise, Bezahlung, Abo verwalten (Paket Z)
 │       └── legal/
 │           ├── ImpressumScreen.jsx
 │           ├── DatenschutzScreen.jsx
@@ -179,7 +183,8 @@ CoachingApp/
 │   │   │   ├── logger.ts                ← Zentraler Logger (sanitizeLogData, describeError)
 │   │   │   ├── rag.ts                   ← Embedding + match_experiences (nur serverseitig)
 │   │   │   ├── learning.ts              ← Prüfschritt (Vorfilter + Haiku, fail-closed) für Lernbasis und Supervision
-│   │   │   └── rateLimit.ts             ← Rate-Limit-Regeln + enforceRateLimit
+│   │   │   ├── rateLimit.ts             ← Rate-Limit-Regeln + enforceRateLimit
+│   │   │   └── stripe.ts                ← Paket Z: Stripe-Client, Stufen, Lookup-Keys, Schalter PAYMENTS_ENABLED/INTENSIV_ENABLED, siteUrl
 │   │   ├── chat/
 │   │   │   ├── index.ts                 ← Claude API Proxy + System-Prompt-Builder + Limit-/Krisen-Check
 │   │   │   └── crisisDetection.ts       ← Leichte Klassifikation auf akute Suizidalität
@@ -191,9 +196,12 @@ CoachingApp/
 │   │   ├── admin-security/index.ts      ← Admin: Alarme + Wochenübersicht (S-22)
 │   │   ├── security-monitor/index.ts    ← Stündliches Monitoring, Alarm-Mails (Cron, nur intern, S-22)
 │   │   ├── admin-invite-user/index.ts   ← Admin: Nutzer per E-Mail einladen (Beta-Zugang)
-│   │   ├── delete-account/index.ts      ← Account-Löschung (hard delete)
+│   │   ├── delete-account/index.ts      ← Account-Löschung (hard delete, beendet vorher ein Stripe-Abo)
 │   │   ├── export-my-data/index.ts      ← Datenexport als Selbstauskunft (S-16)
 │   │   ├── mfa-recovery/index.ts        ← Wiederherstellungscodes, Wiederherstellen, Abschalten (S-06b)
+│   │   ├── create-checkout-session/index.ts ← Paket Z: Stripe-Bezahlseite öffnen
+│   │   ├── stripe-webhook/index.ts      ← Paket Z: Stripe-Ereignisse, einzige Stelle, die plan für Abos setzt (Signatur statt requireUser)
+│   │   ├── create-portal-session/index.ts ← Paket Z: Stripe-Kundenportal öffnen
 │   │   ├── supervision/index.ts         ← Wöchentliche KI-Supervision (Cron)
 │   │   └── backfill-embeddings/index.ts ← Wartung: fehlende Vektoren nachtragen (nur intern)
 │   ├── migrations/
@@ -237,8 +245,10 @@ CoachingApp/
 │   │   ├── 038_u4_access_phases.sql     ← trial_sessions_used, access_state_for/get_access_state, consume_session gesamt
 │   │   ├── 039_u5a_insight_rating.sql   ← insights.user_rating/rated_at/follows_insight_id
 │   │   ├── 040_k_consent_v2.sql         ← Zustimmung v2.0 nur Server, accept_consent_v2
-│   │   └── 041_k_legal_v2_cleanup.sql   ← Reflexionen gelöscht, Lernbasis-Zustimmung nur v2.0
+│   │   ├── 041_k_legal_v2_cleanup.sql   ← Reflexionen gelöscht, Lernbasis-Zustimmung nur v2.0
+│   │   └── 042_z_billing.sql            ← Paket Z: subscriptions, message_quota_periods, message_charges, stripe_events, consume_message/refund_message
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
+│   ├── diagnostics/                     ← SQL-Vorlagen für Tests/Auswertung (u. a. z-quota-test.sql: Kontingent setzen, Testuhr-Kunde zuordnen)
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
 │
@@ -254,6 +264,8 @@ CoachingApp/
 ├── scripts/share-zip.mjs                ← ZIP zum Teilen nur aus HEAD (npm run share:zip)
 ├── .gitleaks.toml                       ← Allowlist öffentlicher Werte (Projekt-URL)
 ├── docs/security/                       ← Discovery, Handoffs, Lösungsdesign, Abschlussberichte
+├── docs/billing/                        ← Paket Z: Bestandsaufnahme abo-discovery.md, Abschlussbericht
+├── STRIPE_INTEGRATION_TODO.md           ← Paket Z: Einrichtung Sandbox (J-Z2) und Live-Gang (J-Z3); wird nach J-Z3 gelöscht
 ├── vercel.json                          ← SPA-Rewrite, Cache-, Security-Header, CSP
 ├── tailwind.config.js                   ← Custom Colors via CSS-Variablen
 ├── vite.config.js                       ← PWA-Manifest, Workbox: nur Precache, runtimeCaching leer, PDFs nicht umgeleitet
@@ -285,7 +297,7 @@ CoachingApp/
 | `/profile` | ProfileScreen | **ja** | — | **ja** |
 | `/howto` | HowItWorksScreen | **ja** | — | nein |
 | `/wellness` | WellnessCheckScreen | **ja** | — | nein |
-| `/begleitung` | BegleitungScreen (U4) | **ja** | — | nein |
+| `/begleitung` | BegleitungScreen (U4, Bezahlung seit Paket Z hinter `PAYMENTS_ENABLED`; Rückkehr von Stripe mit `?checkout=success\|cancel`) | **ja** | — | nein |
 | `/premium` | → Weiterleitung `/begleitung` | — | — | — |
 | `/coach/verlauf` | HistoryScreen | **ja** | — | nein |
 | `/verlauf` | Weiterleitung → `/coach/verlauf` (alte Lesezeichen, U1) | — | — | — |
@@ -401,6 +413,8 @@ function AdminRoute({ children }) {
 
 **Kennenlernen/Ruhemodus (U4):** `useAccessState()` liefert die Phase; der Mount wartet darauf. Ohne freien Start (`can_start = false`) legen „Etwas Neues mitbringen“, „Wie geht's dir?“, Wellness, Entry-Kontext und „Neues Gespräch“ keine Konversation an, sondern zeigen `RestModeSheet`. `429 session_limit` → ebenfalls `RestModeSheet`; `409 conversation_cap` → `ConversationCapNotice` unter dem Verlauf, Eingabe gesperrt (die abgelehnte Nachricht wird nicht gespeichert und aus der Ansicht entfernt). Maßgeblich ist der Server (siehe [Abschnitt 9](#9-kennenlernen--ruhemodus--begleitung-seit-u4-migration-038)).
 
+**Monatskontingent (Paket Z, nur Begleitung mit Abo):** `QuotaNotice` über der Eingabe – `warn` („Noch N Nachrichten in diesem Monat.“, einmal je Zeitraum, verschwindet beim nächsten Senden), `grace` („… Dieses Gespräch kannst du noch in Ruhe abschließen.“), `reached` („… Ab dem TT.MM. geht es weiter.“). Quelle: `meta.quota` im Stream (`onQuotaNotice`) bzw. `409 quota_reached` (`onQuotaReached`). **Die Eingabe bleibt an der Grenze offen**, damit Krisennachrichten durchkommen (Z-E1); eine abgelehnte Nachricht verschwindet aus dem Verlauf, ihr Text kommt zurück ins Eingabefeld (`ChatInput` Prop `restore`). Neues Gespräch bei aufgebrauchtem Kontingent: `429 session_limit` mit `reason: 'quota'` bzw. `access.quota_reached` → `RestModeSheet` mit Datum (`quota_resets_at`).
+
 **Krisenfall-Rendering:** Nachrichten mit `messageType === 'crisis_response'` werden als `CrisisResponseCard` statt als `ChatBubble` gerendert (siehe [Krisenfall-Flow](#krisenfall-flow)).
 
 **Gescheitertes Senden (S-12):** Eigene Nachrichten mit `status === 'failed'` zeigen darunter „Nicht gesendet – nochmal versuchen“ → `retryMessage(msg)` (gleiche `clientMessageId`, der Server legt nichts doppelt an). Eine Bubble mit `action === 'reload'` („Es gibt eine neue Version der App …“) lädt die Seite neu. Rate-Limit-Hinweise erscheinen als Coach-Bubble inkl. Telefonseelsorge (`src/lib/rateLimit.js`).
@@ -474,7 +488,8 @@ Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks
 - **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
 - **„Konto zusätzlich schützen“** (`SecurityCard`, S-06b, freiwillig): ohne Faktor Text + „Einrichten →“ → `MfaEnrollFlow` (Gerätename „Friedensstifter“) → `mfa-recovery codes:generate { afterEnroll: true }` → `RecoveryCodesView` (10 Codes einmalig, „Codes kopieren“, „Ich habe sie gesichert“) → Mail „Zweiter Faktor eingerichtet“. Scheitert das Erzeugen der Codes, bleibt ein sichtbarer Hinweis mit „Noch einmal versuchen“. Mit Faktor: Geräteliste, „Weiteres Gerät hinzufügen“, „Neue Wiederherstellungscodes“ (alte werden ungültig), „Zweiten Faktor entfernen“ (Bestätigungs-Sheet → `disable`). Nach einer Wiederherstellung Hinweis „Du bist wieder angemeldet. Dein zweiter Faktor wurde entfernt …“ mit „Jetzt einrichten →“.
 - **„Meine Daten herunterladen“** (`DataExportSheet`, S-16): Erklärtext → „Datei erstellen“ → `export-my-data` → Download als Blob; 429 → „Du hast heute schon drei Exporte erstellt. Morgen geht es wieder.“
-- **Phase (U4):** unter dem Namen eine ruhige Zeile aus `get_access_state()` („Kennenlernen · Gespräch n von m“, „Ruhemodus – alles, was du erkannt hast, bleibt sichtbar“, „Begleitung“); bei Testern zusätzlich „Beta“. Kein Countdown.
+- **Phase (U4):** unter dem Namen eine ruhige Zeile aus `get_access_state()` („Kennenlernen · Gespräch n von m“, „Ruhemodus – alles, was du erkannt hast, bleibt sichtbar“, „Begleitung“); bei Testern zusätzlich „Beta“. Kein Countdown. **Mit Abo (Paket Z):** „Begleitung · verlängert sich am TT.MM.JJJJ“ bzw. „… endet am …“ (`cancel_at_period_end`) bzw. „… ab dem … Begleitung“ (geplante Herabstufung `pending_tier`), darunter „Abo verwalten →“ (`PortalButton`).
+- **Konto löschen mit Abo (Paket Z):** zusätzlicher Satz „Dein Abo endet damit sofort. Bereits bezahlte Tage werden nicht erstattet.“; `502 subscription_cancel_failed` → eigener Hinweis, nichts gelöscht.
 - Einstellungsliste: Profil bearbeiten, Wie es funktioniert, Begleitung (nicht für `premium`, → `/begleitung`), Beta-Feedback/-Fragebogen (Tester), Coaching-Vereinbarung, Datenschutzerklärung, Meine Daten herunterladen (`export-my-data`, S-16), Impressum, Abmelden, **Konto löschen** (`delete-account`, siehe [Abschnitt 5](#delete-account--account-löschung)).
 
 ---
@@ -606,6 +621,14 @@ Bestandsnutzer ohne `age_confirmed_at` sehen einmalig `AgeConfirmSheet` (in `App
 
 Gemeinsam für `AdminMfaScreen`, `MfaChallengeScreen` und `SecurityCard`: `MfaCodeForm` (6-stelliger Code, sendet automatisch bei 6 Ziffern, Geräteauswahl), `MfaEnrollFlow` (startet `enroll`, zeigt QR-Code und Schlüssel, bestätigt den Code), `RecoveryCodesView` (Codes nur im Speicher der Ansicht), `RecoveryForm` (`mfa-recovery recover`, Fehlertexte für falschen Code und 429). Die Logik liegt in `src/lib/mfa.js`. Nie QR-Code, Schlüssel, Codes oder Wiederherstellungscodes loggen.
 
+#### Begleitung und Zugang (`src/components/begleitung/`, `src/components/access/`, Paket Z)
+
+**CheckoutButton:** `POST create-checkout-session { tier, interval }` → `{ url }`; nur `https://checkout.stripe.com/…` wird geöffnet (`window.location.assign`). `409 already_subscribed` → Hinweis + Portal. `useCheckoutReturn` liest `?checkout=success|cancel` einmal und entfernt den Parameter; `CheckoutReturnNotice` zeigt den Stand. Freigeschaltet wird **nie** durch die Rückkehr-URL, nur durch den Webhook – `BegleitungScreen` lädt die Phase alle 3 s neu (höchstens 10-mal, danach „dauert etwas länger“).
+
+**PortalButton:** `POST create-portal-session` → `{ url }`, nur `https://billing.stripe.com/…`; `404 no_customer`, `429` mit eigenem Text.
+
+**QuotaNotice / RestModeSheet:** siehe CoachScreen. „Begleitung intensiv →“ nur mit `INTENSIV_ENABLED`.
+
 #### Legal-Komponenten (`src/components/legal/`)
 
 **CoachingAgreementContent:** voller Text v2.0 aus `legalTexts.js` (`getAgreementSections()`, Abo-Abschnitte nur mit `PAYMENTS_ENABLED`), mit Kennzeichnung „vorläufig“; im Einstieg, bei der erneuten Zustimmung und im Rückblick. Dazu `ConsentStep`, `LegalSheet`, `DeclineSheet`, `PreliminaryNotice`.
@@ -671,6 +694,8 @@ Exports:
   loadConversation(conversationId)     — lädt bestehendes Gespräch aus dem Verlauf, kein countSession()
   setMessages(messages)
 ```
+
+**Optionen (Callbacks):** `onSessionLimit(info)` (`429 session_limit`, seit Paket Z mit `{ reason: 'quota'|'starts', periodEnd }`), `onConversationCap()` (`409 conversation_cap`), `onQuotaReached({ periodEnd, content })` (`409 quota_reached`: Nutzer-Blase und Platzhalter entfernt, nichts gespeichert), `onQuotaNotice(meta.quota)` (Hinweis ab 80 % bzw. Kulanz aus dem Stream).
 
 **Interne Refs (keine Re-Renders):**
 - `countedConvIdsRef`, `pendingConvRef` — UX-Limitprüfung und Konversationsanlage
@@ -809,7 +834,7 @@ logger.error(msg, data)   // Console + DB (mit stack_trace)
 
 ## 5. Backend — Supabase Edge Functions
 
-Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. **Imports haben feste Versionen** (`npm:@supabase/supabase-js@2.119.0`, `npm:@anthropic-ai/sdk@1.10.0` bzw. `https://esm.sh/@anthropic-ai/sdk@1.10.0`) — ohne Version zieht jeder Deploy die neueste Version (Ausfall 19.11.2026). Schalter-Secrets: `RAG_LEARNING_ENABLED` (Lernbasis, `1` = an), `SUPERVISION_IN_PROMPT` (BLOCK 5, `1` = an) — beide seit 19.11.2026 an. `admin-invite-user` nutzt zusätzlich optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`), `supervision` das Secret `CRON_SECRET`.
+Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY` und `OPENAI_API_KEY`. **Imports haben feste Versionen** (`npm:@supabase/supabase-js@2.119.0`, `npm:@anthropic-ai/sdk@1.10.0` bzw. `https://esm.sh/@anthropic-ai/sdk@1.10.0`) — ohne Version zieht jeder Deploy die neueste Version (Ausfall 19.11.2026). Schalter-Secrets: `RAG_LEARNING_ENABLED` (Lernbasis, `1` = an), `SUPERVISION_IN_PROMPT` (BLOCK 5, `1` = an) — beide seit 19.11.2026 an. `admin-invite-user` und die Stripe-Functions nutzen optional `SITE_URL` (Fallback: `https://app.friedensstifter.coach`), `supervision` das Secret `CRON_SECRET`. Paket Z: `STRIPE_SECRET_KEY` (eingeschränkter Schlüssel), `STRIPE_WEBHOOK_SECRET`, `PAYMENTS_ENABLED` (`1` = Bezahlseite/Portal/Kontingent an), `INTENSIV_ENABLED` (nicht gesetzt = „Begleitung intensiv“ aus).
 
 **Sicherheitsmuster v2 (Pflicht, Security-Paket A):** Jede Function ruft nach dem CORS-Preflight als Erstes `requireUser(req)` bzw. `requireInternalCaller(req)` aus `_shared/auth.ts` auf. Die Identität kommt **ausschließlich** aus dem JWT, nie aus dem Body; jede `conversationId` wird mit `assertConversationOwner()` geprüft (403). Gateway-Schalter „Verify JWT“ ist aus (`supabase/config.toml`), die Prüfung passiert im Code. Details: [Abschnitt 10](#sicherheitsmuster-v2-security-paket-a).
 
@@ -871,7 +896,8 @@ Howto: `{ "howtoMode": true, "messages": [...] }` (Verlauf weiterhin vom Client,
 1. **Verlauf + Idempotenz** — Verlauf aus der DB laden; gleiche `clientMessageId` schon vorhanden → ggf. gespeicherte Antwort zurückgeben
 2. **Krisenerkennung** (`crisisDetection.ts`) — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Bei `acute_risk` + Confidence ≥ medium wird `systemPrompt` **komplett ersetzt** durch `CRISIS_RESPONSE_BLOCK`; der Insert in `crisis_events` (über `admin`) folgt nach dem Speichern der Nutzer-Nachricht, mit deren `message_id`. Läuft **vor** der Limit-Prüfung: Eine Krisenantwort wird auch bei erreichtem Limit ausgeliefert (Entscheidung 18.11.2026).
 3. **Kappung (U4)** — `admin.rpc('access_state_for', { p_user_id })`; ist `cap` gesetzt und hat das Gespräch schon `cap` Nachrichten → `409 { error: 'conversation_cap', cap }` (außer Krisenfall), nichts gespeichert, kein Modellaufruf, Log `conversation_cap_reached`. RPC-Fehler → fail-open, Log `access_state_failed` (Alarm).
-4. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'session_limit', phase }` (außer Krisenfall), die Nutzer-Nachricht wird dann **nicht** gespeichert. RPC-Fehler → `500`, kein Durchlassen.
+4. **Sitzungszählung + Limit** — `userClient.rpc('consume_session', { p_conversation_id })` zählt atomar und idempotent pro Konversation (siehe [Abschnitt 6](#rpcs)). `allowed: false` → `429 { error: 'session_limit', phase, reason, periodEnd }` (seit Paket Z `reason: 'quota'` bei aufgebrauchtem Monatskontingent, sonst `'starts'`; außer Krisenfall), die Nutzer-Nachricht wird dann **nicht** gespeichert. RPC-Fehler → `500`, kein Durchlassen.
+4b. **Monatskontingent (Paket Z)** — nur bei neuer Nutzer-Nachricht im Gesprächsmodus und **nicht** im Krisenfall: `admin.rpc('consume_message', { p_user_id, p_conversation_id, p_client_message_id })`. Ohne Abo `no_quota` (keine Wirkung). `allowed: false` → `409 { error: 'quota_reached', periodEnd }`, nichts gespeichert. RPC-Fehler → `503 quota_check_failed` (Alarm). Hinweis ab 80 % bzw. in der Kulanz → `meta.quota { remaining, grace, periodEnd }` im ersten Meta-Chunk. Scheitert danach das Speichern, der Start des Streams oder kommt eine leere Antwort → `refund_message` (Log `quota_refunded`, Fehler `quota_refund_failed`).
 5. **Nutzer-Nachricht speichern** (Upsert, Fehler → `500 message_insert_failed`, kein Modellaufruf)
 6. **"Innere Stimmen"-Taktung** — prüft auf einen unangesprochenen Kandidaten (`introduceVoice`, ab 2. Antwort) oder einen seit ≥24h eingeführten, noch unbenannten Kandidaten (`namingVoice`); beide nie im selben Turn, übersprungen bei akuter Belastung (`wellnessCheck.score <= 3`)
 7. **Wirkmechanismus-Rhythmus** (`offerMechanism`) — alle 4 Coach-Antworten (ab der 3.) wird aktiv ein Mechanismus angeboten, unabhängig davon ob im Gesagten etwas "offensichtlich" ist
@@ -1009,8 +1035,9 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 ### `delete-account` — Account-Löschung
 
 - Löscht ausschließlich `user.id` aus dem JWT (jede ID im Body wird ignoriert)
+- **Schritt 0 (Paket Z, Z-E3):** Gibt es ein laufendes Stripe-Abo, wird es zuerst sofort beendet (`subscriptions.cancel`, `prorate: false`, `invoice_now: false`). Scheitert das → `502 subscription_cancel_failed` (Alarm), **nichts** wird gelöscht; ein bei Stripe schon fehlendes Abo (`resource_missing`) gilt als beendet. Der Stripe-Kunde selbst bleibt bestehen (offene Anwaltsfrage 22). Das danach eintreffende `customer.subscription.deleted` protokolliert der Webhook als `stripe_webhook_orphan_ended` (kein Alarm)
 - Prüft jedes Lösch-Ergebnis; scheitert ein Schritt → `500 delete_incomplete`, der Auth-Account bleibt bestehen (Wiederholung möglich, kein stilles Scheitern); Fehler beim Auth-Löschen → `500 auth_delete_failed`
-- Hard-Delete des Auth-Users via `service_role`; per CASCADE an `auth.users` hängen `inner_voices`, `crisis_events`, `feedback_surveys`, `rate_limit_counters`, `experience_patterns` (`source_user_id`); an `conversations` hängen `messages`, `session_notes`, `conversation_context` und seit 033 `coach_reflections`
+- Hard-Delete des Auth-Users via `service_role`; per CASCADE an `auth.users` hängen `inner_voices`, `crisis_events`, `feedback_surveys`, `rate_limit_counters`, `experience_patterns` (`source_user_id`); an `conversations` hängen `messages`, `session_notes`, `conversation_context` und seit 033 `coach_reflections`; seit 042 an `profiles` `subscriptions`, `message_quota_periods`, `message_charges` (letztere auch an `conversations`)
 - Nachweis: Löschtest (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0) — nach jeder Änderung an Tabellen mit Personenbezug oder an der Löschlogik ausführen
 - Aufgerufen von `ProfileScreen` nach Bestätigungs-Modal (Text nach Konzept 6.3, „LÖSCHEN“ tippen, Link zum Datenexport; bei Antwort ≠ 200 kein Abmelden, Hinweis „… nicht vollständig gelöscht …“, `403 mfa_required` → globale Code-Abfrage). Erreichbar auch aus `/sicherheit` und der Zustimmungs-Sperre (`state.openDelete`)
 - **Seit Paket K W4:** nach erfolgreicher Löschung Bestätigungsmail „Dein Konto wurde gelöscht“ über `_shared/mailer.ts` (Adresse nur im Speicher der Function, Umlaute als ASCII); Logs `account_deleted_mail_ok` / `account_deleted_mail_failed` (Wochenübersicht). Scheitert die Mail, bleibt die Löschung gültig
@@ -1024,13 +1051,14 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 - Rate-Limit `export` 3/Tag, **fail-closed** (`_shared/rateLimit.ts`); 429 → „Du hast heute schon drei Exporte erstellt. Morgen geht es wieder.“
 - Inhalt (Entscheidung C-4 = alles mit Personenbezug), Tabellenliste als Konstante `EXPORT_TABLES`:
   - `konto`: E-Mail, Anlage, letzte Anmeldung, zweite Faktoren (nur Name, Typ, Status, Datum), `profiles`
+  - `abo` (Paket Z): `subscriptions`, `message_quota_periods`, `message_charges` (Rechnungen und Zahlungsdaten liegen bei Stripe)
   - `gespraeche`: `conversations`, `messages`
   - `spiegel_akte`: `insights`, `coach_file_entries`, `coachee_profile`, `user_memory`, `pattern_references`, `inner_voices`
   - `coach_notizen`: `session_notes`, `resonance_map`, `coach_reflections`
   - `sicherheit_support`: `crisis_events` (inkl. `notes`), `user_feedback`, `feedback_surveys`, `app_logs`, `rate_limit_counters`
   - `lernbasis`: eigene `experience_patterns` (`source_user_id`)
   - `hinweise`: `conversation_context` nur als `{ conversation_id, vorhanden: true }` (enthält Erfahrungen anderer Menschen)
-- Nie in der Datei: Spalten `embedding`, `code_hash`, `invited_by` (ID einer anderen Person). Ausgeschlossen mit Begründung (`EXCLUDED_TABLES`): `supervision_logs`, `security_alerts`, `invite_codes`
+- Nie in der Datei: Spalten `embedding`, `code_hash`, `invited_by` (ID einer anderen Person). Ausgeschlossen mit Begründung (`EXCLUDED_TABLES`): `supervision_logs`, `security_alerts`, `invite_codes`, `stripe_events` (technische Ereignis-IDs ohne Personenbezug)
 - Oben `_erklaerung` (Gruppen in je einem Satz, Verantwortlicher laut Impressum, Kontakt). Antwort `Content-Disposition: attachment; filename="friedensstifter-export-JJJJ-MM-TT.json"`
 - Scheitert eine Tabelle → `500 export_incomplete` (Log mit Tabellenname und Code, Alarm in `monitorRules.ts`); kein unvollständiger Export
 - Log `export_created { tables, rows }`; Bestätigungsmail ohne Inhalte an die eigene Adresse (`export_mail_failed` nur Info)
@@ -1050,6 +1078,22 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 **Nur intern aufrufbar** (`requireInternalCaller`): Header `x-cron-secret` = Function-Secret `CRON_SECRET` oder service_role-Key als Bearer. Der Cron-Job liest das Secret zur Laufzeit aus **Supabase Vault** (`vault.decrypted_secrets`, Name `cron_secret`) — kein Key im Klartext in `cron.job`. `supervision_logs.improvement_recs` lädt `chat` selbst, aber nur mit Secret `SUPERVISION_IN_PROMPT=1` (seit 19.11.2026 an, S-12).
 
 ---
+
+### `create-checkout-session` — Stripe-Bezahlseite (Paket Z)
+
+`POST { tier, interval }`, `requireUser` + `requireConsent`, Rate-Limit `checkout` 10/Std (fail-closed). Ohne Secret `PAYMENTS_ENABLED` → `403 payments_disabled` (Log `checkout_disabled`); `intensiv` ohne `INTENSIV_ENABLED` → `403 tier_unavailable`; ungültige Werte → `400 invalid_tier`/`invalid_interval`; `tester` → `409 not_applicable`; laufendes Abo (`active`, `trialing`, `past_due`) → `409 already_subscribed`. Preis über den Lookup-Key (`begleitung_monat`, `begleitung_jahr`, `intensiv_monat`, `intensiv_jahr`). Kunde wiederverwenden oder anlegen (E-Mail + Metadaten `user_id`, Idempotenz-Key `customer-<uid>`) und **vor** der Session in `subscriptions` speichern. Session mit `customer`, `client_reference_id`, `subscription_data.metadata.user_id`; Rückkehr `SITE_URL/begleitung?checkout=success|cancel`. Antwort `{ url }`.
+
+### `stripe-webhook` — Stripe-Ereignisse (Paket Z)
+
+**Ausnahme von der Sicherheitsregel** (von Jerome mit Handoff v1 bestätigt): kein `requireUser`/`requireInternalCaller` – die Authentifizierung ist die Stripe-Signatur (`constructEventAsync` mit SubtleCrypto), geprüft als Erstes, vor jedem DB-Zugriff (fehlt/falsch → `400`, Log `stripe_webhook_signature_invalid`). Ohne Secret/Schlüssel → `503`.
+
+Ablauf: Signatur → `stripe_events` (Idempotenz; schon verarbeitet → `200 { received, duplicate: true }`) → Verarbeitung → `processed_at`. `2xx` nur, wenn alles gespeichert ist, sonst `500` → Stripe stellt erneut zu. Verarbeitete Ereignisse (genau diese sechs im Stripe-Dashboard abonniert): `checkout.session.completed`, `customer.subscription.created/updated/deleted`, `invoice.paid` (bei `billing_reason = subscription_cycle` Log `subscription_renewed`), `invoice.payment_failed` (Log `payment_failed`).
+
+`syncSubscription`: Abo **frisch** von Stripe holen (`expand: items.data.price.product, schedule`) → Nutzer zuordnen (gespeicherte Kunden-ID, sonst Nutzer-ID aus `client_reference_id`/Metadaten, nur wenn das Profil existiert und keinen anderen Kunden hat) → ein älteres beendetes Abo überschreibt kein neueres laufendes → Upsert `subscriptions` (Stufe aus Produkt-Metadaten `tier`, Rückfall Lookup-Key; Periodenende = spätestes `items.data[].current_period_end`; `quota_anchor` = `start_date`; `cancel_at_period_end` und `cancel_at`; `pending_tier` aus dem Abo-Zeitplan) → `profiles.plan` = `premium` bei `active`/`trialing`/`past_due`, sonst `free`; **`tester` wird nie überschrieben** (Z-11). Ohne zuordenbares Konto: beendetes Abo → `stripe_webhook_orphan_ended` (nach Kontolöschung erwartet), sonst Alarm `stripe_webhook_unmatched`.
+
+### `create-portal-session` — Stripe-Kundenportal (Paket Z)
+
+`POST`, `requireUser`, Rate-Limit `portal` 10/Std (fail-closed). Ohne Kunde → `404 no_customer`. Rückkehr `SITE_URL/profile`. Im Portal (Einstellung im Stripe-Dashboard): Upgrade sofort anteilig, Downgrade und Verkürzung zum Periodenende, Kündigung zum Periodenende, Zahlungsart ändern.
 
 ### `mfa-recovery` — Zweiter Faktor für alle (S-06b, Paket C)
 
@@ -1076,7 +1120,7 @@ Scheitert das Entfernen eines Faktors oder der Codes → `500 mfa_reset_failed` 
 
 Body `{ "probe": true }` schickt eine Testmail („Test: Alarmkanal Friedensstifter“) und legt eine `probe`-Zeile an. Mails enthalten nur Regel, Anzahl und Zeitfenster (keine IDs, keine Inhalte); ein Mailfehler steht als Code in `security_alerts.mail_error`, der Alarm bleibt im Admin-Tab sichtbar. Jeder Lauf loggt `security_monitor_run`. Secrets: `SMTP_HOST`, `SMTP_PORT` (465), `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`.
 
-**Überwachte Codes** (Schnittstelle, Änderungen nur zusammen mit `monitorRules.ts`): `auth_rejected` (aus `errorResponse` bei 401/403), `userId mismatch`, `mfa_required` (Admin), `mfa_verify_failed` (nur Client-Herkunft), `assistant_insert_failed`, `user_message_insert_failed`/`opening_insert_failed`, `rate_limit_db_error`, `delete_incomplete`/`auth_delete_failed`, `learning_review_failed` (technischer Ausfall des Prüfschritts in post-conversation und supervision), `supervision_rejected`; ab C-4/C-5 `export_created`, `mfa_recovery_used`, `mfa_recovery_failed`; Info: `user_mfa_required`, `legacy_format`, `learning_entry_saved`, `learning_rejected`, `supervision_protocol_rejected`. Lebenszeichen: `retention_applied`, `supervision_run`.
+**Überwachte Codes** (Schnittstelle, Änderungen nur zusammen mit `monitorRules.ts`): `auth_rejected` (aus `errorResponse` bei 401/403), `userId mismatch`, `mfa_required` (Admin), `mfa_verify_failed` (nur Client-Herkunft), `assistant_insert_failed`, `user_message_insert_failed`/`opening_insert_failed`, `rate_limit_db_error`, `delete_incomplete`/`auth_delete_failed`, `learning_review_failed` (technischer Ausfall des Prüfschritts in post-conversation und supervision), `supervision_rejected`; ab C-4/C-5 `export_created`, `mfa_recovery_used`, `mfa_recovery_failed`; Info: `user_mfa_required`, `legacy_format`, `learning_entry_saved`, `learning_rejected`, `supervision_protocol_rejected`. Lebenszeichen: `retention_applied`, `supervision_run`. **Paket Z:** Alarm `stripe_webhook_signature_invalid` (ab 5/Std), `stripe_webhook_failed`, `stripe_webhook_unmatched`, `stripe_webhook_not_configured`, `quota_check_failed`, `quota_refund_failed`, `subscription_cancel_failed` (je ab 1/Std), `portal_session_failed` (ab 3/Std); Info: `subscription_started/changed/renewed/ended`, `payment_failed`, `quota_warned/reached/refunded`, `stripe_webhook_ignored`/`stripe_webhook_orphan_ended`, `portal_session_created`, `checkout_session_created`/`checkout_disabled`.
 
 **Hinweis:** Der Angriffstest löst absichtlich `auth_rejected`, `userid_mismatch` und ggf. `admin_mfa_required` aus — danach sind Alarm-Mails zu erwarten.
 
@@ -1116,13 +1160,14 @@ createLogger(source: string, requestId?: string, userId?: string)
 
 ---
 
-### `_shared/models.ts`, `_shared/rag.ts`, `_shared/rateLimit.ts`, `_shared/learning.ts`
+### `_shared/models.ts`, `_shared/rag.ts`, `_shared/rateLimit.ts`, `_shared/stripe.ts`, `_shared/learning.ts`
 
 | Modul | Zweck |
 |---|---|
 | `models.ts` | **Einzige Stelle für Modell-IDs** (`COACH_MODEL` = `claude-sonnet-5-5`, `HAIKU_MODEL`). `COACH_REQUEST_DEFAULTS`: `thinking: { type: 'between_tools' }` (kein Vorab-Denken; `disabled` gibt auf 5.5 einen 400) + `output_config.effort: 'medium'` (konstant, darf sich im Gespräch nicht ändern). `COACH_MAX_TOKENS` 560 / `COACH_CRISIS_MAX_TOKENS` 980 (neuer Tokenizer, × 1,4). `extractText()` liest Antworten nach Blocktyp statt `content[0]` (leer → `empty_text_response`). `ensureEndsWithUser()` hängt einen nicht gespeicherten Nutzer-Turn an, wenn der Verlauf auf `assistant` endet (Sonnet 5.5 kennt kein Prefill; geloggt als `synthetic_user_turn_added`). |
 | `rag.ts` | `generateEmbedding()` (OpenAI `text-embedding-3-small`, Timeout 2,5 s, Fehlergrund nur als Code) und `findSimilarExperiences()` (`match_experiences`). Nur serverseitig — Treffer verlassen den Server nicht. |
-| `rateLimit.ts` | Grenzwerte (`RATE_LIMITS`, u. a. `export` 3/Tag, `mfaCodes` 5/Tag, `mfaRecover` 5/Std + 10/Tag), `enforceRateLimit()` (RPC `consume_rate_limits`, fail-open/-closed wählbar), `rateLimitResponse()` (429 + `Retry-After`). |
+| `rateLimit.ts` | Grenzwerte (`RATE_LIMITS`, u. a. `export` 3/Tag, `mfaCodes` 5/Tag, `mfaRecover` 5/Std + 10/Tag, `checkout` und `portal` je 10/Std), `enforceRateLimit()` (RPC `consume_rate_limits`, fail-open/-closed wählbar), `rateLimitResponse()` (429 + `Retry-After`). |
+| `stripe.ts` | Paket Z: `stripeClient()` (`npm:stripe@23.1.0`, null ohne Schlüssel), `paymentsEnabled()`, `intensivEnabled()`, `siteUrl()`, `TIERS`/`INTERVALS`/`LOOKUP_KEYS`, `ACTIVE_STATUSES` (`active`, `trialing`, `past_due`), `tierFromPrice()`, `stripeErrorInfo()` (nur Typ/Code, nie Stripe-Fehlertexte). |
 | `learning.ts` | Prüfschritt `reviewLearningEntry()` für alles Nutzerübergreifende (Lernbasis, Supervision): Regex-Vorfilter (`contact`, `instruction`) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`). Das JSON wird aus der Antwort herausgelöst (robust gegen Text drumherum); technische Fehler → `review_api_failed` / `review_parse_failed`; immer fail-closed. `makeHaikuCaller()` als Adapter. |
 
 ---
@@ -1398,13 +1443,45 @@ notes              TEXT       -- im Alltag nicht sichtbar, Teil der Selbstauskun
 ```
 RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer sieht seine Einträge nicht. Nur ein echter `service_role`-Client (ohne Nutzer-Token, `BYPASSRLS`) kann schreiben. Keine Echtzeit-Benachrichtigung — wöchentliche Sichtung durch Jerome, analog zum Supervision-Cron.
 
+### Abo und Kontingent (Paket Z, Migration 042)
+
+Alle vier Tabellen: RLS an, **keine** Rechte für `authenticated`/`anon`, nur `service_role`. Anzeige im Frontend nur über `get_access_state()`.
+
+**`subscriptions`** — eine Zeile pro Nutzer (das jeweils aktuelle Abo)
+```
+user_id                UUID PK → profiles ON DELETE CASCADE
+stripe_customer_id     TEXT UNIQUE NOT NULL
+stripe_subscription_id TEXT UNIQUE            -- null, solange nur der Kunde angelegt ist
+tier                   TEXT ('begleitung' | 'intensiv')
+billing_interval       TEXT ('month' | 'year')
+status                 TEXT                   -- Stripe-Status 1:1
+quota_anchor           TIMESTAMPTZ            -- Stripe start_date, Ankertag der Monatszeiträume
+current_period_end     TIMESTAMPTZ            -- Ende des bezahlten Zeitraums
+cancel_at_period_end   BOOLEAN                -- endet (cancel_at_period_end ODER cancel_at)
+cancel_at              TIMESTAMPTZ            -- Stripe setzt bei Kündigung im Portal nur dieses Feld (J-Z2)
+pending_tier           TEXT                   -- geplante Herabstufung zum Periodenende
+updated_at             TIMESTAMPTZ
+```
+
+**`message_quota_periods`** — PK `(user_id, period_start)`: `period_end`, `used`, `grace_used`, `grace_conversation_id` (→ conversations, SET NULL; Kulanz nur in einem Gespräch je Zeitraum), `warned_at`.
+
+**`message_charges`** — Buchungsjournal, PK `(conversation_id, client_message_id)` (eine Buchung pro Nutzernachricht, idempotent): `user_id`, `period_start`, `kind` (`quota` | `grace`), `charged_at`. CASCADE an `conversations` und `profiles`.
+
+**`stripe_events`** — Webhook-Idempotenz ohne Personenbezug: `event_id` PK, `type`, `received_at`, `processed_at`.
+
+**Regeln an einer Stelle (Z-3):** `quota_limit_for(tier)` (Begleitung 150, intensiv 800), `quota_grace()` (10), `quota_warn_percent()` (80) — Änderung nur per neuer Migration. `current_quota_period(anchor, at)`: Zeitraum = Anker + n Monate (größtes n mit Start ≤ jetzt), in UTC, Monatsende wird gekürzt. Die Testuhr von Stripe verstellt nur Stripe; die DB rechnet mit der echten Zeit.
+
 ### RPCs
 
 **`get_conversation_history()`** — `SECURITY INVOKER`, `search_path = ''`, liefert die Gesprächsliste des eingeloggten Nutzers (Datum, Nachrichtenanzahl, `main_topic`/erste Nutzer-Nachricht) für `/coach/verlauf` und die Profil-Statistik, ohne N+1-Queries. Ausführbar nur für `authenticated`.
 
-**`consume_session(p_conversation_id)`** — `SECURITY DEFINER`, `search_path = ''` (Migration 023, seit 038 neu gefasst). Zählt atomar und idempotent: Ist `conversations.session_counted_at` gesetzt → `{ allowed: true, counted: false }`. Sonst Profilzeile sperren und Regeln aus `access_state_for` prüfen: kein freier Start → `{ allowed: false, used, limit, phase }`; sonst `session_counted_at` setzen und `trial_sessions_used + 1`. Fremde Konversation → `42501`. Ausführbar für `authenticated` (aufgerufen von `chat` mit dem Nutzer-Token).
+**`consume_session(p_conversation_id)`** — `SECURITY DEFINER`, `search_path = ''` (Migration 023, seit 038 neu gefasst). Zählt atomar und idempotent: Ist `conversations.session_counted_at` gesetzt → `{ allowed: true, counted: false }`. Sonst Profilzeile sperren und Regeln aus `access_state_for` prüfen: kein freier Start → `{ allowed: false, used, limit, phase }`; sonst `session_counted_at` setzen und `trial_sessions_used + 1`. Fremde Konversation → `42501`. Seit 042 bei Ablehnung zusätzlich `reason` (`quota` | `starts`) und `period_end`. Ausführbar für `authenticated` (aufgerufen von `chat` mit dem Nutzer-Token).
 
-**`access_state_for(p_user_id)`** — `SECURITY DEFINER`, `stable`, nur `service_role` (Migration 038, U4). Einzige Quelle der Regeln für Kennenlernen/Ruhemodus/Begleitung: `{ phase, starts_used, starts_limit, can_start, cap }` (Kappung `c_cap` = 100 ohne Begleitung). Aufrufer: `consume_session`, `chat` (Kappung), `get_access_state`.
+**`access_state_for(p_user_id)`** — `SECURITY DEFINER`, `stable`, nur `service_role` (Migration 038, U4; seit 042 erweitert). Einzige Quelle der Regeln für Kennenlernen/Ruhemodus/Begleitung: `{ phase, starts_used, starts_limit, can_start, cap }` (Kappung `c_cap` = 100 ohne Begleitung), seit Paket Z zusätzlich `tier`, `period_end` (Profil), `cancel_at_period_end`, `pending_tier`, `quota_resets_at` (nächstes Monatskontingent, beim Jahresabo ≠ `period_end`), `messages_left`, `quota_reached`; `can_start = false` bei aufgebrauchtem Kontingent (Phase bleibt `begleitung`). Aufrufer: `consume_session`, `chat` (Kappung), `get_access_state`.
+
+**`consume_message(p_user_id, p_conversation_id, p_client_message_id)`** — `SECURITY DEFINER`, nur `service_role` (Migration 042). Bucht eine Nutzernachricht gegen das Monatskontingent: ohne `premium`-Abo → `{ allowed: true, reason: 'no_quota' }`; schon gebucht → keine zweite Buchung; unter der Grenze → `kind 'quota'`, `warn` einmal ab 80 %; danach Kulanz in **einem** Gespräch (`kind 'grace'`, `grace_left`); sonst `{ allowed: false, reason: 'quota_reached', period_end }`. Zeile des Zeitraums `for update` gesperrt.
+
+**`refund_message(p_conversation_id, p_client_message_id)`** — `SECURITY DEFINER`, nur `service_role`. Nimmt eine Buchung zurück (`used` bzw. `grace_used` − 1), liefert `true`/`false`.
 
 **`get_access_state()`** — `SECURITY DEFINER`, ausführbar für `authenticated`, prüft zuerst `mfa_satisfied()` (Migration 038). Liefert `access_state_for(auth.uid())` für die Anzeige im Frontend (`useAccessState`).
 
@@ -1434,7 +1511,7 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 | `security-monitor` | `7 * * * *` | `security-monitor` per `net.http_post` mit `x-cron-secret` aus Vault (Migration 034) |
 | `purge-security-alerts` | `29 3 * * *` | `security_alerts` älter als 12 Monate löschen (Migration 034) |
 
-**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs`, `user_feedback` und (seit 036) `feedback_surveys` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage. Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (Paket D). `security_alerts` 12 Monate (`purge-security-alerts`).
+**Fristen (`apply_retention()`, D-4, keine Rechtsberatung — mit Anwalt bestätigen, R-4):** `crisis_events.excerpt` nach Sichtung (`reviewed_by_jerome`) bzw. spätestens 90 Tagen leeren · `crisis_events` 3 Jahre ab Ende des Kalenderjahres · `coach_reflections` 12 Monate · `supervision_logs`, `user_feedback` und (seit 036) `feedback_surveys` 24 Monate · `app_logs` 30 Tage · `rate_limit_counters` 2 Tage · seit 042 `message_charges` und `message_quota_periods` 13 Monate, `stripe_events` 90 Tage (`subscriptions` bleibt bis zur Kontolöschung). Inaktive Konten (24 Monate ohne Anmeldung) werden nur gezählt (`inactive_accounts_report`, nur service_role); gelöscht wird erst mit Mailkanal für den Vorab-Hinweis (Paket D). `security_alerts` 12 Monate (`purge-security-alerts`).
 
 ### RLS-Prinzip (Least Privilege, Migration 025)
 
@@ -1451,7 +1528,7 @@ Alle Tabellen haben RLS. Policies gelten **nur für `authenticated`**, nie für 
 | `coach_file_entries`, `coachee_profile`, `session_notes`, `pattern_references` | SELECT | `user_id = auth.uid()` |
 | `user_feedback`, `feedback_surveys` | INSERT | `user_id = auth.uid()` **und** `consent_given = true` (seit 036) |
 | `app_logs` | INSERT | `user_id = auth.uid()` (Migration 026); bewusst **ohne** MFA-Policy, damit Logging vor der Code-Eingabe funktioniert |
-| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, `conversation_context`, `rate_limit_counters`, `security_alerts`, `mfa_recovery_codes`, View `feedback_survey_scores` | **keine** | nur service_role |
+| `resonance_map`, `experience_patterns`, `coach_reflections`, `supervision_logs`, `invite_codes`, `crisis_events`, `conversation_context`, `rate_limit_counters`, `security_alerts`, `mfa_recovery_codes`, `subscriptions`, `message_quota_periods`, `message_charges`, `stripe_events`, View `feedback_survey_scores` | **keine** | nur service_role |
 
 **MFA-Policy (S-06b, Migration 037):** Alle Tabellen der Liste oben mit Client-Rechten außer `app_logs` (`profiles`, `conversations`, `messages`, `insights`, `user_memory`, `inner_voices`, `coach_file_entries`, `coachee_profile`, `session_notes`, `pattern_references`, `user_feedback`, `feedback_surveys`) haben zusätzlich die **restriktive** Policy `mfa_required` (`for all to authenticated using/with check ((select public.mfa_satisfied()))`). Ein aal1-Token eines Nutzers mit Faktor liest damit 0 Zeilen und kann nichts schreiben – auch direkt über die API (Angriffstest #34). Neue Client-Tabellen bekommen diese Policy ebenfalls.
 
@@ -1656,8 +1733,8 @@ Grundsatz (UX-Konzept 5.2): Was über den Menschen entsteht, bleibt in jeder Pha
 
 | Bereich | Kennenlernen (`free`) | Ruhemodus | Begleitung |
 |---|---|---|---|
-| Neue Gespräche | `session_limit` insgesamt (Default 3, `null` = unbegrenzt) | – | `premium` unbegrenzt · `tester` eigenes Limit (Admin, z. B. 200/300/500) |
-| Fortsetzen / Weitermachen | bis 100 Nachrichten je Gespräch | bis 100 Nachrichten (Tester ohne Grenze) | ohne Grenze |
+| Neue Gespräche | `session_limit` insgesamt (Default 3, `null` = unbegrenzt) | – | `premium` ohne Startgrenze, mit Abo begrenzt durch das Monatskontingent · `tester` eigenes Limit (Admin, z. B. 200/300/500) |
+| Fortsetzen / Weitermachen | bis 100 Nachrichten je Gespräch | bis 100 Nachrichten (Tester ohne Grenze) | ohne Grenze je Gespräch; mit Abo Monatskontingent (Begleitung 150 / intensiv 800 eigene Nachrichten, + 10 Kulanz in einem Gespräch) |
 | Heute, Spiegel, Verlauf, Export, Profil | vollständig | vollständig | vollständig |
 
 **Regeln:** `access_state_for(uid)` (SQL, nur service_role) ist die einzige Quelle: `premium` → Begleitung; `tester` → Begleitung, solange Starts übrig sind, sonst Ruhemodus, keine Kappung; sonst Kennenlernen, solange Starts übrig sind, sonst Ruhemodus, Kappung 100 (Konstante `c_cap`). Bestandsgespräche (schon gezählt) lassen sich ohne neuen Start fortsetzen.
@@ -1667,7 +1744,15 @@ Grundsatz (UX-Konzept 5.2): Was über den Menschen entsteht, bleibt in jeder Pha
 **Übergangstexte (UX 5.4):** 1. vor dem letzten Kennenlern-Gespräch (Einstieg und oben im neuen Gespräch, bis zur ersten Nachricht) · 2. Karte „Ende des Kennenlernens“ auf Heute (nur Standardgrenze 3, mit „Schließen“) · 3. `RestModeSheet` („Für ein neues Gespräch gibt es die Begleitung …“) · 4. `ConversationCapNotice` (Eingabe gesperrt). „Einmalig“ pro Gerät über `localStorage` (`fs_trial_last_hint_v1`, `fs_trial_end_card_v1`). Kein Zähler im Chat; im Profil eine ruhige Zeile zur Phase.
 
 **Rate-Limits pro Nutzer** (Migration 029, RPC `consume_rate_limits`, Werte zentral in `supabase/functions/_shared/rateLimit.ts`): `chat` Gespräch 10/Minute + 200/Tag · Howto 30/Stunde · Extraktion 30/Tag · `post-conversation` 60/Tag · `validate-invite-code` 5/Stunde + 10/Tag. Antwort `429 { error: 'rate_limited', retryAfter }` + `Retry-After`-Header; das Frontend zeigt dann einen Hinweis inkl. Telefonseelsorge statt des Limit-Modals (`src/lib/rateLimit.js`). chat/post-conversation fail-open bei DB-Fehler (protokolliert), Invite-Code fail-closed. Zähler werden täglich nach 2 Tagen gelöscht (Cron `purge-rate-limits`).
-**Begleitung:** Info-Seite `/begleitung` (`BegleitungScreen`, noch ohne Bezahlung, Kontakt zu Jerome); `/premium` leitet dorthin. Erreichbar über Ruhemodus-Hinweis, Karte auf Heute, Kappungshinweis, Profil und „Wie es funktioniert“.
+**Begleitung:** Seite `/begleitung` (`BegleitungScreen`); `/premium` leitet dorthin. Erreichbar über Ruhemodus-Hinweis, Karte auf Heute, Kappungshinweis, Profil und „Wie es funktioniert“. Ohne `PAYMENTS_ENABLED` (derzeit) nur Info + Kontakt zu Jerome.
+
+**Abo über Stripe (Paket Z, Migration 042):**
+- **Stufen:** Begleitung 9,90 €/Monat oder 99 €/Jahr, 150 Nachrichten im Monat; „Begleitung intensiv“ 19,90 € / 199 €, 800 Nachrichten – gebaut, aber aus (`INTENSIV_ENABLED`). Preise im Frontend nur zur Anzeige (`src/content/plans.js`); abgerechnet wird, was in Stripe hinterlegt ist.
+- **Zwei Schalter:** Frontend `PAYMENTS_ENABLED` in `legalTexts.js` (setzt nur Jerome, derzeit `false`) und Secret `PAYMENTS_ENABLED` (Server, gesetzt). Ohne Server-Schalter keine Bezahlseite, kein Portal und kein Kontingent.
+- **Freischaltung nur über den Webhook:** `plan` setzt ausschließlich `stripe-webhook`. `past_due` bleibt Begleitung (Stripe versucht es ca. 14 Tage erneut, danach „Abonnement kündigen“ → `free`), `tester` wird nie überschrieben. Nach dem Ende eines Abos zählen wieder die Kennenlern-Starts (`trial_sessions_used` zählt auch in der Begleitung weiter).
+- **Monatskontingent:** Zeitraum ab dem Startdatum des Abos (auch beim Jahresabo monatlich). Hinweis einmal ab 80 %, danach 10 Nachrichten Kulanz im laufenden Gespräch, dann `409 quota_reached`; neue Gespräche → `429 session_limit` (`reason: 'quota'`). Krisenantworten sind nie gesperrt und werden nicht gezählt; Howto/Extraktion zählen nicht.
+- **Kontolöschung:** beendet das Abo sofort, ohne Erstattung (Z-E3); scheitert das, wird nichts gelöscht.
+- **Test (J-Z2, 20.11.2026):** 12 Schritte in der Stripe-Sandbox bestanden, Testuhren für Verlängerung/Ende/gescheiterte Zahlung (`supabase/diagnostics/z-quota-test.sql`). Bericht `docs/billing/paket-z-abschlussbericht.md`.
 
 ---
 
@@ -1697,7 +1782,7 @@ Seit Paket A gibt es keinen „Ein-Client-Ansatz“ mehr: Alle Functions bekomme
 
 Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` prüft das Token über den echten service_role-Client (`admin.auth.getUser(token)`) und liefert zusätzlich `userClient` (anon-Key + Nutzer-Token, Rolle `authenticated`). Regeln für **jede** Function, auch neue:
 
-1. Erste Zeile nach dem CORS-Preflight: `requireUser(req)` (Nutzer-Functions) bzw. `requireInternalCaller(req)` (Cron). Admin-Functions zusätzlich `requireAdmin(ctx)`.
+1. Erste Zeile nach dem CORS-Preflight: `requireUser(req)` (Nutzer-Functions) bzw. `requireInternalCaller(req)` (Cron). Admin-Functions zusätzlich `requireAdmin(ctx)`. **Einzige Ausnahme:** `stripe-webhook` – dort ist die Prüfung der Stripe-Signatur die Authentifizierung und kommt als Erstes (von Jerome mit Handoff Paket Z bestätigt).
 2. Identität nur aus `ctx.user.id`. Body-Felder wie `userId` nie als Identität verwenden.
 3. Jede Objekt-ID aus dem Body (`conversationId` …) vor dem ersten Zugriff auf Eigentum prüfen (`assertConversationOwner`). IDs aus Modellausgaben nur übernehmen, wenn sie zu den eigenen Daten gehören; Writes über `admin` immer zusätzlich mit `.eq('user_id', userId)`.
 4. Body-Größe und Felder begrenzen (`readJsonBody`, `validateMessages`).
@@ -1719,9 +1804,9 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 
 **Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
 
-**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), S-11 (Feedback nur mit Einwilligung, `age_confirmed_at` server-only), S-22 (#31 Monitoring nur intern), S-16 (#27 Export enthält nur B-Daten, ohne Vektoren/Hashes), S-06b (#33 Codes-Tabelle gesperrt; mit `ATTACK_TEST_MFA=1` #34–#38: aal1 mit Faktor gesperrt an Tabelle, Functions und RPC, Wiederherstellung, Aufräumen – TOTP ohne Zusatzpaket nach RFC 6238), Function-Region eu-west-1 (#32), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), S-11 (Feedback nur mit Einwilligung, `age_confirmed_at` server-only), S-22 (#31 Monitoring nur intern), S-16 (#27 Export enthält nur B-Daten, ohne Vektoren/Hashes), S-06b (#33 Codes-Tabelle gesperrt; mit `ATTACK_TEST_MFA=1` #34–#38: aal1 mit Faktor gesperrt an Tabelle, Functions und RPC, Wiederherstellung, Aufräumen – TOTP ohne Zusatzpaket nach RFC 6238), Function-Region eu-west-1 (#32), Paket Z (Z1/Z2 Webhook ohne bzw. mit gefälschter Signatur → 400, Z3 `plan` nicht selbst setzbar, Z4/Z4b Abo-Tabellen und Kontingent-RPCs gesperrt, Z5 „intensiv“ abgeschaltet, Z7 ungültige Stufe/Laufzeit), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
 
-**Löschtest:** `npm run security:deletion-test` (`scripts/security/deletion-test.mjs`, frisches Testkonto C in `.env.security.local`) erzeugt Daten über die normalen Wege, löscht das Konto und prüft den Login; `supabase/security/deletion-check.sql` zählt danach die Reste je Tabelle (Erwartung überall 0; Stand 19.11.2026 nach C-5: 32 Prüfpunkte inkl. `mfa_recovery_codes` und `auth.mfa_factors`, alle 0). `DELETION_TEST_MFA=1` richtet vorher einen zweiten Faktor ein, erzeugt Codes, prüft den Export und löscht mit `aal2`.
+**Löschtest:** `npm run security:deletion-test` (`scripts/security/deletion-test.mjs`, frisches Testkonto C in `.env.security.local`) erzeugt Daten über die normalen Wege, löscht das Konto und prüft den Login; `supabase/security/deletion-check.sql` zählt danach die Reste je Tabelle (Erwartung überall 0; Stand 19.11.2026 nach C-5: 32 Prüfpunkte inkl. `mfa_recovery_codes` und `auth.mfa_factors`, alle 0). `DELETION_TEST_MFA=1` richtet vorher einen zweiten Faktor ein, erzeugt Codes, prüft den Export und löscht mit `aal2`. `DELETION_TEST_SUBSCRIPTION=1` (Paket Z): C hat vorher in der Sandbox ein Abo abgeschlossen; geprüft wird zusätzlich, dass es bei Stripe beendet ist. Stand 20.11.2026: Löschung mit Abo von Hand geprüft (J-Z2 Test 10), 36 Prüfpunkte inkl. `subscriptions`, `message_quota_periods`, `message_charges`, alle 0.
 
 ### Browser-Schutz (S-08)
 
@@ -1777,21 +1862,27 @@ VITE_SUPABASE_ANON_KEY=eyJhbGc...
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 SUPABASE_SERVICE_ROLE_KEY=   # automatisch in Edge Functions verfügbar
-SITE_URL=                    # optional, Fallback: https://app.friedensstifter.coach (nur admin-invite-user)
+SITE_URL=                    # optional, Fallback: https://app.friedensstifter.coach (admin-invite-user, Stripe-Rückkehr-URLs)
 CRON_SECRET=                 # supervision, security-monitor; derselbe Wert liegt in Vault als 'cron_secret'
 SMTP_HOST= SMTP_PORT=465 SMTP_USER= SMTP_PASS=   # One.com, Mailkanal (Alarme, Export-/MFA-Mails)
 ALERT_EMAIL_FROM= ALERT_EMAIL_TO=                 # Absender bzw. Empfänger der Alarm-Mails
 MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellungscodes (≥ 32 Zeichen, offline gesichert)
+STRIPE_SECRET_KEY=           # Paket Z: eingeschränkter Schlüssel (rk_test_… bis J-Z3), Rechte siehe STRIPE_INTEGRATION_TODO.md
+STRIPE_WEBHOOK_SECRET=       # Paket Z: whsec_… des Webhook-Endpunkts
+PAYMENTS_ENABLED=1           # Paket Z: Server-Schalter (Bezahlseite, Portal, Kontingent)
+INTENSIV_ENABLED=            # Paket Z: nicht gesetzt = „Begleitung intensiv“ aus
 ```
 
-`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der Testkonten A und B für `npm run security:test` und eines frischen Kontos C für `npm run security:deletion-test` (Vorlage `.env.security.example`). Schalter beim Aufruf (cmd): `set ATTACK_TEST_MFA=1&& npm run security:test`, `set DELETION_TEST_MFA=1&& npm run security:deletion-test`.
+Kein Stripe-Schlüssel im Frontend und keine `VITE_`-Variable dafür (auch kein `pk_…`, die Bezahlseite ist gehostet). `SITE_URL` nur vorübergehend für lokale Tests auf `http://localhost:5173` setzen und danach entfernen.
+
+`.env.security.local` (nur lokal, nicht eingecheckt): Zugangsdaten der Testkonten A und B für `npm run security:test` und eines frischen Kontos C für `npm run security:deletion-test` (Vorlage `.env.security.example`). Schalter beim Aufruf (cmd): `set ATTACK_TEST_MFA=1&& npm run security:test`, `set DELETION_TEST_MFA=1&& npm run security:deletion-test`, `set DELETION_TEST_SUBSCRIPTION=1&& npm run security:deletion-test`.
 
 ### Deployment
 
 - **Frontend:** Vercel (Auto-Deploy aus `main`-Branch)
 - **Edge Functions:** `supabase functions deploy <name>` — `supabase/config.toml` hält `verify_jwt = false` für alle Functions fest (zur Sicherheit zusätzlich `--no-verify-jwt`)
 - **Migrationen:** `supabase db push` vor jedem Deployment das DB-Änderungen enthält
-- **Reihenfolge:** Erst den Branch nach `main` mergen (bzw. auschecken), **dann** `db push` und `functions deploy` — die CLI arbeitet mit dem lokalen Stand (Panne 19.11.2026: „Remote database is up to date“, weil die neue Migration lokal noch fehlte). Nach neuen RPCs: `notify pgrst, 'reload schema';`
+- **Reihenfolge:** Erst den Branch nach `main` mergen (bzw. auschecken), **dann** `db push` und `functions deploy` (bei Paket Z ausnahmsweise Migration vor Functions, weil `chat` die neuen RPCs aufruft) — die CLI arbeitet mit dem lokalen Stand (Panne 19.11.2026: „Remote database is up to date“, weil die neue Migration lokal noch fehlte). Nach neuen RPCs: `notify pgrst, 'reload schema';`
 - **Build-Prüfung:** `postbuild` (`scripts/security/check-build.mjs`) läuft nach jedem `npm run build`, auch auf Vercel. Findet sie ein Schlüsselmuster (`sk-ant-`, OpenAI, `sb_secret_`, Namen geheimer Variablen) oder ein JWT mit einer anderen Rolle als `anon`, scheitert der Build und Vercel deployt nicht.
 - **Secret-Scan:** `npm run security:secrets` (gitleaks über die ganze Historie, Ausgabe nur Regel/Datei/Commit/Zeile; anon- und `sb_publishable_`-Keys gelten als öffentlich).
 - **ZIPs zum Teilen:** nur `npm run share:zip` (`git archive` aus HEAD, `export-ignore` für `.env*`, `*.har`, `*.csv`, Audit-Ergebnisse).
@@ -1804,7 +1895,7 @@ MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellu
 
 1. Sprachprinzip-Audit: Alle UI-Texte auf verbotene Wörter (`müssen`, `immer`, `nie`, `können nicht`, `du bist X`)
 2. Migrationen ausgeführt: `supabase db push`
-3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `export-my-data`, `mfa-recovery`, `supervision`, `security-monitor`, `backfill-embeddings` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
+3. Edge Functions deployed (bei Bedarf, je nach Änderung): `chat`, `post-conversation`, `pre-session-briefing`, `validate-invite-code`, `admin-users`, `admin-feedback`, `admin-invite-user`, `admin-security`, `delete-account`, `export-my-data`, `mfa-recovery`, `supervision`, `security-monitor`, `backfill-embeddings`, `create-checkout-session`, `stripe-webhook`, `create-portal-session` (oder alle: `supabase functions deploy --no-verify-jwt`) — bei Änderungen an `_shared/*` alle, die das Modul importieren
 4. **Angriffstest:** `npm run security:test` → alle PASS (vor jedem Release)
 5. Neue Tabellen/Functions: RLS + Policies nur für `authenticated` + gezielte GRANTs; neue Functions mit `requireUser`/`requireInternalCaller` und Eintrag in `supabase/config.toml`; Log-Regel beachten
 6. Neue externe Dienste/Origins: in die CSP (`vercel.json`) aufnehmen
@@ -1827,3 +1918,17 @@ Diese Werte stehen nicht im Repository und werden von Jerome im Dashboard gepfle
 | Database → Backups | täglich, 7 Tage; Point-in-Time-Recovery aus | `BACKUP_DELETION = 'spätestens nach 14 Tagen'` in `legalTexts.js` |
 | Projekt-Region | `eu-west-1` (Irland) | `x-region` in `src/lib/functions.js`, Sicherheitsseite „Region“ |
 
+## Stripe-Dashboard: Einstellungen außerhalb des Codes (Paket Z)
+
+Eingerichtet in der Sandbox (J-Z1, 20.11.2026); für den Live-Modus in J-Z3 gleich anlegen. Ändert sich einer, die Stelle im Code mitziehen.
+
+| Einstellung | Wert | Gegenstück im Code |
+|---|---|---|
+| Produkte | „Begleitung“, „Begleitung intensiv“, Metadaten `tier` = `begleitung` bzw. `intensiv` | `tierFromPrice()` in `_shared/stripe.ts` |
+| Preise (inkl. Steuer, § 19 UStG) | Suchschlüssel `begleitung_monat` 9,90 €, `begleitung_jahr` 99 €, `intensiv_monat` 19,90 €, `intensiv_jahr` 199 € | `LOOKUP_KEYS`; Anzeige `src/content/plans.js` |
+| Kundenportal | Upgrade sofort anteilig mit sofortiger Rechnung, Downgrade/Verkürzung zum Periodenende, Kündigung zum Periodenende, keine Umfrage/Halteangebote | `create-portal-session`, Webhook (`cancel_at`, `pending_tier`) |
+| Rechnungen | Fußzeile mit Hinweis § 19 UStG | – |
+| Webhook-Endpunkt | `…/functions/v1/stripe-webhook`, „Ihr Konto“, Nutzlast „Momentaufnahme“, API-Version `2026-10-28.endive`, genau 6 Ereignisse | `HANDLED` in `stripe-webhook`, Secret `STRIPE_WEBHOOK_SECRET` |
+| Eingeschränkter Schlüssel | Customers, Checkout Sessions, Subscriptions, Customer Portal: Schreiben · Prices, Products: Lesen | Secret `STRIPE_SECRET_KEY` |
+| Umsatzsicherung → Wiederholungsversuche | erster Fehlschlag: Abo „überfällig“ belassen · alle Versuche gescheitert: **Abonnement kündigen** | Z-9: `past_due` bleibt Begleitung, danach `free` |
+| Sprache | noch Browsersprache (Portal erschien englisch) | offen für J-Z3: `locale: 'de'` in Checkout und Portal |
