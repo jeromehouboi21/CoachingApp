@@ -306,6 +306,9 @@ export function CoachScreen() {
       return
     }
     setShowQuickReplies(false)
+    // Paket Z: Der 80-%-Hinweis gilt nur für die Nachricht, nach der er kam (sonst steht die Zahl veraltet da).
+    // Kulanz- und Grenzhinweis bleiben stehen.
+    if (quotaNotice?.kind === 'warn') setQuotaNotice(null)
     if (activeContinue && activeContinue.conversationId === conversationId) continueWroteRef.current = true
     if (!conversationHasOwnMessage(messages)) acknowledgeTrialHint()
     await sendMessage(content, inputMode)
