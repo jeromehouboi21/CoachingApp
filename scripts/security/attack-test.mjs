@@ -58,13 +58,16 @@ const OWNED_TABLES = [
 // messages hat keine user_id – Eigentum über conversation_id
 const MESSAGE_TABLE = { name: 'messages', conv: 'conversation_id' };
 // Interne Tabellen: Client darf gar nichts sehen
-const INTERNAL_TABLES = ['app_logs', 'experience_patterns', 'coach_reflections', 'supervision_logs', 'invite_codes', 'crisis_events', 'conversation_context'];
+const INTERNAL_TABLES = ['app_logs', 'experience_patterns', 'coach_reflections', 'supervision_logs', 'invite_codes', 'crisis_events', 'conversation_context',
+  // Paket Z (Z4): Abo und Kontingent nur service_role
+  'subscriptions', 'message_quota_periods', 'message_charges', 'stripe_events'];
 const ALL_TABLE_NAMES = [...OWNED_TABLES.map(t => t.name), MESSAGE_TABLE.name, ...INTERNAL_TABLES];
 
 const EDGE_FUNCTIONS = [
   'chat', 'post-conversation', 'pre-session-briefing', 'validate-invite-code',
   'delete-account', 'admin-users', 'admin-feedback', 'admin-invite-user', 'supervision', 'backfill-embeddings',
   'export-my-data', 'mfa-recovery',
+  'create-checkout-session', 'create-portal-session',   // Paket Z (Z6)
 ];
 
 // ── Ergebnis-Sammlung ────────────────────────────────────────────────────────
@@ -1176,6 +1179,73 @@ async function ensureConsentV2(who, acc) {
   return true;
 }
 
+// ── Paket Z: Zahlung und Abo ────────────────────────────────────────────────
+// Z4 (Tabellen) und Z6 (ohne Token) laufen über INTERNAL_TABLES bzw. EDGE_FUNCTIONS.
+// Keiner dieser Fälle ruft Stripe auf: Abgelehnt wird vor jedem Stripe-Aufruf.
+async function testsZ(a, b) {
+  // Z1: Webhook ohne Signatur
+  {
+    const r = await callFunction('stripe-webhook', { apikey: false, body: { id: 'evt_sectest', type: 'customer.subscription.created' } });
+    if (r.status === 503) record('Z1', 'stripe-webhook ohne Signatur', '400', SKIP, 'Webhook nicht konfiguriert (STRIPE_WEBHOOK_SECRET fehlt)');
+    else record('Z1', 'stripe-webhook ohne Signatur', '400', r.status === 400 ? PASS : FAIL, `HTTP ${r.status}`);
+  }
+  // Z2: gefälschte Signatur mit einem Ereignis für A → 400, plan von A unverändert
+  {
+    a = { ...a, ...(await signIn('A (Z)', A)) };
+    const { data: before } = await a.client.from('profiles').select('plan').eq('id', a.userId).single();
+    const fake = {
+      id: 'evt_sectest_forged', type: 'customer.subscription.created',
+      data: { object: { id: 'sub_sectest', customer: 'cus_sectest', status: 'active', metadata: { user_id: a.userId } } },
+    };
+    const headers = { 'Content-Type': 'application/json', 'stripe-signature': `t=${Math.floor(Date.now() / 1000)},v1=${'0'.repeat(64)}` };
+    let status = 'network';
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/stripe-webhook`, { method: 'POST', headers, body: JSON.stringify(fake) });
+      status = res.status;
+      try { await res.body?.cancel(); } catch {}
+    } catch (e) { status = `network:${e?.name ?? 'error'}`; }
+    const { data: after } = await a.client.from('profiles').select('plan').eq('id', a.userId).single();
+    if (status === 503) {
+      record('Z2', 'stripe-webhook mit gefälschter Signatur', '400, plan unverändert', SKIP, 'Webhook nicht konfiguriert');
+    } else {
+      record('Z2', 'stripe-webhook mit gefälschter Signatur', '400, plan unverändert',
+        status === 400 && before?.plan === after?.plan ? PASS : FAIL, `HTTP ${status}, plan ${before?.plan}→${after?.plan}`);
+    }
+  }
+  // Z3: Client setzt plan = 'premium' (Regressionstest Schutz-Trigger)
+  {
+    const { data: p } = await b.client.from('profiles').select('plan').eq('id', b.userId).single();
+    const target = p?.plan === 'premium' ? 'free' : 'premium';
+    const { data, error } = await b.client.from('profiles').update({ plan: target }).eq('id', b.userId).select('id');
+    if (!error && data?.length) await b.client.from('profiles').update({ plan: p?.plan }).eq('id', b.userId);
+    record('Z3', `update profiles.plan = '${target}' direkt`, '42501',
+      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+  }
+  // Z5 / Z7: Bezahlseite mit nicht freigeschalteter Stufe bzw. ungültigen Werten
+  {
+    const r5 = await callFunction('create-checkout-session', { token: b.token, body: { tier: 'intensiv', interval: 'month' } });
+    if (r5.status === 403 && r5.json?.error === 'payments_disabled') {
+      record('Z5', 'Bezahlseite „intensiv“ ohne INTENSIV_ENABLED', '403 tier_unavailable', SKIP, 'PAYMENTS_ENABLED ist aus');
+      record('Z7', 'Bezahlseite mit ungültigem tier/interval', '400', SKIP, 'PAYMENTS_ENABLED ist aus');
+    } else {
+      record('Z5', 'Bezahlseite „intensiv“ ohne INTENSIV_ENABLED', '403 tier_unavailable',
+        r5.status === 403 && r5.json?.error === 'tier_unavailable' ? PASS : FAIL, `HTTP ${r5.status}, ${r5.json?.error ?? ''}`);
+      const r7a = await callFunction('create-checkout-session', { token: b.token, body: { tier: 'gold', interval: 'month' } });
+      const r7b = await callFunction('create-checkout-session', { token: b.token, body: { tier: 'begleitung', interval: 'week' } });
+      record('Z7', 'Bezahlseite mit ungültigem tier/interval', '400 / 400',
+        r7a.status === 400 && r7b.status === 400 ? PASS : FAIL, `HTTP ${r7a.status} ${r7a.json?.error ?? ''} / ${r7b.status} ${r7b.json?.error ?? ''}`);
+    }
+  }
+  // Kontingent-RPCs nur service_role
+  for (const [fn, args] of [
+    ['consume_message', { p_user_id: b.userId, p_conversation_id: crypto.randomUUID(), p_client_message_id: crypto.randomUUID() }],
+    ['refund_message', { p_conversation_id: crypto.randomUUID(), p_client_message_id: crypto.randomUUID() }],
+  ]) {
+    const { error } = await b.client.rpc(fn, args);
+    record('Z4b', `rpc ${fn} (als B, nur service_role)`, 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`Friedensstifter Angriffstest · ${new Date().toISOString()}`);
@@ -1208,6 +1278,7 @@ async function ensureConsentV2(who, acc) {
   await testsU5a(a, b);
   await testsK(b);       // Paket K W1 (B bekommt sein Passwort ggf. sofort zurück)
   await testsKW3(b);     // Paket K W3 (Einwilligung v2.0)
+  await testsZ(a, b);    // Paket Z (Zahlung und Abo), vor den Rate-Limit-Tests
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)

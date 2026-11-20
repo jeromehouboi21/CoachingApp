@@ -19,6 +19,8 @@ const env = process.env;
 // S-06b: DELETION_TEST_MFA=1 → C richtet vorher einen zweiten Faktor ein (aal2) und erzeugt
 // Wiederherstellungscodes; geprüft wird zusätzlich der Export (Faktoren ohne Geheimnisse).
 const WITH_MFA = ['1', 'true', 'yes'].includes((env.DELETION_TEST_MFA ?? '').trim().toLowerCase());
+// Paket Z: Testkonto C hat vorher in der Stripe-Sandbox ein Abo abgeschlossen (J-Z2 Schritt 10)
+const WITH_SUBSCRIPTION = ['1', 'true', 'yes'].includes((process.env.DELETION_TEST_SUBSCRIPTION ?? '').trim().toLowerCase());
 
 function base32Decode(s) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -186,6 +188,15 @@ const SYNTHETIC = [
       `HTTP ${r.status}, faktoren=${factors.length}, codes=${codes.length}`);
   }
 
+  // 5c. Paket Z: Mit Sandbox-Abo steht es im Export (Gruppe abo), danach muss die Löschung es beenden
+  if (WITH_SUBSCRIPTION) {
+    const r = await callFunction('export-my-data', token, {});
+    const subs = r.json?.abo?.subscriptions ?? [];
+    const ok = r.status === 200 && subs.length === 1 && ['active', 'trialing', 'past_due'].includes(subs[0]?.status);
+    record('Export mit Abo', 'abo.subscriptions: 1 laufendes Abo', ok ? PASS : FAIL,
+      `HTTP ${r.status}, abos=${subs.length}, status=${subs[0]?.status ?? '-'}`);
+  }
+
   // 6. IDs für deletion-check.sql
   console.log('\nFür supabase/security/deletion-check.sql:');
   console.log(`  USER_ID          = ${userId}`);
@@ -204,6 +215,9 @@ const SYNTHETIC = [
     record('Login nach Löschung', 'Fehler', error && !data?.session ? PASS : FAIL, error?.code ?? 'Login möglich');
   }
 
+  if (WITH_SUBSCRIPTION) {
+    record('Abo bei Stripe', 'Status canceled', INFO, 'Im Stripe-Dashboard (Sandbox) prüfen: Das Abo von Testkonto C ist sofort beendet, ohne Erstattung.');
+  }
   record('Lernbasis-Eintrag', 'nur mit RAG_LEARNING_ENABLED=1', INFO,
     'Ob ein Eintrag entstand, zeigt deletion-check.sql nicht mehr (gelöscht). Bei Schalter aus: Opt-in-Pfad nur teilweise geprüft.');
 

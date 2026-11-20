@@ -52,6 +52,9 @@ export const SECURITY_MEASURES = [
   { id: 'S-11 Spracheingabe', group: 'ort', status: 'geplant',
     text: 'Eine Spracheingabe kommt später dazu. Die Umwandlung von Sprache in Text soll dann in der EU stattfinden.',
     evidence: 'Mikrofon seit Paket K (CODE-1) aus: VOICE_MISTRAL_ENABLED = false (src/content/legalTexts.js, ChatInput). Die Browser-Spracherkennung schickte Aufnahmen an Google/Apple (Rechtstext A2)' },
+  { id: 'Z Zahlung', group: 'ort', status: 'geplant',   // Paket Z: 'live' erst nach Abnahme J-Z3
+    text: 'Deine Zahlungsdaten liegen nur bei Stripe. Bezahlt und verwaltet wird auf Seiten von Stripe, die App sieht keine Karten- oder Kontodaten.',
+    evidence: 'Gehostete Bezahlseite und Kundenportal (create-checkout-session, create-portal-session), kein Stripe-Skript im Frontend, CSP unverändert; Freischaltung nur über stripe-webhook mit Signaturprüfung; Angriffstest Z1–Z7' },
   { id: 'S-08/S-10', group: 'ort', status: 'live',
     text: 'Keine Werbung, kein Tracking, keine Analyse-Dienste. Auch Schriften werden nicht von Google geladen.',
     evidence: 'CSP ohne Fremd-Origins außer Supabase (vercel.json); Schriften lokal über @fontsource (src/main.jsx); kein Analyse-, Tracking- oder Fehlerdienst im Frontend (Phase 0, Frage 7)' },

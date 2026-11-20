@@ -1,6 +1,8 @@
 -- Friedensstifter Löschtest (S-15): Reste eines gelöschten Testnutzers zählen — nur Zähler.
 -- Die drei Platzhalter durch die Ausgabe von `npm run security:deletion-test` ersetzen.
 -- Erwartung: Jede Zeile hat remaining = 0.
+-- Neue Tabellen mit user_id/conversation_id (z. B. Paket Z: subscriptions, message_quota_periods,
+-- message_charges) werden über information_schema automatisch mitgezählt.
 with p as (
   select '<USER_ID>'::uuid as uid,
          array['<CONV_ID_1>', '<CONV_ID_2>']::uuid[] as convs
