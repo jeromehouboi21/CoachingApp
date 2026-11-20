@@ -41,7 +41,17 @@ export type RagResult =
 export async function findSimilarExperiences(admin: AdminClient, queryText: string): Promise<RagResult> {
   const openaiKey = Deno.env.get('OPENAI_API_KEY');
   const text = queryText.trim().slice(0, MAX_QUERY_CHARS);
-  if (!openaiKey || !text) return { status: 'skipped', experiences: [] };
+  if (!openaiKey || !text) return { status: 'skipped', experiences: [], code: !openaiKey ? 'no_key' : 'no_text' };
+
+  // Paket K (CODE-2): Die Nachricht geht nur an OpenAI, wenn die Lernbasis eingeschaltet ist
+  // UND freigegebene Einträge hat – sonst gäbe es nichts zu finden (Rechtstext A4).
+  if ((Deno.env.get('RAG_LEARNING_ENABLED') ?? '').trim() !== '1') {
+    return { status: 'skipped', experiences: [], code: 'learning_disabled' };
+  }
+  const { count, error: countError } = await admin.from('experience_patterns')
+    .select('id', { count: 'exact', head: true }).eq('review_status', 'approved');
+  if (countError) return { status: 'match_failed', experiences: [], code: countError.code ?? 'count_failed' };
+  if (!count) return { status: 'skipped', experiences: [], code: 'no_entries' };
 
   const { embedding, reason } = await generateEmbedding(text, openaiKey);
   if (!embedding) return { status: 'embedding_failed', experiences: [], code: reason };

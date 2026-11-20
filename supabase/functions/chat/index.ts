@@ -1,5 +1,6 @@
 import Anthropic from 'npm:@anthropic-ai/sdk@1.10.0';
 import { detectCrisis } from './crisisDetection.ts';
+import { requireConsent } from '../_shared/consent.ts';
 import { createLogger, describeError } from '../_shared/logger.ts';
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, validateMessages, errorResponse, jsonResponse, isUuid,
@@ -1062,7 +1063,7 @@ async function loadCoachContext(admin: any, userId: string, convId: string, firs
       ragStatus = 'stored';
     } else if (firstUserMessage && !failed.conversation_context) {
       const rag = await findSimilarExperiences(admin, firstUserMessage);
-      ragStatus = rag.status;
+      ragStatus = rag.status === 'skipped' && rag.code ? `skipped_${rag.code}` : rag.status;
       if (rag.status === 'match_failed') failed.match_experiences = rag.code ?? 'unknown';
       if (rag.status === 'embedding_failed') failed.embedding = rag.code ?? 'unknown';
       if (rag.status === 'ok') {
@@ -1231,6 +1232,9 @@ Deno.serve(async (req) => {
     // memory, coachFile, briefing, ragContext, supervisionNote werden ignoriert (S-12, Teil 1).
     const safeRequestId = typeof b.requestId === 'string' ? b.requestId.slice(0, 64) : undefined;
     logger = createLogger('chat', safeRequestId, user.id);
+
+    // Paket K (CODE-4): ohne Zustimmung v2.0 keine Verarbeitung, auch nicht Howto/Extraktion
+    await requireConsent(admin, user.id, logger);
 
     const isExtract = b.mode === 'extract' || !!b.extractMemory;
     const isHowto = !isExtract && (b.mode === 'howto' || !!b.howtoMode);

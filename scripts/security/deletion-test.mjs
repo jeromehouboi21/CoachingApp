@@ -116,9 +116,15 @@ const SYNTHETIC = [
     record('Wiederherstellungscodes erzeugen', '10 Codes', g.status === 200 && g.json?.codes?.length === 10 ? PASS : FAIL, `HTTP ${g.status}`);
   }
 
+  // 1c. Paket K: Zustimmung v2.0 (sonst lehnt chat mit 403 consent_required ab)
+  {
+    const { error } = await client.rpc('accept_consent_v2');
+    record('Zustimmung v2.0', 'ok', error ? FAIL : PASS, error?.code ?? '');
+  }
+
   // 2. Opt-in Lernbasis (damit post-conversation einen Lernbasis-Eintrag erzeugen KANN)
   {
-    const { data, error } = await client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: '1.0' });
+    const { data, error } = await client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: '2.0' });   // seit 041 nur 2.0
     record('Opt-in Lernbasis', 'ok', !error && data?.opt_in === true ? PASS : FAIL, error?.code ?? '');
   }
 

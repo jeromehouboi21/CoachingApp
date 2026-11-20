@@ -10,6 +10,7 @@ import { reviewLearningEntry, makeHaikuCaller, isReviewTechnicalFailure } from '
 import {
   HttpError, requireUser, assertConversationOwner, readJsonBody, errorResponse, jsonResponse,
 } from '../_shared/auth.ts';
+import { requireConsent } from '../_shared/consent.ts';
 import { RATE_LIMITS, enforceRateLimit, RateLimitError, rateLimitResponse } from '../_shared/rateLimit.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -186,6 +187,13 @@ WICHTIG:
 const REFLECTION_PROMPT = `Du hast gerade dieses Coaching-Gespräch geführt.
 Reflektiere dein eigenes Vorgehen ehrlich.
 
+ANONYMITÄT: Deine Notizen werden später mit Notizen aus vielen anderen Gesprächen zu
+allgemeinen Empfehlungen zusammengefasst. Schreibe deshalb nur über dein Vorgehen als Coach,
+allgemein formuliert. Keine Namen, keine Orte, keine Arbeitgeber, keine Daten, keine Zitate
+aus dem Gespräch, keine Details, an denen man die Person erkennen könnte, und keine Details
+zu einer Krise. Beispiel: nicht "als sie von ihrem Chef bei Siemens erzählte", sondern
+"als es um einen Konflikt mit einer Führungskraft ging".
+
 Antworte NUR mit validem JSON:
 {
   "was_helpful": true,
@@ -328,6 +336,7 @@ Deno.serve(async (req) => {
     const { user, admin: supabase } = await requireUser(req);
     const userId = user.id;
     logger = createLogger('post-conversation', undefined, userId);
+    await requireConsent(supabase, userId, logger);   // Paket K (CODE-4)
 
     const body = await readJsonBody(req, MAX_BODY_BYTES);
     await enforceRateLimit(supabase, userId, RATE_LIMITS.postConversation, logger, true);
@@ -694,10 +703,10 @@ Deno.serve(async (req) => {
       logger.info('learning_no_summary', { conversationId });
     } else {
       const { data: optInRow, error: optInError } = await supabase
-        .from('profiles').select('learning_opt_in').eq('id', userId).maybeSingle();
+        .from('profiles').select('learning_opt_in, learning_opt_in_version').eq('id', userId).maybeSingle();
       if (optInError) {
         logger.error('learning_optin_check_failed', { code: optInError.code, conversationId });
-      } else if (!optInRow?.learning_opt_in) {
+      } else if (!optInRow?.learning_opt_in || optInRow?.learning_opt_in_version !== '2.0') {   // nur Zustimmung mit Text v2.0 (E2)
         logger.info('learning_no_optin', { conversationId });
       } else {
         const entryFields = {
@@ -779,16 +788,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 8. Coach-Selbstreflexion speichern
-    if (reflection.what_worked || reflection.improvement_note) {
+    // 8. Coach-Selbstreflexion speichern – nur nach Prüfschritt (Paket K, CODE-3; Rechtstext A3):
+    //    keine erkennbaren Angaben, Zitate, Kontaktdaten, Krisendetails oder Anweisungen.
+    //    Abgelehnt oder Prüfung ausgefallen → Textfelder werden nicht gespeichert (fail-closed).
+    const reflectionTexts = [reflection.what_worked, reflection.what_missed, reflection.resistance_handled, reflection.improvement_note]
+      .filter((t) => typeof t === 'string' && t.trim()).map((t) => String(t).slice(0, 1000));
+    let reflectionApproved = false;
+    if (reflectionTexts.length) {
+      const review = await reviewLearningEntry(reflectionTexts.join(' / '), makeHaikuCaller(anthropic), ['low_quality']);
+      reflectionApproved = review.approved;
+      if (!review.approved) {
+        logger.info('reflection_rejected', { conversationId, reasons: review.reasons.join(',') });   // nur Codes
+        if (isReviewTechnicalFailure(review)) logger.warn('reflection_review_failed', { conversationId });   // Alarm S-22
+      }
+    }
+    if (reflectionApproved && (reflection.what_worked || reflection.improvement_note)) {
+      const clip = (t: unknown) => (typeof t === 'string' && t.trim() ? t.slice(0, 1000) : null);
       const { error: reflectionError } = await supabase.from('coach_reflections').insert({
         conversation_id: conversationId,
         was_helpful: reflection.was_helpful ?? null,
-        what_worked: reflection.what_worked ?? null,
-        what_missed: reflection.what_missed ?? null,
+        what_worked: clip(reflection.what_worked),
+        what_missed: clip(reflection.what_missed),
         resistance_detected: reflection.resistance_detected ?? false,
-        resistance_handled: reflection.resistance_handled ?? null,
-        improvement_note: reflection.improvement_note ?? null,
+        resistance_handled: clip(reflection.resistance_handled),
+        improvement_note: clip(reflection.improvement_note),
       });
       if (reflectionError) {
         logger.error('coach_reflections insert failed', { code: reflectionError.code, conversationId });

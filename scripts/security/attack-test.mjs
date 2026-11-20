@@ -569,7 +569,7 @@ async function testsS12(a, b) {
 // B endet immer ohne Opt-in (erst einschalten, dann zurücknehmen).
 async function testsS13(b) {
   {
-    const on = await b.client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: '1.0' });
+    const on = await b.client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: '2.0' });   // seit 041 nur Text v2.0
     const off = await b.client.rpc('set_learning_opt_in', { p_opt_in: false, p_version: null });
     const ok = !on.error && !off.error && on.data?.opt_in === true && off.data?.opt_in === false
       && Number.isInteger(off.data?.deleted);
@@ -585,6 +585,13 @@ async function testsS13(b) {
   {
     const { error } = await b.client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: 'x'.repeat(50) });
     record('S13-c', 'rpc set_learning_opt_in mit ungültiger Version', 'Fehler',
+      error ? PASS : FAIL, error ? errCode(error) : 'angenommen');
+    if (!error) await b.client.rpc('set_learning_opt_in', { p_opt_in: false, p_version: null });
+  }
+  {
+    // Paket K (E2, Migration 041): Zustimmung mit dem alten Text wird abgelehnt
+    const { error } = await b.client.rpc('set_learning_opt_in', { p_opt_in: true, p_version: '1.0' });
+    record('S13-d', 'rpc set_learning_opt_in mit alter Version 1.0', 'Fehler',
       error ? PASS : FAIL, error ? errCode(error) : 'angenommen');
     if (!error) await b.client.rpc('set_learning_opt_in', { p_opt_in: false, p_version: null });
   }
@@ -1117,6 +1124,22 @@ function printResults() {
   return n(FAIL);
 }
 
+// ── Paket K (CODE-4): chat verlangt Zustimmung v2.0 ─────────────────────────
+// Fehlt sie bei einem Testkonto, prüft K8 einmal die Sperre (leerer Body → 403 consent_required,
+// ohne Modellaufruf und ohne Zählung) und holt die Zustimmung dann nach. Sonst SKIP.
+async function ensureConsentV2(who, acc) {
+  const { data: p } = await acc.client.from('profiles')
+    .select('consent_version, coaching_agreement_version').eq('id', acc.userId).single();
+  if (p?.consent_version === '2.0' && p?.coaching_agreement_version === '2.0') return false;
+  const r = await callFunction('chat', { token: acc.token, body: {} });
+  record('K8', `chat ohne Zustimmung v2.0 (${who})`, '403 consent_required',
+    r.status === 403 && r.json?.error === 'consent_required' ? PASS : FAIL, `HTTP ${r.status}, ${r.json?.error ?? ''}`);
+  const { error } = await acc.client.rpc('accept_consent_v2');
+  if (error) abort(`Zustimmung v2.0 für ${who} fehlgeschlagen (${errCode(error)}) – Migration 040 eingespielt?`);
+  console.log(`• ${who}: Zustimmung v2.0 nachgeholt`);
+  return true;
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`Friedensstifter Angriffstest · ${new Date().toISOString()}`);
@@ -1130,6 +1153,10 @@ function printResults() {
     }
   }
   console.log('• Testkonten A und B angemeldet');
+  {
+    const tested = [await ensureConsentV2('A', a), await ensureConsentV2('B', b)];
+    if (!tested.some(Boolean)) record('K8', 'chat ohne Zustimmung v2.0', '403 consent_required', SKIP, 'A und B haben bereits zugestimmt (Prüfung läuft nur einmal)');
+  }
 
   await testsAsB(a, b);
   await testsAnonymous();

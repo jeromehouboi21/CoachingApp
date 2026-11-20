@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, Mic } from 'lucide-react'
 import { useVoiceInput } from '../../hooks/useVoiceInput'
+import { CHAT_AI_NOTICE, VOICE_MISTRAL_ENABLED } from '../../content/legalTexts'
 
 // S-11: Hinweis beim ersten Mikrofon-Tipp pro Gerät. Ohne localStorage (privat, blockiert) jedes Mal.
 const VOICE_HINT_KEY = 'fs_voice_hint_v1'
@@ -108,8 +109,9 @@ export function ChatInput({ onSend, disabled }) {
       )}
 
       <div className="flex items-end gap-2 p-3">
-        {/* Mikrofon-Button */}
-        {isSupported && (
+        {/* Mikrofon-Button – Paket K (CODE-1): aus, bis die Spracheingabe über Mistral (EU) läuft.
+            Die Browser-Spracherkennung schickt Aufnahmen an Google/Apple (Rechtstext A2). */}
+        {VOICE_MISTRAL_ENABLED && isSupported && (
           <button
             onClick={handleMicClick}
             disabled={disabled}
@@ -148,6 +150,8 @@ export function ChatInput({ onSend, disabled }) {
           <ArrowUp size={16} color="white" />
         </button>
       </div>
+      {/* KI-Hinweis, dauerhaft (Art. 50 Abs. 1 KI-VO, Paket K B1) */}
+      <p className="text-[11px] text-ink-3 text-center pb-2 -mt-1">{CHAT_AI_NOTICE}</p>
     </div>
   )
 }

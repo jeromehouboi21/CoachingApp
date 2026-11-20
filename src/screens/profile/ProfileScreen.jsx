@@ -7,6 +7,7 @@ import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSqua
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
+import { NOT_EMERGENCY } from '../../content/legalTexts'
 import { SecurityCard } from '../../components/profile/SecurityCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
@@ -220,6 +221,8 @@ export function ProfileScreen() {
           { icon: FileText, label: 'Impressum', action: () => navigate('/impressum') },
         ]} />
       </ProfileSection>
+      {/* Paket K B4: Notfall-Hinweis aus den Rechtstexten */}
+      <p className="text-[12px] text-ink-3 leading-relaxed -mt-2 mb-6 px-1">{NOT_EMERGENCY.short}</p>
 
       <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
         <button

@@ -73,6 +73,7 @@ export function ConsentGateScreen({ profile, user, consentState, acceptConsentV2
     content = (
       <ConsentStep
         title={consentState === 'outdated' ? RECONSENT.title : undefined}
+        note={consentState === 'outdated' ? RECONSENT.pendingText : null}
         onAccept={accept}
         busy={busy}
         error={error}

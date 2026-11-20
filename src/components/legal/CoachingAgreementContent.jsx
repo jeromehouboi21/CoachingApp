@@ -1,15 +1,16 @@
 import { Avatar } from '../ui/Avatar'
-import { AGREEMENT_FULL, AGREEMENT_SIGNATURE } from '../../content/legalTexts'
+import { getAgreementSections, AGREEMENT_SIGNATURE } from '../../content/legalTexts'
 
 /**
  * Der volle Text der Coaching-Vereinbarung (seit Paket K W3 aus src/content/legalTexts.js, v2.0).
  * Wird im Einstieg („Ganze Vereinbarung lesen ›“), bei der erneuten Zustimmung und im
- * Rückblick (/vereinbarung) gerendert – eine Quelle, damit die Stellen nie auseinanderlaufen.
+ * Rückblick (/vereinbarung) gerendert – eine Quelle, damit die Stellen nicht auseinanderlaufen.
+ * Abo-Abschnitte erscheinen erst mit PAYMENTS_ENABLED (CODE-5).
  */
 export function CoachingAgreementContent() {
   return (
     <div className="flex flex-col gap-6 text-[14px] text-ink-2 leading-[1.7]">
-      {AGREEMENT_FULL.map(section => (
+      {getAgreementSections().map(section => (
         <section key={section.heading}>
           <p className="text-[13px] text-ink-3 uppercase tracking-[0.05em] font-medium mb-2">{section.heading}</p>
           {(section.paragraphs ?? []).map(p => <p key={p} className="mb-3 last:mb-0">{p}</p>)}
@@ -23,6 +24,7 @@ export function CoachingAgreementContent() {
               ))}
             </ul>
           )}
+          {(section.closing ?? []).map(p => <p key={p} className="mt-3">{p}</p>)}
         </section>
       ))}
 

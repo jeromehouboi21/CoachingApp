@@ -29,6 +29,9 @@ export const RULES: Rule[] = [
   { id: 'delete_incomplete',       codes: ['delete_incomplete', 'auth_delete_failed'], windowMin: 60, threshold: 1, label: 'Kontolöschung unvollständig' },
   { id: 'learning_review_failed',  codes: ['learning_review_failed'],  windowMin: 1440,  threshold: 5,  label: 'Prüfschritt technisch ausgefallen' },
   { id: 'supervision_rejected',    codes: ['supervision_rejected'],    windowMin: 10080, threshold: 2,  label: 'Supervision-Empfehlung verworfen' },
+  // Paket K (Rechtstexte v2.0):
+  { id: 'consent_check_failed',    codes: ['consent_check_failed'],    windowMin: 60,    threshold: 1,  label: 'Zustimmungsprüfung ausgefallen' },
+  { id: 'reflection_review_failed', codes: ['reflection_review_failed'], windowMin: 1440, threshold: 5, label: 'Prüfschritt Reflexionen technisch ausgefallen' },
   // ab C-4 / C-5 (Codes entstehen erst mit diesen Wellen):
   { id: 'export_burst',            codes: ['export_created'],          windowMin: 60,    threshold: 10, label: 'Viele Datenexporte' },
   { id: 'export_incomplete',       codes: ['export_incomplete'],       windowMin: 60,    threshold: 1,  label: 'Datenexport unvollständig' },
@@ -36,6 +39,7 @@ export const RULES: Rule[] = [
   { id: 'mfa_recovery_failed',     codes: ['mfa_recovery_failed'],     windowMin: 60,    threshold: 5,  label: 'Falsche Wiederherstellungscodes' },
   { id: 'mfa_reset_failed',        codes: ['mfa_reset_failed'],        windowMin: 60,    threshold: 1,  label: 'Zweiter Faktor ließ sich nicht entfernen' },
   // nur in der Wochenübersicht:
+  { id: 'consent_required',        codes: ['consent_required'],        windowMin: 10080, threshold: 0, infoOnly: true, label: 'Anfragen ohne Zustimmung v2.0' },
   { id: 'user_mfa_required',       codes: ['user_mfa_required'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Nutzer-Anfragen ohne zweiten Faktor' },
   { id: 'mfa_codes_generated',     codes: ['mfa_codes_generated'],     windowMin: 10080, threshold: 0, infoOnly: true, label: 'Neue Wiederherstellungscodes erzeugt' },
   { id: 'mfa_disabled',            codes: ['mfa_disabled'],            windowMin: 10080, threshold: 0, infoOnly: true, label: 'Zweiter Faktor entfernt (durch Nutzer)' },

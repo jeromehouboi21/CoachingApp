@@ -5,12 +5,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
-  AGREEMENT_SUMMARY, AGREEMENT_CHECKBOX, CONSENT_ART9_CHECKBOX, CONSENT_WITHDRAWAL,
+  AGREEMENT_SUMMARY, AGREEMENT_CHECKBOX, CONSENT_ART9_CHECKBOX, CONSENT_WITHDRAWAL, LEGAL_LINKS,
 } from '../../content/legalTexts'
 import { CoachingAgreementContent } from './CoachingAgreementContent'
 import { LegalSheet } from './LegalSheet'
 
-export function ConsentStep({ title = AGREEMENT_SUMMARY.title, intro = AGREEMENT_SUMMARY.intro, onAccept, busy = false, error = '', onDecline, header = null }) {
+export function ConsentStep({ title = AGREEMENT_SUMMARY.title, intro = AGREEMENT_SUMMARY.intro, onAccept, busy = false, error = '', onDecline, header = null, note = null }) {
   const [agreement, setAgreement] = useState(false)
   const [art9, setArt9] = useState(false)
   const [showFull, setShowFull] = useState(false)
@@ -21,6 +21,7 @@ export function ConsentStep({ title = AGREEMENT_SUMMARY.title, intro = AGREEMENT
 
       <h1 className="font-display text-[26px] text-ink leading-[1.25] mb-2">{title}</h1>
       <p className="text-[14px] text-ink-2 leading-relaxed mb-6">{intro}</p>
+      {note && <p className="text-[13px] text-ink-2 bg-surface-2 rounded-lg px-4 py-3 leading-relaxed mb-6">{note}</p>}
 
       <ul className="flex flex-col gap-3 mb-5">
         {AGREEMENT_SUMMARY.points.map(pt => (
@@ -35,9 +36,11 @@ export function ConsentStep({ title = AGREEMENT_SUMMARY.title, intro = AGREEMENT
         <button type="button" onClick={() => setShowFull(true)} className="text-[13px] text-accent hover:underline">
           Ganze Vereinbarung lesen ›
         </button>
-        <Link to="/datenschutz" target="_blank" rel="noopener noreferrer" className="text-[13px] text-accent hover:underline">
-          Datenschutzerklärung ›
-        </Link>
+        {[LEGAL_LINKS.privacy, LEGAL_LINKS.imprint].map(l => (
+          <Link key={l.href} to={l.href} target="_blank" rel="noopener noreferrer" className="text-[13px] text-accent hover:underline">
+            {l.label} ›
+          </Link>
+        ))}
       </div>
 
       <div className="flex flex-col gap-4 mb-6">

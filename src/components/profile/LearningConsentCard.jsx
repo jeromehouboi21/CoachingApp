@@ -1,4 +1,5 @@
-// Opt-in „Zur Lernbasis beitragen“ (S-13). Texte wörtlich nach Lösungsdesign Paket B, 5.3.
+// Opt-in Lernbasis (S-13). Texte seit Paket K aus src/content/legalTexts.js (LEARNING_OPT_IN, v2.0):
+// eigene, ausdrückliche Einwilligung mit Häkchen.
 // Geändert wird nur über die RPC set_learning_opt_in (Profilfelder sind für den Client gesperrt).
 // Kein Erfolgshinweis ohne Erfolg: Der Schalter zeigt immer den Stand aus dem Profil.
 import { useState } from 'react'
@@ -7,6 +8,7 @@ import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { LEARNING_CONSENT_VERSION } from '../../lib/consent'
 import { reportIfMfaRpcError } from '../../lib/mfa'
+import { LEARNING_OPT_IN } from '../../content/legalTexts'
 
 const logger = createLogger('LearningConsentCard')
 const ERROR_TEXT = 'Das hat gerade nicht geklappt. Versuch es bitte noch einmal.'
@@ -29,6 +31,7 @@ export function LearningConsentCard({ profile, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState(null)
+  const [checked, setChecked] = useState(false)
 
   const setOptIn = async (value) => {
     setBusy(true)
@@ -60,6 +63,7 @@ export function LearningConsentCard({ profile, onChanged }) {
   const openToggle = () => {
     setError(null)
     setNotice(null)
+    setChecked(false)
     setSheet(optedIn ? 'revoke' : 'info')
   }
 
@@ -68,11 +72,11 @@ export function LearningConsentCard({ profile, onChanged }) {
       <div className="bg-surface border border-[var(--color-border)] rounded-lg p-4 mb-4">
         <div className="flex items-start gap-3">
           <div className="flex-1">
-            <p className="text-[15px] text-ink">Zur Lernbasis beitragen</p>
+            <p className="text-[15px] text-ink">{LEARNING_OPT_IN.title}</p>
             <p className="text-[13px] text-ink-3 leading-relaxed mt-1">
-              Freiwillig. Die App funktioniert ohne Zustimmung genauso.
+              Freiwillig. Der Begleiter funktioniert für dich auch ohne Zustimmung genauso.
             </p>
-            <button onClick={() => { setError(null); setSheet('info') }} className="text-[13px] text-accent mt-1">
+            <button onClick={() => { setError(null); setChecked(false); setSheet('info') }} className="text-[13px] text-accent mt-1">
               Mehr dazu →
             </button>
           </div>
@@ -80,7 +84,7 @@ export function LearningConsentCard({ profile, onChanged }) {
             type="button"
             role="switch"
             aria-checked={optedIn}
-            aria-label="Zur Lernbasis beitragen"
+            aria-label={LEARNING_OPT_IN.title}
             onClick={openToggle}
             className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 mt-0.5 ${optedIn ? 'bg-accent' : 'bg-[var(--color-border)]'}`}
           >
@@ -93,28 +97,20 @@ export function LearningConsentCard({ profile, onChanged }) {
 
       {sheet === 'info' && (
         <Sheet onClose={() => setSheet(null)}>
-          <h3 className="font-display text-[22px] text-ink mb-4">Zur Lernbasis beitragen</h3>
-          <p className="text-[14px] text-ink-2 leading-relaxed mb-4">
-            Wenn du magst, hält der Coach nach einem Gespräch kurz und verallgemeinert fest, was dir geholfen hat
-            und was eher nicht – ohne Namen, Orte oder Details, an denen man dich erkennen könnte. Aus solchen
-            Erfahrungen lernt der Coach, Menschen mit ähnlichen Themen besser zu begleiten.
-          </p>
-          <p className="text-[14px] text-ink font-medium mb-2">So funktioniert es</p>
-          <ul className="flex flex-col gap-2 mb-4">
-            {[
-              'Eine automatische Prüfung verwirft die Zusammenfassung, wenn sie trotzdem persönliche Details enthält.',
-              'Andere Menschen sehen deine Beiträge nicht. Sie fließen nur unsichtbar in die Hinweise des Coaches ein.',
-              'Intern sind die Beiträge deinem Konto zugeordnet. So können wir sie löschen, wenn du deine Zustimmung zurücknimmst oder dein Konto löschst.',
-              'Deine Gespräche selbst bleiben, wo sie sind, und nur für dich sichtbar.',
-            ].map(item => (
-              <li key={item} className="flex items-start gap-2 text-[14px] text-ink-2 leading-relaxed">
-                <span className="text-accent">–</span>{item}
-              </li>
-            ))}
-          </ul>
-          <p className="text-[14px] text-ink-2 leading-relaxed mb-5">
-            Du kannst die Zustimmung hier jederzeit zurücknehmen.
-          </p>
+          <h3 className="font-display text-[22px] text-ink mb-4">{LEARNING_OPT_IN.title}</h3>
+          <p className="text-[14px] text-ink-2 leading-relaxed mb-4">{LEARNING_OPT_IN.text}</p>
+          {!optedIn && (
+            <label className="flex items-start gap-3 cursor-pointer mb-4">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={e => setChecked(e.target.checked)}
+                className="mt-0.5 flex-shrink-0 accent-[var(--color-accent)]"
+              />
+              <span className="text-[13px] text-ink-2 leading-snug">{LEARNING_OPT_IN.checkbox}</span>
+            </label>
+          )}
+          <p className="text-[13px] text-ink-3 leading-relaxed mb-5">{LEARNING_OPT_IN.withdrawal}</p>
           {error && <p className="text-[13px] text-coral mb-3">{error}</p>}
           {optedIn ? (
             <button onClick={() => setSheet(null)} className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors">
@@ -124,7 +120,7 @@ export function LearningConsentCard({ profile, onChanged }) {
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => setOptIn(true)}
-                disabled={busy}
+                disabled={busy || !checked}
                 className="w-full bg-accent text-white py-3 rounded-full font-medium hover:bg-accent-2 transition-colors disabled:opacity-50"
               >
                 {busy ? 'Wird gespeichert…' : 'Ja, ich mache mit'}
@@ -141,7 +137,7 @@ export function LearningConsentCard({ profile, onChanged }) {
         <Sheet onClose={() => setSheet(null)}>
           <h3 className="font-display text-[22px] text-ink mb-4">Zustimmung zurücknehmen?</h3>
           <p className="text-[14px] text-ink-2 leading-relaxed mb-5">
-            Deine bisherigen Beiträge zur Lernbasis werden gelöscht. Deine Gespräche, dein Spiegel und deine Akte
+            Deine Erfahrungen in der Lernbasis werden gelöscht. Deine Gespräche und dein Spiegel
             bleiben unverändert.
           </p>
           {error && <p className="text-[13px] text-coral mb-3">{error}</p>}
