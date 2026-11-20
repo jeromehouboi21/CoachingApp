@@ -411,11 +411,12 @@ export const DATA_RECIPIENTS = [
     safeguard: '[Offen]',
   },
   {
-    name: '[Prüfen: Dienst für den E-Mail-Versand bei Anmeldung und Benachrichtigungen]',
-    location: '[Prüfen]',
+    // Supabase Auth → SMTP Settings: send.one.com:465, Absender hallo@friedensstifter.coach (20.11.2026)
+    name: 'one.com (E-Mail-Postfach hallo@friedensstifter.coach)',
+    location: 'Dänemark (EU)',
     purpose: 'Versand von Anmelde-, Bestätigungs- und Erinnerungs-E-Mails',
     data: 'E-Mail-Adresse, Inhalt der E-Mail',
-    safeguard: '[Prüfen]',
+    safeguard: 'Verarbeitung in der EU, Auftragsverarbeitungsvertrag [Prüfen: mit one.com abgeschlossen? Standort des Mailservers bestätigen]',
   },
 ]
 
