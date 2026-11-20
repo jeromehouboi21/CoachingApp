@@ -117,6 +117,25 @@ order by 1, 2;
 - **`premium`:** `session_limit` wirkt nicht, die Phase ist Begleitung. Mit Stripe-Abo gilt das Monatskontingent, von Hand gesetzt gibt es keines.
 - **Nach dem Ende eines Abos** setzt der Webhook `plan = 'free'`. Dann zählt wieder `session_limit`, gegen alle bisher begonnenen Gespräche (`trial_sessions_used`). Meist heißt das sofort Ruhemodus.
 
+**Ergebnis (Jerome, 20.11.2026):**
+
+| Plan | Limit | Anzahl | Einordnung |
+|---|---|---|---|
+| `free` | 3 | 3 | Normalfall seit U4, vermutlich Testkonten |
+| `tester` | 0 | 1 | **Offen:** kann kein neues Gespräch beginnen, ist sofort im Ruhemodus. Absicht? |
+| `tester` | 3 | 1 | so viel wie ein kostenloses Konto |
+| `tester` | 20 | 6 | **Offen:** wahrscheinlich der alte Standardwert aus 027. 038 hat nur `free` von 20 auf 3 gesetzt, Tester nicht. |
+| `tester` | 200 / 300 / 500 | 6 / 1 / 1 | bewusst vergebene Kontingente |
+| `premium` | – | 0 | kein Abo, keine Freischaltung von Hand (Bezahlung aus) |
+
+**Befund:**
+- Kein `free`-Konto mit 20. Migration 038 hat also gegriffen.
+- Kein Konto widerspricht Paket Z.
+
+**Offene Entscheidungen für Jerome** (im Admin-Bereich, individuelles Gesprächslimit):
+1. Sollen die 6 Tester mit 20 dabei bleiben oder ein größeres Kontingent bekommen?
+2. Ist das Limit 0 beim einen Tester gewollt?
+
 ## Weitere Beobachtungen (nicht umgesetzt)
 
 - **`docs/architecture.md`** (die kürzere zweite Architekturdatei) ist an mehreren Stellen veraltet:
