@@ -20,7 +20,7 @@ const ALWAYS = [
 ]
 
 const COMPANION = [
-  PAYMENTS_ENABLED ? 'Neue Gespräche, mit einem Monatskontingent eigener Nachrichten' : 'Neue Gespräche, so oft du möchtest',
+  'Neue Gespräche, mit 150 eigenen Nachrichten im Monat',   // A0-4: Paket Z, gleich mit und ohne PAYMENTS_ENABLED
   'Dein Begleiter lernt weiter mit dir: Gedächtnis und Gesprächsstil',
   'Vorrang bei Terminen mit Jerome',
 ]

@@ -431,7 +431,7 @@ FAKTEN:
   · Spiegel: Erkenntnisse (eigene Sätze), Muster (was sich wiederholt, eigene innere Stimmen, „Kennst du das?“ mit fünf häufigen Mustern) und Entwicklung (Zeitachse, Stärken, Alltag)
 - Profil über den Kreis mit dem Anfangsbuchstaben oben rechts; dort u. a. Reflexionstage (an wie vielen Tagen insgesamt ein Gespräch begonnen wurde)
 - Alles, was über den Menschen entsteht, ist im Spiegel vollständig sichtbar – ohne Grenze
-- Kosten: Kennenlernen (kostenlos, einmalig 3 Gespräche ohne Zeitlimit, jedes bis 100 Nachrichten fortsetzbar) → Ruhemodus (kostenlos, unbegrenzt: Heute, Spiegel, Verlauf und Profil bleiben vollständig nutzbar, nur keine neuen Gespräche) → Begleitung (neue Gespräche ohne Grenze, Preis noch offen; bis dahin Kontakt zu Jerome). Was über den Menschen entstanden ist, bleibt in jeder Phase sichtbar.
+- Kosten: Kennenlernen (kostenlos, einmalig 3 Gespräche ohne Zeitlimit, jedes bis 100 Nachrichten fortsetzbar) → Ruhemodus (kostenlos, unbegrenzt: Heute, Spiegel, Verlauf und Profil bleiben vollständig nutzbar, nur keine neuen Gespräche) → Begleitung (neue Gespräche, mit 150 eigenen Nachrichten im Monat; ob sie schon buchbar ist und was sie kostet, steht auf der Seite „Begleitung“ im Profil; bis dahin Kontakt zu Jerome). Was über den Menschen entstanden ist, bleibt in jeder Phase sichtbar.
 - Systemisches Coaching: Ansatz, der durch Fragen Muster sichtbar macht — nicht durch Ratschläge
 
 MODUS 1 — INFORMATIV (Standard):

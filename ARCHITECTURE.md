@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041) · **Paket Z Zahlung & Abo** (20.11.2026: Stripe Checkout, Webhook, Kundenportal, Monatskontingent mit Kulanz, Kontolöschung beendet das Abo, Migration 042; deployt und in der Stripe-Sandbox getestet (J-Z2), **Bezahlung noch aus** (`PAYMENTS_ENABLED = false`), live erst mit J-Z3; Bericht: `docs/billing/paket-z-abschlussbericht.md`)
+> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket Z Zahlung & Abo** (20.11.2026: Stripe Checkout, Webhook, Kundenportal, Monatskontingent mit Kulanz, Kontolöschung beendet das Abo, Migration 042; deployt und in der Stripe-Sandbox getestet (J-Z2), **Bezahlung noch aus** (`PAYMENTS_ENABLED = false`), live erst mit J-Z3; Bericht: `docs/billing/paket-z-abschlussbericht.md`)
 
 ---
 
@@ -143,7 +143,7 @@ CoachingApp/
 │       │   ├── InvitedSetPassword.jsx
 │       │   └── ProfileMissingScreen.jsx ← angemeldet, aber Profil fehlt/lädt nicht (W4-Befund)
 │       ├── home/
-│       │   └── HomeScreen.jsx           ← Dashboard mit Tool-Kacheln (Coach/Wellness/Stimmen/Verstehen → Spiegel)
+│       │   └── HomeScreen.jsx           ← „Heute“ (U3): ein nächster Schritt je Zustand A · D · B · C2 · C aus lib/todayState.js
 │       ├── coach/
 │       │   └── CoachScreen.jsx          ← Haupt-Chat-Interface
 │       ├── mirror/
@@ -496,10 +496,10 @@ Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks
 
 #### CoachingAgreementScreen (`/vereinbarung`)
 
-**Rolle:** Nachträglicher Rückblick auf die im Onboarding akzeptierte Coaching-Vereinbarung.
+**Rolle:** Nachträglicher Rückblick auf die beim Einstieg (`/start/3`) bzw. bei der erneuten Zustimmung (`ConsentGateScreen`) akzeptierte Coaching-Vereinbarung.
 
 - Nachweis-Card oben: Zustimmungsdatum (`coaching_agreement_accepted_at`, Format „12. Juli 2026, 14:32 Uhr") oder Fallback-Hinweis bei fehlendem Datum
-- Vertragstext aus `CoachingAgreementContent.jsx` — identisch zur Onboarding-Version (single source of truth)
+- Vertragstext aus `CoachingAgreementContent.jsx` — derselbe Text wie im Einstieg `/start/1–4` (single source of truth)
 
 ---
 
@@ -650,7 +650,7 @@ Exports:
   mfaGate         — 'ok' | 'required' (aal1 + verifizierter Faktor → Code-Abfrage, S-06b)
   refreshMfa()    — Sitzung erneuern und Sicherheitsstufe neu prüfen (= requestMfaCheck aus lib/mfa.js)
 
-  signUp(email, password, displayName, meta)  — meta (Einwilligung, Vereinbarung, Onboarding) landet über handle_new_user im Profil
+  signUp(email, password, displayName, meta)  — meta aus dem Einstieg `/start/4` (Zustimmung v2.0, 18+) landet über handle_new_user im Profil (seit 040 nur v2.0)
   signIn(email, password)
   sendMagicLink(email)                — nur bestehende Konten (shouldCreateUser: false)
   signOut()
@@ -667,7 +667,7 @@ Exports:
 - Session wird beim Mount aus Supabase wiederhergestellt (`onAuthStateChange`, Verarbeitung per `setTimeout` außerhalb des Auth-Callbacks)
 - **Reihenfolge (S-06b):** erst `getAuthenticatorAssuranceLevel()`, dann – nur wenn frei – das Profil. Bei `aal1` mit Faktor bleibt `profile = null` und `mfaGate = 'required'`; das führt nie ins Onboarding. Beim Zurückkehren in den Tab (`visibilitychange`) wird die Stufe erneut geprüft.
 - **Kein gemeinsamer Context:** Jede Komponente mit `useAuth()` hat einen eigenen Zustand. Der globale Fehlerpfad (`403 mfa_required` aus Functions, `42501 mfa_required` aus RPCs → `checkMfaResponse` / `reportIfMfaRpcError`) erneuert deshalb einmal die Sitzung; das Ereignis `TOKEN_REFRESHED` lässt jede Instanz neu prüfen.
-- Pending Invite Code: Wenn ein Code in `localStorage` liegt (gesetzt im Onboarding), wird er nach E-Mail-Verifikation automatisch eingelöst
+- Pending Invite Code: Wenn ein Code in `localStorage` liegt (`pendingInviteCode`, gesetzt im Einstieg `/start/4`), wird er nach E-Mail-Verifikation beim ersten Login automatisch eingelöst
 - Consent-Versioning: `consent_version = '2.0'`, `coaching_agreement_version = '2.0'` (aus `src/content/legalTexts.js`), Lernbasis `learning_opt_in_version = '2.0'` (`src/lib/consent.js`)
 - `profile` enthält seit v3.x auch Admin-/Beta-/Invite-Felder — keine eigenen Hook-Exporte dafür nötig, da `select('*')` bereits alles lädt
 
@@ -1180,8 +1180,8 @@ createLogger(source: string, requestId?: string, userId?: string)
 ```
 id                                UUID PK → auth.users
 display_name                      TEXT
-onboarding_completed              BOOLEAN DEFAULT false
-onboarding_data                   JSONB
+onboarding_completed              BOOLEAN DEFAULT false   -- Altbestand des früheren Onboardings (Einstieg seit Paket K W3: /start/1–4)
+onboarding_data                   JSONB                   -- Altbestand, seit 040 nicht mehr gesetzt
 streak_count                      INTEGER DEFAULT 0
 streak_last_date                  DATE
 plan                              TEXT ('free' | 'premium' | 'tester')
@@ -1931,4 +1931,4 @@ Eingerichtet in der Sandbox (J-Z1, 20.11.2026); für den Live-Modus in J-Z3 glei
 | Webhook-Endpunkt | `…/functions/v1/stripe-webhook`, „Ihr Konto“, Nutzlast „Momentaufnahme“, API-Version `2026-10-28.endive`, genau 6 Ereignisse | `HANDLED` in `stripe-webhook`, Secret `STRIPE_WEBHOOK_SECRET` |
 | Eingeschränkter Schlüssel | Customers, Checkout Sessions, Subscriptions, Customer Portal: Schreiben · Prices, Products: Lesen | Secret `STRIPE_SECRET_KEY` |
 | Umsatzsicherung → Wiederholungsversuche | erster Fehlschlag: Abo „überfällig“ belassen · alle Versuche gescheitert: **Abonnement kündigen** | Z-9: `past_due` bleibt Begleitung, danach `free` |
-| Sprache | noch Browsersprache (Portal erschien englisch) | offen für J-Z3: `locale: 'de'` in Checkout und Portal |
+| Sprache | Bezahlseite und Kundenportal auf Deutsch (A0-2) | `locale: 'de'` in `create-checkout-session` und `create-portal-session` |

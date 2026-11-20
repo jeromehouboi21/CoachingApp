@@ -49,6 +49,7 @@ Deno.serve(async (req: Request) => {
       const session = await stripe.billingPortal.sessions.create({
         customer: sub.stripe_customer_id,
         return_url: `${siteUrl()}/profile`,
+        locale: 'de',                   // A0-2: Kundenportal auf Deutsch, unabhängig von der Browsersprache
       });
       url = session.url ?? null;
     } catch (err: unknown) {

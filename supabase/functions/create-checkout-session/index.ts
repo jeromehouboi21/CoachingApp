@@ -132,6 +132,7 @@ Deno.serve(async (req: Request) => {
       integration_identifier: 'hosted_web_0001',
       origin_context: 'web',
       mode: 'subscription',
+      locale: 'de',                     // A0-2: Bezahlseite auf Deutsch, unabhängig von der Browsersprache
       payment_method_collection: 'always',
       success_url: `${base}/begleitung?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${base}/begleitung?checkout=cancel`,
