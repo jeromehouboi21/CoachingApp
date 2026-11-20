@@ -1,31 +1,31 @@
 # Handoff: Zahlung und Abo (Paket Z)
 
-> **Für:** Claude Code · **Von:** Jerome (vorbereitet mit Claude) · **Stand:** 20.11.2026 · **Version:** v0.1 **ENTWURF – nicht freigegeben**
+> **Für:** Claude Code · **Von:** Jerome (vorbereitet mit Claude) · **Stand:** 20.11.2026 · **Version:** v1 **freigegeben (20.11.2026)**
 > **Grundlage:** `docs/Abo_Modell/friedensstifter-abo-modell-v1.md` (fachliche Vorgabe), `docs/billing/abo-discovery.md` (Bestandsaufnahme mit Entscheidungen Z-E1 bis Z-E3), `STRIPE_INTEGRATION_TODO.md` und Branch `feature/stripe-checkout-geruest` (Gerüst), `ARCHITECTURE.md`, Spielregeln aus `handoff-security-paket-c.md` Abschn. 0
 > **Ziel:** Man kann die Begleitung über Stripe abschließen, wechseln und kündigen. Freigeschaltet wird nur über den Webhook. In der Begleitung gilt ein Monatskontingent eigener Nachrichten mit ruhigem Hinweis und Kulanz. Ein gelöschtes Konto beendet das Abo. „Begleitung intensiv“ ist gebaut, bleibt aber abgeschaltet, bis Prompt-Caching umgesetzt ist. **Live gehen Zahlungen erst nach der Freigabe der Abo-Rechtstexte (J-Z3).**
 
 ---
 
-## Entscheidungen (von Jerome vor dem Start eingetragen)
+## Entscheidungen (von Jerome am 20.11.2026 eingetragen)
 
-> Leere Felder = Empfehlung. **Claude Code trifft keine dieser Entscheidungen selbst.**
+> Alle Entscheidungen sind getroffen (20.11.2026). **Claude Code trifft keine dieser Entscheidungen selbst.**
 
 | # | Frage | Empfehlung | Jeromes Entscheidung |
 |---|---|---|---|
 | Z-E1 | Krisenantwort an der Monatsgrenze | nie blockieren, nicht buchen | ✅ entschieden (20.11.) |
 | Z-E2 | Stufe im Plan | `plan = 'premium'` für jedes Abo, Stufe in `subscriptions.tier`, CHECK auf `plan` unverändert | ✅ entschieden (20.11.) |
 | Z-E3 | Konto löschen mit laufendem Abo | Löschung beendet das Abo sofort, ohne Erstattung, Hinweis im Löschdialog; scheitert die Kündigung → Löschung bricht ab | ✅ entschieden (20.11.) |
-| Z-1 | Branch | neuer Branch `feature/paket-z-zahlung` von `main`, das Gerüst aus `feature/stripe-checkout-geruest` per Merge übernehmen und anpassen | |
-| Z-2 | Begleitung intensiv | komplett bauen, abgeschaltet über Secret `INTENSIV_ENABLED` und Konstante `INTENSIV_ENABLED` im Frontend. Live erst nach eigener Tranche „Prompt-Caching“ | |
-| Z-3 | Wo die Nachrichtengrenzen stehen | als Konstanten in **einer** SQL-Funktion (`quota_limit_for(tier)`, wie `c_cap` in 038): Begleitung 150, intensiv 800, Kulanz 10, Hinweis ab 80 % | |
-| Z-4 | Kündigen, Zahlungsart ändern, Stufe wechseln | Stripe-Kundenportal (gehostet), aufgerufen über eine neue Function `create-portal-session` | |
-| Z-5 | Wechsel Begleitung → intensiv | sofort, Stripe verrechnet anteilig (Proration) und stellt die Differenz sofort in Rechnung | |
-| Z-6 | Wechsel intensiv → Begleitung | zum Ende des Abrechnungszeitraums (im Kundenportal „Herabstufungen zum Periodenende“) | |
-| Z-7 | Monat oder Jahr | beide Laufzeiten im Kundenportal und auf `/begleitung` wählbar | |
-| Z-8 | Was an Stripe geht | Nutzer-ID (`client_reference_id`, Customer-Metadaten `user_id`) und E-Mail beim Anlegen des Stripe-Kunden. Name, Gesprächsinhalte und Profildaten gehen nicht an Stripe | |
-| Z-9 | Zahlung fehlgeschlagen | Plan bleibt bei Status `past_due` aktiv, endet bei `unpaid`/`canceled` (Stripe: Smart Retries, danach Abo kündigen) | |
-| Z-10 | Preisangabe vor dem Klick | Preise auf `/begleitung` aus einer Konstante im Frontend; beim Test J-Z2 mit Stripe abgleichen | |
-| Z-11 | Ein Nutzer mit Tester-Plan | sieht keine Bezahlung (Phase `begleitung`), Webhook überschreibt `tester` nie | |
+| Z-1 | Branch | neuer Branch `feature/paket-z-zahlung` von `main`, das Gerüst aus `feature/stripe-checkout-geruest` per Merge übernehmen und anpassen | ✅ nach Empfehlung (20.11.) |
+| Z-2 | Begleitung intensiv | komplett bauen, abgeschaltet über Secret `INTENSIV_ENABLED` und Konstante `INTENSIV_ENABLED` im Frontend. Live erst nach eigener Tranche „Prompt-Caching“ | ✅ nach Empfehlung (20.11.) |
+| Z-3 | Wo die Nachrichtengrenzen stehen | als Konstanten in **einer** SQL-Funktion (`quota_limit_for(tier)`, wie `c_cap` in 038): Begleitung 150, intensiv 800, Kulanz 10, Hinweis ab 80 % | ✅ nach Empfehlung (20.11.) |
+| Z-4 | Kündigen, Zahlungsart ändern, Stufe wechseln | Stripe-Kundenportal (gehostet), aufgerufen über eine neue Function `create-portal-session` | ✅ nach Empfehlung (20.11.) |
+| Z-5 | Wechsel Begleitung → intensiv | sofort, Stripe verrechnet anteilig (Proration) und stellt die Differenz sofort in Rechnung | ✅ nach Empfehlung (20.11.) |
+| Z-6 | Wechsel intensiv → Begleitung | zum Ende des Abrechnungszeitraums (im Kundenportal „Herabstufungen zum Periodenende“) | ✅ nach Empfehlung (20.11.) |
+| Z-7 | Monat oder Jahr | beide Laufzeiten im Kundenportal und auf `/begleitung` wählbar | ✅ nach Empfehlung (20.11.) |
+| Z-8 | Was an Stripe geht | Nutzer-ID (`client_reference_id`, Customer-Metadaten `user_id`) und E-Mail beim Anlegen des Stripe-Kunden. Name, Gesprächsinhalte und Profildaten gehen nicht an Stripe | ✅ nach Empfehlung (20.11.) |
+| Z-9 | Zahlung fehlgeschlagen | Plan bleibt bei Status `past_due` aktiv, endet bei `unpaid`/`canceled` (Stripe: Smart Retries, danach Abo kündigen) | ✅ nach Empfehlung (20.11.) |
+| Z-10 | Preisangabe vor dem Klick | Preise auf `/begleitung` aus einer Konstante im Frontend; beim Test J-Z2 mit Stripe abgleichen | ✅ nach Empfehlung (20.11.) |
+| Z-11 | Ein Nutzer mit Tester-Plan | sieht keine Bezahlung (Phase `begleitung`), Webhook überschreibt `tester` nie | ✅ nach Empfehlung (20.11.) |
 
 ---
 
