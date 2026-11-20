@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041)
+> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041)
 
 ---
 
@@ -72,7 +72,14 @@ CoachingApp/
 │   │   ├── consent.js                   ← Versionen der Zustimmungstexte (inkl. LEARNING_CONSENT_VERSION)
 │   │   ├── functions.js                 ← functionUrl/functionHeaders (Region eu-west-1 = Datenbank-Region, S-09)
 │   │   ├── mfa.js                       ← Zweiter Faktor: Stand, Einrichten, Prüfen, mfa-recovery, globaler Fehlerpfad (S-06b)
+│   │   ├── passwordPolicy.js            ← 12 Zeichen, PASSWORD_MESSAGES, mapAuthError (Paket K W1)
+│   │   ├── passwordRecovery.js          ← erkennt den Reset-Link vor dem Supabase-Client (erster Import in main.jsx, W1)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
+│   │
+│   ├── content/                         ← Inhalte mit Freigabe-/Belegpflicht (Paket K)
+│   │   ├── legalTexts.js                ← Rechtstexte v2.0, LEGAL_TEXTS_STATUS, LEGAL_REVIEW_OPEN, DATA_RECIPIENTS, Schalter
+│   │   ├── securityMeasures.js          ← Aussagen der Sicherheitsseite mit Status und Beleg
+│   │   └── whyMemory.js                 ← „Warum sich die App etwas merkt“ (W2)
 │   │
 │   ├── styles/
 │   │   ├── globals.css                  ← CSS-Reset, Basisstile
@@ -106,8 +113,11 @@ CoachingApp/
 │   │   │   ├── MfaEnrollFlow.jsx        ← QR-Code, Schlüssel, Code bestätigen
 │   │   │   ├── RecoveryCodesView.jsx    ← 10 Wiederherstellungscodes, einmalig
 │   │   │   └── RecoveryForm.jsx         ← Anmelden mit Wiederherstellungscode
+│   │   ├── auth/                        ← PasswordField (Sichtbar-Schalter), ForgotPasswordForm (W1)
+│   │   ├── WhyMemoryBlock.jsx           ← Baustein „Warum sich die App etwas merkt“ (Wie es funktioniert, /start/2)
 │   │   └── legal/
-│   │       └── CoachingAgreementContent.jsx ← Vertragstext, single source of truth
+│   │       ├── CoachingAgreementContent.jsx ← Vertragstext v2.0 aus legalTexts.js
+│   │       ├── ConsentStep.jsx · LegalSheet.jsx · DeclineSheet.jsx · PreliminaryNotice.jsx ← Zustimmung (W3)
 │   │
 │   └── screens/
 │       ├── auth/
@@ -272,6 +282,9 @@ CoachingApp/
 | `/vereinbarung` | CoachingAgreementScreen | **ja** | — | nein |
 | `/admin/users` | AdminUsersScreen | **ja** | `AdminRoute` (`profile.is_admin`) | nein |
 | `/impressum` | ImpressumScreen | nein | — | nein |
+| `/sicherheit` | SecurityInfoScreen (Paket K W2; ohne DB-Aufrufe, Angemeldete sehen „Konto löschen ›“) | nein | — | nein |
+| `/profil/passwort` | PasswordChangeScreen (Paket K W1) | **ja** | — | nein |
+| `/passwort-neu` | PasswordResetScreen (Paket K W1, nur mit Recovery-Sitzung) | eigene Prüfung | — | nein |
 | `/datenschutz` | DatenschutzScreen | nein | — | nein |
 
 ### Routing-Logik
@@ -984,7 +997,9 @@ Trägt fehlende Vektoren in `experience_patterns` nach (z. B. nach einem OpenAI-
 - Prüft jedes Lösch-Ergebnis; scheitert ein Schritt → `500 delete_incomplete`, der Auth-Account bleibt bestehen (Wiederholung möglich, kein stilles Scheitern); Fehler beim Auth-Löschen → `500 auth_delete_failed`
 - Hard-Delete des Auth-Users via `service_role`; per CASCADE an `auth.users` hängen `inner_voices`, `crisis_events`, `feedback_surveys`, `rate_limit_counters`, `experience_patterns` (`source_user_id`); an `conversations` hängen `messages`, `session_notes`, `conversation_context` und seit 033 `coach_reflections`
 - Nachweis: Löschtest (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0) — nach jeder Änderung an Tabellen mit Personenbezug oder an der Löschlogik ausführen
-- Aufgerufen von `ProfileScreen` nach Bestätigungs-Modal
+- Aufgerufen von `ProfileScreen` nach Bestätigungs-Modal (Text nach Konzept 6.3, „LÖSCHEN“ tippen, Link zum Datenexport; bei Antwort ≠ 200 kein Abmelden, Hinweis „… nicht vollständig gelöscht …“, `403 mfa_required` → globale Code-Abfrage). Erreichbar auch aus `/sicherheit` und der Zustimmungs-Sperre (`state.openDelete`)
+- **Seit Paket K W4:** nach erfolgreicher Löschung Bestätigungsmail „Dein Konto wurde gelöscht“ über `_shared/mailer.ts` (Adresse nur im Speicher der Function, Umlaute als ASCII); Logs `account_deleted_mail_ok` / `account_deleted_mail_failed` (Wochenübersicht). Scheitert die Mail, bleibt die Löschung gültig
+- Frontend danach: Eine im Browser gespeicherte Sitzung eines gelöschten Kontos wird beim nächsten Laden erkannt (`PGRST116` → `getUser()` scheitert → lokal abmelden); fehlt das Profil bei bestehendem Konto, zeigt `ProfileMissingScreen` Neu laden/Abmelden
 
 ---
 
@@ -1773,3 +1788,18 @@ MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellu
 7. Nachrichten schreibt nur der Server — kein `supabase.from('messages').insert` im Frontend
 8. Änderungen an Tabellen mit Personenbezug oder an der Löschlogik: Löschtest (`npm run security:deletion-test` + `deletion-check.sql`) → überall 0
 9. Texte über Datenverarbeitung (Datenschutzerklärung, Opt-in) mit dem tatsächlichen Stand abgleichen — offen laut Abschlussbericht Paket B: OpenAI-Embeddings, Lernbasis, Fristen
+
+## Supabase-Dashboard: Einstellungen außerhalb des Codes (Paket K)
+
+Diese Werte stehen nicht im Repository und werden von Jerome im Dashboard gepflegt. Ändert sich einer, die Stelle im Code mitziehen.
+
+| Einstellung | Wert | Gegenstück im Code |
+|---|---|---|
+| Authentication → Passwort-Mindestlänge | 12 | `PASSWORD_MIN_LENGTH` in `src/lib/passwordPolicy.js` |
+| Require current password when updating | an | `mapAuthError` (`current_password_required`, `current_password_invalid`), Angriffstest K1/K2 |
+| Redirect-URLs | u. a. `https://app.friedensstifter.coach/passwort-neu` | `ForgotPasswordForm`, `PasswordResetScreen` |
+| E-Mail-Vorlagen | Reset Password, Password changed, Invite, Confirm signup, Magic Link | `supabase/templates/*.html` (Quelle, manuell übertragen) |
+| SMTP | One.com, `send.one.com:465`, Absender `hallo@friedensstifter.coach` | Empfänger in `DATA_RECIPIENTS` (`legalTexts.js`); Functions-Mailer nutzt eigene Secrets (`SMTP_*`) |
+| Database → Backups | täglich, 7 Tage; Point-in-Time-Recovery aus | `BACKUP_DELETION = 'spätestens nach 14 Tagen'` in `legalTexts.js` |
+| Projekt-Region | `eu-west-1` (Irland) | `x-region` in `src/lib/functions.js`, Sicherheitsseite „Region“ |
+

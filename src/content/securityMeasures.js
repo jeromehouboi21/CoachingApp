@@ -79,7 +79,7 @@ export const SECURITY_MEASURES = [
   // ── Was mit deinen Daten passiert, wenn du gehst ─────────────────────────────
   { id: 'S-15 Löschen', group: 'gehen', status: 'live',
     text: 'Wenn du dein Konto löschst, werden alle deine Daten gelöscht. Das ist mit einem eigenen Löschtest geprüft.',
-    evidence: 'delete-account + ON-DELETE-CASCADE-Ketten (Migration 033); scripts/security/deletion-test.mjs + supabase/security/deletion-check.sql, zuletzt 32 Prüfpunkte alle 0 (C-5)' },
+    evidence: 'delete-account + ON-DELETE-CASCADE-Ketten (Migration 033); scripts/security/deletion-test.mjs + supabase/security/deletion-check.sql, zuletzt 32 Prüfpunkte alle 0 (Paket K W4, 20.11.2026, mit zweitem Faktor); Bestätigungsmail nach der Löschung (delete-account, W4)' },
   { id: 'S-15 Fristen', group: 'gehen', status: 'live',
     text: 'Manche Daten werden auch ohne Kontolöschung nach festen Fristen gelöscht: die Notizen, mit denen der Begleiter seine Gespräche reflektiert, nach 12 Monaten, Feedback und Fragebögen nach 24 Monaten. Hinweise auf Krisen werden nach spätestens 90 Tagen gekürzt und nach drei Jahren gelöscht.',
     evidence: 'apply_retention (Migration 036): coach_reflections 12 Monate, user_feedback/feedback_surveys/supervision_logs 24 Monate, crisis_events.excerpt nach Sichtung bzw. 90 Tagen leer, crisis_events 3 Jahre ab Ende des Kalenderjahres; Formulierung von Jerome freigegeben (J-K3, 20.11.2026)' },

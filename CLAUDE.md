@@ -4,6 +4,7 @@
 **Stand:** Design-Dokument v2.5 implementiert
 **Arbeitsverzeichnis:** `f:/OneDrive/Documents/GitHub/CoachingApp/`
 **Security-Paket B abgeschlossen (19.11.2026):** Bericht `docs/security/paket-b-abschlussbericht.md` · Auftrag `docs/security/handoff-security-paket-b.md`, Lösungsdesign `docs/security/friedensstifter-security-paket-b-design-v1.md`, Bestandsaufnahme `docs/security/paket-b-discovery.md`
+**Paket K „Konto & Vertrauen“ abgeschlossen (20.11.2026):** Bericht `docs/konto/paket-k-abschlussbericht.md` · Handoff `docs/Neues_Zielbild/handoff-paket-k-konto-vertrauen.md`, Konzept `docs/konto/friedensstifter-konto-vertrauen-konzept-v1.md`, Bestandsaufnahme `docs/konto/paket-k-discovery.md` · Rechtstexte **vorläufig** (Anwaltsprüfung offen: `docs/konto/anwaltstermin-fragen.md`)
 **Security-Paket C abgeschlossen (19.11.2026):** Bericht `docs/security/paket-c-abschlussbericht.md` · Auftrag `docs/security/handoff-security-paket-c.md`, Lösungsdesign `docs/security/friedensstifter-security-paket-c-design-v2.md`, Bestandsaufnahme `docs/security/paket-c-discovery.md`, Notfallplan `docs/security/notfallplan.md`
 
 ---
@@ -42,6 +43,9 @@
 /mirror/entwicklung   → Ebene Entwicklung (Zeitachse, Stärken, Alltag)
 /mirror/muster/:key   → PatternDetailScreen (kein AppShell) — key = pattern_key
 /profile              → ProfileScreen (AppShell, kein Tab – über den Avatar oben rechts)
+/profil/passwort      → PasswordChangeScreen (Paket K W1, geschützt: aktuelles + neues Passwort, andere Geräte abmelden)
+/passwort-neu         → PasswordResetScreen (Paket K W1, Link aus der Reset-Mail, eigene Sitzungsprüfung)
+/sicherheit           → SecurityInfoScreen „Wie wir deine Daten schützen“ (Paket K W2, öffentlich, ohne DB-Aufrufe)
 
 /verlauf              → Weiterleitung /coach/verlauf (alte Lesezeichen)
 /                     → Weiterleitung /home bzw. /landing
@@ -273,6 +277,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
 | `security-monitor` | Cron stündlich :07 (`x-cron-secret`) | Monitoring S-22: Log-Codes zählen (`_shared/monitorRules.ts`), Lebenszeichen der Cron-Jobs, Alarm-Mail über One.com-SMTP 465, montags Wochenübersicht (nur intern) |
 | `admin-security` | Admin-Tab „Sicherheit“ | Alarme + Wochenübersicht (`requireAdmin`, aal2) |
+| `delete-account` | Profil → „Konto löschen“ (auch aus `/sicherheit` und der Zustimmungs-Sperre) | Löscht alles zur Nutzer-ID aus dem JWT, dann das Auth-Konto; Fehler → `500 delete_incomplete`/`auth_delete_failed` ohne Abmelden; **danach** Bestätigungsmail über `_shared/mailer.ts` (Adresse nur im Speicher; `account_deleted_mail_ok/_failed`) – Paket K W4 |
 | `export-my-data` | Profil → „Meine Daten herunterladen“ | Selbstauskunft S-16: alle eigenen Daten als JSON (`EXPORT_TABLES`), `requireUser`, 3/Tag fail-closed, `export_incomplete` bei Teilausfall |
 | `mfa-recovery` | Profil → Sicherheit, Code-Abfrage | Zweiter Faktor für alle (S-06b): `codes:generate` (aal2, 10 Codes, HMAC mit `MFA_CODE_PEPPER`) · `recover` (auch aal1, entfernt alle Faktoren) · `disable` (aal2) |
 | `backfill-embeddings` | Manuell (SQL-Editor, `net.http_post` + Vault-Secret) | Wartung: fehlende Vektoren in experience_patterns nachtragen (nur intern) |
@@ -462,7 +467,8 @@ perfektionismus_blockade → Perfektionismus-Blockade
 - **ZIPs für Chats nur über `npm run share:zip`** (nur eingecheckte Dateien, nie `.env*`). Der Build prüft `dist/` automatisch auf Schlüssel (`postbuild`), `npm run security:secrets` scannt die Historie.
 - **Rechtstexte nur in `src/content/legalTexts.js`** (Einwilligung, Vereinbarung, Hinweise, Empfänger `DATA_RECIPIENTS`; die Datenschutzerklärung rendert Abschnitt 5 daraus). Claude Code schreibt keine Rechtstexte, nur Vorschläge zur Freigabe. `LEGAL_TEXTS_STATUS` (`entwurf` · `vorlaeufig` · `freigegeben`) setzt **nur Jerome**; seit 20.11.2026 `vorlaeufig` mit sichtbarer Kennzeichnung, offene Anwaltsfragen in `LEGAL_REVIEW_OPEN` (`docs/konto/anwaltstermin-fragen.md`). Abo- und Mistral-Texte hinter `PAYMENTS_ENABLED` / `VOICE_MISTRAL_ENABLED`. Text ↔ Code: `docs/konto/legaltexte-abgleich.md`, Verträge: `docs/DPA/` + `docs/konto/dpa-auswertung.md`. Nach der Anwaltsprüfung: Version 2.1 → erneute Zustimmung für alle.
 - **Zustimmung v2.0 ist Pflicht für Verarbeitung:** `chat` und `post-conversation` rufen `requireConsent` (`_shared/consent.ts`) → `403 consent_required`, DB-Fehler `503` (fail-closed). Neue Functions, die Gesprächsinhalte verarbeiten, ebenso.
-- **Sicherheitsaussagen** nur über `src/content/securityMeasures.js` mit Beleg (Build-Prüfung `check-content.mjs`).
+- **Sicherheitsaussagen** nur über `src/content/securityMeasures.js` mit Beleg (Build-Prüfung `check-content.mjs`, im `postbuild`). Nach jeder Security-Welle den Status der Einträge prüfen (`geplant` → `live` erst nach Abnahme) und `SECURITY_PAGE_AS_OF` hochsetzen.
+- **Passwörter (Paket K W1):** Mindestlänge 12 – im Supabase-Dashboard und in `src/lib/passwordPolicy.js` gleich halten; Fehlertexte nur über `mapAuthError`/`PASSWORD_MESSAGES` (Codes `current_password_required`, `current_password_invalid`). Dashboard: „Require current password when updating“ an, Redirect-URL `/passwort-neu`. Mailvorlagen liegen in `supabase/templates/` (Quelle fürs Dashboard, nicht automatisch übertragen). Passwort-Link: `src/lib/passwordRecovery.js` ist der erste Import in `main.jsx`.
 - Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 
 ### Sicherheitsmuster (Security-Paket A, Pflicht)
