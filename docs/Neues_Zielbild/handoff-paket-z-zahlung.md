@@ -402,3 +402,20 @@ Wochenübersicht (`infoOnly`):
 ## Beobachtungen
 
 _(von Claude Code während des Baus ergänzt)_
+
+**Abweichungen vom Handoff (begründet):**
+1. **`tier` aus den Produkt-Metadaten**, nicht vom Preis (4.2). So wurde es in J-Z1 eingerichtet. Als Rückfall gilt der Anfang des Suchschlüssels.
+2. **Neue Spalte `subscriptions.cancel_at`.** Stripe setzt bei Kündigung zum Periodenende je nach Abrechnungsmodus nur `cancel_at` statt `cancel_at_period_end`. Beides zählt als „endet“.
+3. **`access_state_for` liefert zwei Daten:** `period_end` (Ende des bezahlten Zeitraums, für das Profil) und `quota_resets_at` (nächstes Monatskontingent, für Hinweise und Ruhemodus). Beim Jahresabo unterscheiden sie sich.
+4. **Die Regeln stehen in drei SQL-Funktionen** (`quota_limit_for`, `quota_grace`, `quota_warn_percent`) statt in einer. Sie stehen alle im selben Abschnitt der Migration 042 (Z-3).
+5. **Zurückbuchen** passiert zusätzlich, wenn das Speichern der Nutzernachricht scheitert (4.4 nennt nur den Abbruch des Streams und eine leere Antwort).
+6. **Webhook nach einer Kontolöschung:** Das beendete Abo kommt ohne Konto an. Es wird als `stripe_webhook_orphan_ended` (Wochenübersicht) geloggt, nicht als Alarm `stripe_webhook_unmatched`. Das gilt auch, wenn das Profil zwischen Lesen und Schreiben verschwindet (FK-Fehler 23503).
+7. **Export:** Für die Abo-Tabellen gibt es eine eigene Gruppe `abo` mit Erklärtext (Vorschlag zur Freigabe).
+
+**Beobachtungen:**
+- **Periodenende an den Positionen:** In der API-Version von `stripe@23.1.0` (`2026-10-28.endive`) gibt es das Periodenende nur an den Abo-Positionen. Gespeichert wird das späteste.
+- **Ankertag nach Laufzeitwechsel:** Wechselt jemand sofort von Monat auf Jahr, setzt Stripe den Abrechnungsanker neu. Der Kontingent-Anker bleibt `start_date` (Vorgabe 4.2). Dann laufen Monatskontingent und Rechnungsdatum auseinander, für Nutzer sichtbar höchstens am Datum im Hinweis.
+- **Von Hand gesetztes `premium` (Admin, ohne Abo):** bleibt ohne Monatskontingent. Schließt so jemand ein Abo ab und kündigt es, setzt der Webhook am Ende `free`.
+- **Starts zählen auch in der Begleitung:** `consume_session` zählt Starts auch dort weiter (`trial_sessions_used`), wie bisher in 038. Wer nach dem Ende des Abos auf `free` fällt, ist deshalb im Ruhemodus.
+- **Nicht geprüft:** Deno ist lokal nicht installiert, also gibt es keinen Typcheck der Functions, nur eine Syntaxprüfung mit esbuild.
+- **Geprüft:** Die SQL-Logik der Migration 042 wurde mit PGlite getestet (25 Fälle: Zeiträume, Buchung, 80 %, Kulanz, Zurückbuchen, Sperre neuer Gespräche, Tester, Cascade).
