@@ -173,3 +173,25 @@ Auf dem Branch `feature/stripe-checkout-geruest` (nicht gemergt) liegen:
 ---
 
 ⛔ **STOPP:** Ergebnis an Jerome. Das Handoff „Paket Z – Zahlung“ wird auf dieser Grundlage geschrieben.
+
+---
+
+## Delta vor dem Bau (Paket Z, 20.11.2026)
+
+Geprüft auf `feature/paket-z-zahlung` (von `main` nach Handoff v1.1, Gerüst per Merge übernommen).
+
+1. **`chat/index.ts`:** Die Zeilen stimmen noch: Kappung 1490–1508, `consume_session` 1510–1530, Nutzernachricht speichern 1532–1559, `messages.stream` 1661, Speichern der Antwort im Hintergrund 1739–1755. Prompt-Caching (`cache_control`) gibt es weiterhin nicht.
+2. **Migrationen:** Die letzte ist `041_k_legal_v2_cleanup.sql`, Paket Z bekommt also `042`. `apply_retention` steht zuletzt in 036, `access_state_for`/`consume_session` zuletzt in 038.
+3. **Stripe-SDK 23.1.0:** Es nutzt fest die API-Version `2026-10-28.endive`. `constructEventAsync` und `createSubtleCryptoProvider` gibt es weiterhin. Für den Bau wichtig:
+   - Das Periodenende steht seit `2025-03-31.basil` an den Abo-Positionen (`items.data[].current_period_end`), nicht mehr am Abo.
+   - Die Abo-ID einer Rechnung steht unter `invoice.parent.subscription_details.subscription`.
+   - Eine Kündigung zum Periodenende setzt je nach Abrechnungsmodus `cancel_at_period_end` (klassisch) oder nur `cancel_at` (flexibel, für neue Abos Standard). Beides gilt als „endet“.
+   - Herabstufungen zum Periodenende legt das Kundenportal als Abo-Zeitplan (`subscription.schedule`) an.
+4. **Kundenportal:** Jerome hat es am 20.11. eingerichtet. Kosten erhöhen gilt sofort, Kosten senken und Laufzeit verkürzen gelten zum Periodenende, die Abrechnung ist anteilig und sofort, die Kündigung gilt zum Periodenende. Umfrage und Halteangebote sind aus.
+5. **`delete-account`:** Die Stripe-Kündigung kommt direkt nach `requireUser` und vor Schritt 1 („Conversation IDs laden“).
+6. **Export und Löschung:** `EXPORT_TABLES` und `EXCLUDED_TABLES` in `export-my-data/index.ts`. `deletion-check.sql` findet neue Tabellen mit `user_id`/`conversation_id` automatisch über `information_schema`.
+
+**Abweichungen vom Handoff (begründet, auch unter „Beobachtungen“ im Handoff):**
+- `tier` steht in den Metadaten des **Produkts** (so in J-Z1 eingerichtet), nicht am Preis. Der Webhook liest es dort, als Rückfall gilt der Anfang des Lookup-Keys.
+- `subscriptions` bekommt zusätzlich die Spalte `cancel_at` (Stripe-Feld, siehe Punkt 3).
+- `access_state_for` liefert zwei Daten: `period_end` (Ende des bezahlten Zeitraums, für das Profil) und `quota_resets_at` (Beginn des nächsten Monatskontingents). Beim Jahresabo sind das verschiedene Daten.
