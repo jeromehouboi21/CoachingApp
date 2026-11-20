@@ -5,11 +5,11 @@ Die Coaching-Vereinbarung verspricht einige Dinge, die nicht die App erledigt, s
 
 ## 1. Erneute Zustimmung ausstehend (`RECONSENT.pendingText`)
 
-- **Wann:** alle [Offen: z. B. 2 Wochen] nach einer neuen Fassung.
+- **Wann:** einmal pro Woche, solange nach einer neuen Fassung Zustimmungen ausstehen. Stichtag ist der Tag, an dem die neue Fassung live gegangen ist.
 - **Schritte:**
   1. Abfrage 1b: Konten ohne Zustimmung v2.0.
-  2. Wer sich seit [Offen: Frist] nicht entschieden hat, bekommt eine E-Mail von dir. Inhalt: Es gibt eine neue Fassung, so stimmst du zu, so lädst du deine Daten herunter. Kein Inhalt aus dem Konto.
-  3. Kommt innerhalb von [Offen: weitere Frist] keine Zustimmung, löschst du das Konto: Admin-Bereich bzw. Supabase → Authentication → Users → Delete user. Die CASCADE-Ketten löschen alles Weitere.
+  2. Wer sich seit zwei Wochen nicht entschieden hat, bekommt eine E-Mail von dir. Inhalt: Es gibt eine neue Fassung, so stimmst du zu, so lädst du deine Daten herunter. Kein Inhalt aus dem Konto.
+  3. Kommt innerhalb von weiteren vier Wochen keine Zustimmung, löschst du das Konto: Admin-Bereich bzw. Supabase → Authentication → Users → Delete user. Die CASCADE-Ketten löschen alles Weitere.
 - **Festhalten** (ohne Inhalte): Datum der Mail, Datum der Löschung, Nutzer-ID.
 
 ## 2. Krisen-Sichtung (Vereinbarung, „Was mit deinen Daten passiert“)
@@ -36,7 +36,7 @@ Die Coaching-Vereinbarung verspricht einige Dinge, die nicht die App erledigt, s
 
 ## 4. Kündigung kostenloser Konten durch dich
 
-- Abfrage 2 (inaktive Konten). Mail mit Frist von [Offen: z. B. zwei Wochen] und dem Hinweis auf den Datendownload, danach löschen wie in 1.
+- Abfrage 2 (inaktive Konten). Mail mit Frist von zwei Wochen und dem Hinweis auf den Datendownload, danach löschen wie in 1.
 
 ## 5. Sperre bei Missbrauch
 

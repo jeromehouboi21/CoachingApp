@@ -37,13 +37,15 @@ export const VOICE_MISTRAL_ENABLED = false   // Spracheingabe über Mistral (COD
 // ---------------------------------------------------------------------------
 export const OPERATOR = {
   name: 'Jerome Houboi',
-  address: '[Offen: ladungsfähige Anschrift]',
-  email: '[Offen: E-Mail-Adresse für Datenschutz, Widerruf und Kündigung]',
-  phone: '[Offen: Telefonnummer, gesetzlich in der Widerrufsbelehrung anzugeben, falls vorhanden]',
+  address: 'Damer Str. 41, 41372 Niederkrüchten',
+  email: 'jerome@houboi.de',
+  phone: '01774482782',   // wie im Impressum
 }
 
 // Frist aus dem Supabase-Dashboard (Database → Backups) plus Puffer, siehe B10.
-const BACKUP_DELETION = 'spätestens nach [Offen: Anzahl] Tagen'
+// Supabase: tägliche Sicherung, 7 Tage aufbewahrt (Dashboard → Database → Backups, 20.11.2026) + Puffer.
+// Point-in-Time-Recovery ist NICHT aktiv. Wird das Add-on eingeschaltet, diese Frist neu prüfen.
+const BACKUP_DELETION = 'spätestens nach 14 Tagen'
 
 // App-Routen (B3). Die Ziele müssen existieren.
 export const LEGAL_LINKS = {
@@ -131,7 +133,7 @@ export const RECONSENT = {
   title: 'Wir haben die Vereinbarung überarbeitet',
   declineTitle: 'Das ist in Ordnung.',
   declineText: 'Ohne deine Zustimmung lässt sich der Begleiter nicht weiter nutzen. Du kannst vorher deine Daten herunterladen und dein Konto löschen.',
-  pendingText: 'Bis du dich entschieden hast, ist die App für dich pausiert. Erreichbar bleiben dein Profil, der Download deiner Daten und das Löschen deines Kontos. Deine bisherigen Daten bleiben so lange gespeichert. Entscheidest du dich nicht, schreibe ich dir nach [Offen: Frist] eine E-Mail. Kommt danach innerhalb von [Offen: weitere Frist] keine Antwort, lösche ich dein Konto mit allen Daten.',
+  pendingText: 'Bis du dich entschieden hast, ist die App für dich pausiert. Erreichbar bleiben dein Profil, der Download deiner Daten und das Löschen deines Kontos. Deine bisherigen Daten bleiben so lange gespeichert. Entscheidest du dich nicht, schreibe ich dir nach zwei Wochen eine E-Mail. Kommt danach innerhalb von weiteren vier Wochen keine Antwort, lösche ich dein Konto mit allen Daten.',
 }
 
 // ---------------------------------------------------------------------------
@@ -139,7 +141,7 @@ export const RECONSENT = {
 // ---------------------------------------------------------------------------
 export const SUBSCRIPTION = {
   title: 'Begleitung',
-  freeTier: 'Zum Kennenlernen kannst du [Offen: drei] Gespräche kostenlos beginnen. Ein Gespräch umfasst dabei höchstens 100 Nachrichten. Dein Spiegel und deine Erkenntnisse bleiben auch danach kostenlos sichtbar.',
+  freeTier: 'Zum Kennenlernen kannst du drei Gespräche kostenlos beginnen. Ein Gespräch umfasst dabei höchstens 100 Nachrichten. Dein Spiegel und deine Erkenntnisse bleiben auch danach kostenlos sichtbar.',
   scope: 'Mit der Begleitung kannst du neue Gespräche mit dem Begleiter führen. [Prüfen: Leistungsumfang, z. B. Gesprächs- oder Nachrichtenlimit im Abo]',
   price: 'Die Begleitung kostet [Offen: Betrag] Euro pro Monat. [Offen: „inklusive Umsatzsteuer“ oder Hinweis auf die Kleinunternehmerregelung nach § 19 UStG]',
   term: 'Das Abo läuft jeweils einen Monat und verlängert sich automatisch um einen weiteren Monat, wenn du nicht kündigst. Du zahlst monatlich im Voraus über [Offen: Zahlungsdienstleister].',
@@ -181,7 +183,7 @@ export const AGREEMENT_FULL = [
       // A6
       'Ich lese deine Gespräche nicht. Ausnahmen: Du bittest mich darum, ein technischer Fehler erfordert meinen Eingriff, ich bin gesetzlich dazu verpflichtet, oder es geht um einen Krisenausschnitt (siehe unten). Technisch habe ich über die Verwaltung der Datenbank Zugriff auf alle gespeicherten Daten. Diese Zugriffe werden derzeit nicht gesondert protokolliert.',
       // A5
-      'Erkennt die App in einem Gespräch Hinweise auf eine akute Krise, zeigt sie dir Hilfsangebote und speichert einen kurzen Ausschnitt deiner Nachricht (höchstens 300 Zeichen). Diesen sehe ich mir später an, um zu prüfen, ob die Krisenerkennung richtig angeschlagen hat, und um sie zu verbessern. [Offen: Zweck bestätigen] Ich kann dabei nicht in Echtzeit reagieren. Der Ausschnitt wird nach meiner Sichtung gelöscht, spätestens nach 90 Tagen.',
+      'Erkennt die App in einem Gespräch Hinweise auf eine akute Krise, zeigt sie dir Hilfsangebote und speichert einen kurzen Ausschnitt deiner Nachricht (höchstens 300 Zeichen). Diesen sehe ich mir später an, um zu prüfen, ob die Krisenerkennung richtig angeschlagen hat, und um sie zu verbessern. Ich kann dabei nicht in Echtzeit reagieren. Der Ausschnitt wird nach meiner Sichtung gelöscht, spätestens nach 90 Tagen.',
       'Dass es einen solchen Hinweis gab (Zeitpunkt und Einstufung, ohne deinen Text), bleibt bis zum Ende des dritten Jahres danach gespeichert. So kann ich nachweisen, dass die App Hilfsangebote gezeigt hat. Löschst du dein Konto, wird auch dieser Eintrag sofort gelöscht. [Prüfen: Rechtsgrundlage Art. 9 Abs. 2 lit. f DSGVO und Dauer]',
       // A3
       'Ich nutze deine Inhalte, damit der Begleiter für dich funktioniert. Dazu gehört, dass die App deine Gespräche auswertet, um dir deinen Spiegel und deine Erkenntnisse zu zeigen. Für Werbung nutze ich sie nicht, und ich verkaufe sie nicht.',
@@ -263,7 +265,7 @@ export const AGREEMENT_FULL = [
     heading: 'Wann die Vereinbarung endet',
     points: [
       'Du kannst die Vereinbarung jederzeit beenden, indem du dein Konto löschst.',
-      'Ich kann ein kostenloses Konto mit einer Frist von [Offen: z. B. zwei Wochen] kündigen. Ich informiere dich per E-Mail, damit du deine Daten vorher herunterladen kannst.',
+      'Ich kann ein kostenloses Konto mit einer Frist von zwei Wochen kündigen. Ich informiere dich per E-Mail, damit du deine Daten vorher herunterladen kannst.',
       'Bei schwerem Missbrauch, etwa bei Angriffen auf die App oder einer Nutzung für rechtswidrige Zwecke, kann ich dein Konto sperren und fristlos kündigen.',
     ],
   },
@@ -389,7 +391,7 @@ export const DATA_RECIPIENTS = [
     name: 'Vercel',
     location: 'USA',
     purpose: 'Auslieferung der App',
-    data: 'Technische Zugriffsdaten wie IP-Adresse, keine Gesprächsinhalte [Prüfen]',
+    data: 'Technische Zugriffsdaten wie IP-Adresse, keine Gesprächsinhalte',   // geprüft: App spricht direkt mit Supabase
     safeguard: '[Prüfen: DPF-Zertifizierung und DPA]',
   },
   {
