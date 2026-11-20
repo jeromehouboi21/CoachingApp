@@ -49,3 +49,6 @@ verify_jwt = false
 
 [functions.mfa-recovery]
 verify_jwt = false
+
+[functions.create-checkout-session]
+verify_jwt = false

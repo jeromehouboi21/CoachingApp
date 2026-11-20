@@ -31,6 +31,8 @@ export const RATE_LIMITS = {
   mfaCodes:      [{ bucket: 'mfa_codes_day', limit: 5, window_seconds: DAY }],
   mfaRecover:    [{ bucket: 'mfa_recover_hour', limit: 5, window_seconds: HOUR },
                   { bucket: 'mfa_recover_day', limit: 10, window_seconds: DAY }],
+  // Stripe Checkout (Gerüst, PAYMENTS_ENABLED), fail-closed
+  checkout:      [{ bucket: 'checkout_hour', limit: 10, window_seconds: HOUR }],
 } satisfies Record<string, RateRule[]>;
 
 export class RateLimitError extends HttpError {
