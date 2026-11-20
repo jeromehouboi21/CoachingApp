@@ -1,6 +1,6 @@
 # Handoff: Zahlung und Abo (Paket Z)
 
-> **Für:** Claude Code · **Von:** Jerome (vorbereitet mit Claude) · **Stand:** 20.11.2026 · **Version:** v1 **freigegeben (20.11.2026)**
+> **Für:** Claude Code · **Von:** Jerome (vorbereitet mit Claude) · **Stand:** 20.11.2026 · **Version:** v1.1 **freigegeben (20.11.2026)** · v1.1: Ereignis `invoice.paid` ergänzt (4.2, J-Z2)
 > **Grundlage:** `docs/Abo_Modell/friedensstifter-abo-modell-v1.md` (fachliche Vorgabe), `docs/billing/abo-discovery.md` (Bestandsaufnahme mit Entscheidungen Z-E1 bis Z-E3), `STRIPE_INTEGRATION_TODO.md` und Branch `feature/stripe-checkout-geruest` (Gerüst), `ARCHITECTURE.md`, Spielregeln aus `handoff-security-paket-c.md` Abschn. 0
 > **Ziel:** Man kann die Begleitung über Stripe abschließen, wechseln und kündigen. Freigeschaltet wird nur über den Webhook. In der Begleitung gilt ein Monatskontingent eigener Nachrichten mit ruhigem Hinweis und Kulanz. Ein gelöschtes Konto beendet das Abo. „Begleitung intensiv“ ist gebaut, bleibt aber abgeschaltet, bis Prompt-Caching umgesetzt ist. **Live gehen Zahlungen erst nach der Freigabe der Abo-Rechtstexte (J-Z3).**
 
@@ -203,6 +203,7 @@ Keine Änderung nötig. `plan` ist schon server-only. Die neuen Tabellen haben k
 - **Behandelte Ereignisse:**
   - `checkout.session.completed`
   - `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`
+  - `invoice.paid`: bei jeder bezahlten Rechnung, auch bei jeder Verlängerung. Die Abo-ID kommt aus der Rechnung (bei der aktuellen API-Version unter `parent.subscription_details.subscription`), danach wie bei den Abo-Ereignissen frisch laden und speichern. Ohne Abo-ID (Einzelrechnung) → wie „alles andere“. Bei einer Verlängerung (`billing_reason = 'subscription_cycle'`) Log `subscription_renewed`. Zweck: Eine Verlängerung hängt nicht allein an `customer.subscription.updated`.
   - `invoice.payment_failed` (nur Log)
   - Alles andere → `200`, Log `stripe_webhook_ignored` mit `type`.
 - **Grundsatz: immer frisch laden.** Bei jedem Abo-Ereignis wird das Abo über `stripe.subscriptions.retrieve(id)` neu von Stripe geholt, statt den Event-Inhalt zu übernehmen. Damit spielt die Reihenfolge der Ereignisse keine Rolle.
@@ -212,7 +213,7 @@ Keine Änderung nötig. `plan` ist schon server-only. Die neuen Tabellen haben k
   - `profiles.plan`: `premium` bei active/trialing/past_due (Z-9), sonst `free`. Ein `tester` wird nie überschrieben.
 - **Bei einem neuen Abo** (vorher kein `stripe_subscription_id` oder `canceled`): Der Zeitraum beginnt neu, `used = 0`. Das ergibt sich aus dem neuen `quota_anchor`.
 - Erst wenn alles gespeichert ist: `processed_at` setzen, dann `200`. Bei einem Fehler → `500`, Log `stripe_webhook_failed` mit `type` und Fehlercode, und Stripe versucht es erneut.
-- **Logs:** `subscription_started`, `subscription_changed` (mit `fromTier`/`toTier`), `subscription_ended`, `payment_failed`, alle mit `userId` und Stripe-IDs, ohne Beträge.
+- **Logs:** `subscription_started`, `subscription_changed` (mit `fromTier`/`toTier`), `subscription_renewed`, `subscription_ended`, `payment_failed`, alle mit `userId` und Stripe-IDs, ohne Beträge.
 
 ### 4.3 `create-portal-session` (neu)
 
@@ -323,7 +324,7 @@ Alarm:
 - `checkout_session_failed` / `checkout_not_configured` (bestehend aus dem Gerüst)
 
 Wochenübersicht (`infoOnly`):
-- `subscription_started`, `subscription_changed`, `subscription_ended`
+- `subscription_started`, `subscription_changed`, `subscription_renewed`, `subscription_ended`
 - `payment_failed`
 - `quota_warned`, `quota_reached`, `quota_refunded`
 - `stripe_webhook_ignored`
@@ -352,7 +353,7 @@ Wochenübersicht (`infoOnly`):
 > 1. Diff prüfen, mergen.
 > 2. Reihenfolge: `supabase db push` (042) → Functions deployen (`create-checkout-session`, `stripe-webhook`, `create-portal-session`, `chat`, `delete-account`, `export-my-data`, `security-monitor`) → Frontend. `PAYMENTS_ENABLED` bleibt im Frontend **aus**. Getestet wird lokal (`npm run dev`) mit dem Schalter vorübergehend an.
 > 3. **Secrets:** `STRIPE_SECRET_KEY` (Sandbox, eingeschränkter Schlüssel), `STRIPE_WEBHOOK_SECRET`, `PAYMENTS_ENABLED=1`, `INTENSIV_ENABLED` vorerst nicht setzen. Das alte `STRIPE_PRICE_ID` entfernen.
-> 4. **Webhook** in der Sandbox anlegen: URL `…/functions/v1/stripe-webhook`, die Ereignisse aus 4.2.
+> 4. **Webhook** in der Sandbox anlegen: URL `…/functions/v1/stripe-webhook`, genau diese sechs Ereignisse: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Nicht abonnieren: `payment_intent.succeeded`, `setup_intent.succeeded` (werden nicht gebraucht).
 > 5. **Testablauf** mit Testkonto (Karte `4242 4242 4242 4242`):
 >
 > | # | Schritt | Erwartung | ok |
@@ -368,6 +369,7 @@ Wochenübersicht (`infoOnly`):
 > | 9 | Karte `4000 0000 0000 0341` (Zahlung scheitert bei Verlängerung) | `payment_failed` im Log, Plan bleibt bis Stripe beendet | |
 > | 10 | Konto mit laufendem Abo löschen | Abo bei Stripe `canceled`, Konto weg, Löschtest 0 | |
 > | 11 | Webhook in Stripe erneut senden („Resend“) | keine Doppelwirkung (`stripe_events`) | |
+> | 12 | Zweites Testkonto mit Monatsabo, Test Clock über den Abrechnungstag (ohne Kündigung) | `invoice.paid` verarbeitet, `subscription_renewed` im Log, neues Periodenende im Profil, Kontingent beginnt neu | |
 >
 > 6. `npm run security:test` → alle PASS, Löschtest → 0.
 
