@@ -12,6 +12,7 @@ import { createLogger } from '../../lib/logger'
 import { dismissInsight, markSurfaced } from '../../lib/insightActions'
 import { chooseTodayState } from '../../lib/todayState'
 import { TrialEndCard } from '../../components/today/TrialEndCard'
+import { InstallCard } from '../../components/app/InstallCard'
 import { useAccessState, seenOnce, markSeen, TRIAL_END_CARD_KEY } from '../../lib/accessState'
 
 const logger = createLogger('HomeScreen')
@@ -29,6 +30,8 @@ export function HomeScreen() {
   const impulse = getDailyImpulse()
   const [today, setToday] = useState(null)   // { state, insight? }
   const [hidden, setHidden] = useState(false) // Karte per „Heute nicht“ oder Entfernen weggeschoben
+  // Paket P (P-3): Gespräche mit eigener Beteiligung (gleiche Definition wie todayState: ab 3 Nachrichten)
+  const [conversationCount, setConversationCount] = useState(0)
 
   useEffect(() => {
     if (!user) return
@@ -48,6 +51,7 @@ export function HomeScreen() {
         setToday({ state: 'C' })
         return
       }
+      setConversationCount((convRes.data ?? []).filter(c => Number(c.message_count) >= 3).length)
       const choice = chooseTodayState(convRes.data ?? [], insRes.data ?? [])
       setToday(choice)
       // Wiederentdecken zählt als gezeigt, sobald die Karte erscheint (auch ohne Antippen)
@@ -90,6 +94,9 @@ export function HomeScreen() {
 
       {/* E – Ende des Kennenlernens (U4) */}
       {showEndCard && <TrialEndCard onClose={closeEndCard} />}
+
+      {/* Paket P: einmalige Einladung, die App auf den Startbildschirm zu legen */}
+      {!showEndCard && <InstallCard conversationCount={conversationCount} />}
 
       {/* A – Neu */}
       {state === 'A' && (

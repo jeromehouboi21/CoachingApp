@@ -6,28 +6,41 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'icons/*.png'],
+      // Paket P (P-2): Nutzer entscheidet, wann neu geladen wird (UpdateBanner); automatisch nur bei client_outdated.
+      registerType: 'prompt',
+      // Registrierung über useRegisterSW (UpdateBanner) – registerSW.js entfällt
+      injectRegister: false,
+      includeAssets: ['favicon.svg', 'apple-touch-icon-180.png'],
       manifest: {
+        id: '/',
         name: 'Friedensstifter',
         short_name: 'Friedensstifter',
         description: 'Fragen, die dich anders denken lassen.',
-        theme_color: '#2D5A4E',
-        background_color: '#F5F3EF',
+        lang: 'de',
+        dir: 'ltr',
+        start_url: '/',
+        scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
+        theme_color: '#2D5A4E',        // --color-accent
+        background_color: '#F5F3EF',   // --color-bg
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-        ]
+          { src: '/icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
       workbox: {
-        // Schriften liegen lokal (S-10) und werden über globPatterns (woff2) vorgeladen
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Nur statische Build-Dateien. Schriften liegen lokal (S-10) und werden über woff2 vorgeladen.
+        globPatterns: ['**/*.{js,css,html,woff2,svg,png,ico,webmanifest}'],
+        navigateFallback: '/index.html',
         // Dateien wie /supabase-dpa.pdf direkt laden, nicht von der App-Navigation abfangen lassen
         navigateFallbackDenylist: [/\.pdf$/],
-      }
+        cleanupOutdatedCaches: true,
+        // BEWUSST LEER: keine API-Antworten, keine Nutzerdaten (Paket P, Regel 0.2; geprüft von check-sw.mjs)
+        runtimeCaching: [],
+      },
+      devOptions: { enabled: false },
     })
   ]
 })

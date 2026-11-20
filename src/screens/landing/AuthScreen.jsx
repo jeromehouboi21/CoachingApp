@@ -4,6 +4,11 @@ import { ArrowLeft, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { Button } from '../../components/ui/Button'
 import { ForgotPasswordForm } from '../../components/auth/ForgotPasswordForm'
+import { supabase } from '../../lib/supabase'
+import { createLogger } from '../../lib/logger'
+import { getInstallContext } from '../../hooks/useInstallPrompt'
+
+const logger = createLogger('AuthScreen')
 
 export function AuthScreen() {
   const navigate = useNavigate()
@@ -18,6 +23,27 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false)
   const [magicSent, setMagicSent] = useState(false)
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
+  // Paket P (P-4): In der installierten App öffnen Mail-Links den Browser (iPhone). Deshalb dort Code statt Link.
+  const [installed] = useState(() => getInstallContext().standalone)
+  const [code, setCode] = useState('')
+  const [codeError, setCodeError] = useState('')
+  const [codeBusy, setCodeBusy] = useState(false)
+
+  const handleVerifyCode = async (e) => {
+    e.preventDefault()
+    setCodeError('')
+    const token = code.replace(/\s/g, '')
+    if (!/^\d{6,10}$/.test(token)) { setCodeError('Bitte gib den Code aus der Mail ein.'); return }
+    setCodeBusy(true)
+    const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+    setCodeBusy(false)
+    if (verifyError) {
+      logger.warn('magic_code_failed', { code: verifyError.code ?? verifyError.status ?? 'unknown' })
+      setCodeError('Der Code passt nicht oder ist abgelaufen. Du kannst dir einen neuen schicken lassen.')
+      return
+    }
+    navigate('/home')   // danach greift wie gewohnt die Code-Abfrage des zweiten Faktors (mfaGate)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -52,9 +78,32 @@ export function AuthScreen() {
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6 text-center max-w-lg mx-auto">
         <div className="text-5xl mb-6">📬</div>
         <h2 className="font-display text-[28px] text-ink mb-3">Schau in dein Postfach</h2>
-        <p className="text-[15px] text-ink-2 leading-relaxed">
-          Wir haben dir einen Link an <strong>{email}</strong> geschickt.
-        </p>
+        {installed ? (
+          <>
+            <p className="text-[15px] text-ink-2 leading-relaxed mb-5">
+              Wir haben dir eine Mail an <strong>{email}</strong> geschickt. Gib hier den Code daraus ein. Den Link in der Mail brauchst du in der App nicht.
+            </p>
+            <form onSubmit={handleVerifyCode} className="w-full flex flex-col gap-3">
+              <input
+                value={code}
+                onChange={e => setCode(e.target.value)}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="Code aus der Mail"
+                aria-label="Code aus der Mail"
+                className="w-full bg-surface border border-[var(--color-border)] rounded-lg px-4 py-3 text-[18px] text-ink text-center tracking-[0.3em] placeholder:text-ink-3 placeholder:tracking-normal placeholder:text-[15px] outline-none focus:border-accent transition-colors"
+              />
+              {codeError && <p role="alert" className="text-[13px] text-ink-2 bg-surface-2 rounded-lg px-4 py-3">{codeError}</p>}
+              <Button type="submit" variant="primary" className="w-full py-4" disabled={codeBusy}>
+                {codeBusy ? 'Wird geprüft…' : 'Anmelden'}
+              </Button>
+            </form>
+          </>
+        ) : (
+          <p className="text-[15px] text-ink-2 leading-relaxed">
+            Wir haben dir einen Link an <strong>{email}</strong> geschickt.
+          </p>
+        )}
         <button
           onClick={() => setMagicSent(false)}
           className="mt-6 text-[13px] text-ink-3 hover:text-ink-2"

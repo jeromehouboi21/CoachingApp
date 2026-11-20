@@ -3,12 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { useAccessState } from '../../lib/accessState'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound, ShieldCheck } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound, ShieldCheck, Smartphone } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
 import { NOT_EMERGENCY, AI_PROVIDER_RETENTION_NOTE } from '../../content/legalTexts'
 import { checkMfaResponse } from '../../lib/mfa'
+import { useInstallPrompt } from '../../hooks/useInstallPrompt'
+import { InstallSheet } from '../../components/app/InstallSheet'
 import { SecurityCard } from '../../components/profile/SecurityCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
@@ -70,6 +72,9 @@ export function ProfileScreen() {
   const [editName, setEditName] = useState('')
   const [showBetaModal, setShowBetaModal] = useState(false)
   const [showExportSheet, setShowExportSheet] = useState(false)
+  // Paket P: Eintrag „Friedensstifter auf den Startbildschirm“, solange nicht installiert
+  const { mode: installMode, install } = useInstallPrompt()
+  const [showInstallSheet, setShowInstallSheet] = useState(false)
   const location = useLocation()
   // W4: „Konto löschen“ aus /sicherheit oder der Zustimmungs-Sperre öffnet das Modal direkt
   const [showDeleteModal, setShowDeleteModal] = useState(() => !!location.state?.openDelete)
@@ -208,6 +213,7 @@ export function ProfileScreen() {
         <MenuList items={[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
+          ...(installMode !== 'installed' && installMode !== 'unsupported' ? [{ icon: Smartphone, label: 'Friedensstifter auf den Startbildschirm', action: () => setShowInstallSheet(true) }] : []),
           ...(profile?.plan !== 'premium' ? [{ icon: CreditCard, label: 'Begleitung', action: () => navigate('/begleitung') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setBetaConsent(false); setBetaError(false); setShowBetaModal(true) } }] : []),
           ...(profile?.plan === 'tester' || profile?.plan === 'premium' ? [{ icon: ClipboardList, label: 'Beta-Fragebogen ausfüllen', action: () => navigate('/feedback') }] : []),
@@ -296,6 +302,7 @@ export function ProfileScreen() {
 
       {/* Datenexport (S-16) */}
       {showExportSheet && <DataExportSheet onClose={() => setShowExportSheet(false)} />}
+      {showInstallSheet && <InstallSheet mode={installMode} install={install} onClose={() => setShowInstallSheet(false)} />}
 
       {/* Konto löschen Modal (Paket K W4, Konzept 6.3) */}
       {showDeleteModal && (

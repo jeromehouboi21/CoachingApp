@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { ArrowUp, Mic } from 'lucide-react'
 import { useVoiceInput } from '../../hooks/useVoiceInput'
 import { CHAT_AI_NOTICE, VOICE_MISTRAL_ENABLED } from '../../content/legalTexts'
+import { useOnline } from '../../hooks/useOnline'
 
 // S-11: Hinweis beim ersten Mikrofon-Tipp pro Gerät. Ohne localStorage (privat, blockiert) jedes Mal.
 const VOICE_HINT_KEY = 'fs_voice_hint_v1'
@@ -13,6 +14,8 @@ function markVoiceHintSeen() {
 }
 
 export function ChatInput({ onSend, disabled }) {
+  // Paket P (P-5): offline nicht senden, der getippte Text bleibt stehen
+  const online = useOnline()
   const [value, setValue] = useState('')
   const [interimText, setInterimText] = useState('')
   const [showVoiceHint, setShowVoiceHint] = useState(false)
@@ -40,7 +43,7 @@ export function ChatInput({ onSend, disabled }) {
   }, [value])
 
   const handleSubmit = () => {
-    if (!value.trim() || disabled) return
+    if (!value.trim() || disabled || !online) return
     if (isListening) stopListening()   // beim Absenden Mikrofon aus
     onSend(value.trim())
     setValue('')
@@ -144,7 +147,7 @@ export function ChatInput({ onSend, disabled }) {
         {/* Send-Button */}
         <button
           onClick={handleSubmit}
-          disabled={!value.trim() || disabled}
+          disabled={!value.trim() || disabled || !online}
           className="w-[38px] h-[38px] rounded-full bg-accent flex items-center justify-center flex-none disabled:opacity-40 transition-opacity"
         >
           <ArrowUp size={16} color="white" />

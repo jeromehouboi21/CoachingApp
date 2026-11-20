@@ -111,9 +111,9 @@ export function HowItWorksScreen() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-bg max-w-lg mx-auto">
+    <div className="flex flex-col h-app bg-bg max-w-lg mx-auto">
       {/* Header */}
-      <div className="bg-surface border-b border-[var(--color-border)] px-5 pt-12 pb-4 flex-none">
+      <div className="bg-surface border-b border-[var(--color-border)] px-5 pt-safe-header pb-4 flex-none">
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="text-ink-3 hover:text-ink-2 transition-colors">
             <ArrowLeft size={20} />

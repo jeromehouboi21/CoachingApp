@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { OPENING_MESSAGES, FIRST_OPENING_MESSAGE } from '../lib/prompts'
 import { createLogger } from '../lib/logger'
 import { readRateLimit, rateLimitMessage } from '../lib/rateLimit'
 import { functionHeaders, functionUrl } from '../lib/functions'
 import { checkMfaResponse } from '../lib/mfa'
+import { setChatBusy } from '../lib/chatActivity'
 
 const logger = createLogger('useChat')
 const CHAT_URL = functionUrl('chat')
@@ -31,7 +32,10 @@ async function isClientOutdated(response) {
   if (response.status !== 409) return false
   try {
     const body = await response.clone().json()
-    return body?.error === 'client_outdated'
+    const outdated = body?.error === 'client_outdated'
+    // Paket P: Weiterarbeiten geht nicht → UpdateBanner aktualisiert automatisch
+    if (outdated) window.dispatchEvent(new Event('fs:client-outdated'))
+    return outdated
   } catch {
     return false
   }
@@ -99,6 +103,8 @@ export function useChat(userId, session, options = {}) {
   const pendingConvRef = useRef(null)
   const [messages, setMessages] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  // Paket P: laufende Antwort global melden (UpdateBanner, InstallCard)
+  useEffect(() => { setChatBusy(isLoading); return () => setChatBusy(false) }, [isLoading])
   const [conversationId, setConversationId] = useState(null)
 
   // Gemeinsamer Ablauf für Eröffnungen, bei denen der Coach sofort antwortet

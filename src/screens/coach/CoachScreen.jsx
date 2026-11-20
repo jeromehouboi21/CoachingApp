@@ -511,9 +511,9 @@ export function CoachScreen() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-bg">
+    <div className="flex flex-col h-app bg-bg">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-surface border-b border-[var(--color-border)] px-5 pt-12 pb-4">
+      <div className="sticky top-0 z-10 bg-surface border-b border-[var(--color-border)] px-5 pt-safe-header pb-4">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex items-start gap-1">
             {entryData.hasHistory && (

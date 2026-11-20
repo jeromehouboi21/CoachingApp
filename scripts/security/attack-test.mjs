@@ -1088,6 +1088,38 @@ async function testsHeaders() {
     ['Content-Security-Policy (erzwingend)', /script-src 'self'/.test(h('content-security-policy')) && /frame-ancestors 'none'/.test(h('content-security-policy'))],
   ];
   for (const [name, ok] of checks) record('HDR', `Header ${name}`, 'vorhanden', ok ? PASS : FAIL, ok ? 'ok' : 'fehlt/abweichend');
+
+  // Paket P (PWA): Worker, Manifest und index.html werden nie lange zwischengespeichert; CSP erlaubt
+  // Worker/Manifest nur von der eigenen Origin. Nummern 45–48 laut Handoff.
+  const get = async (path) => { try { return await fetch(`${APP_URL}${path}`, { redirect: 'manual' }); } catch { return null; } };
+  {
+    const r = await get('/sw.js');
+    const ok = r?.status === 200 && /max-age=0/.test(r.headers.get('cache-control') ?? '');
+    record(45, 'GET /sw.js', '200, Cache-Control max-age=0', ok ? PASS : FAIL, r ? `HTTP ${r.status} · ${r.headers.get('cache-control') ?? '-'}` : 'network');
+  }
+  {
+    const r = await get('/manifest.webmanifest');
+    let mf = null;
+    try { mf = r ? await r.json() : null; } catch { mf = null; }
+    const icons = Array.isArray(mf?.icons) ? mf.icons : [];
+    const ok = r?.status === 200 && /application\/manifest\+json/.test(r.headers.get('content-type') ?? '')
+      && !!mf?.name && !!mf?.start_url && !!mf?.display
+      && icons.some((i) => String(i.sizes).includes('192x192')) && icons.some((i) => String(i.sizes).includes('512x512'));
+    record(46, 'GET /manifest.webmanifest', '200, manifest+json, Pflichtfelder', ok ? PASS : FAIL, r ? `HTTP ${r.status} · icons=${icons.length}` : 'network');
+  }
+  {
+    const r = await get('/index.html');
+    const html = r ? await r.text() : '';
+    const inlineScript = /<script(?![^>]*\bsrc=)[^>]*>\s*\S/i.test(html);
+    const ok = r?.status === 200 && /max-age=0|no-cache/.test(r.headers.get('cache-control') ?? '') && !inlineScript;
+    record(47, 'GET /index.html', 'kein Langzeit-Cache, kein Inline-Script', ok ? PASS : FAIL, r ? `HTTP ${r.status} · inline=${inlineScript}` : 'network');
+  }
+  {
+    const csp = h('content-security-policy');
+    const ok = /worker-src 'self'/.test(csp) && /manifest-src 'self'/.test(csp)
+      && !/https?:\/\/(?!dpvqysabgycdjawkdrah\.supabase\.co)/.test(csp) && !/wss:\/\/(?!dpvqysabgycdjawkdrah\.supabase\.co)/.test(csp);
+    record(48, 'HDR: CSP worker-src/manifest-src', "'self', keine neue Fremd-Origin", ok ? PASS : FAIL, ok ? 'ok' : 'abweichend');
+  }
 }
 
 // ── S-09 (Paket C): Functions laufen in Irland (eu-west-1), neben der Datenbank ──

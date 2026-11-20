@@ -31,3 +31,13 @@ body {
     font-family: var(--font-body);
   }
 }
+
+/* Paket P: sichere Ränder im App-Modus (viewport-fit=cover) und echte Höhe auf Mobilgeräten */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+.h-app { height: 100vh; height: 100dvh; }                         /* 100vh als Rückfall */
+.pt-safe-header { padding-top: calc(3rem + var(--safe-top)); }    /* statt pt-12 */
+.pb-safe-cta { padding-bottom: calc(2rem + var(--safe-bottom)); } /* statt pb-8 */
+.pb-shell { padding-bottom: calc(5rem + var(--safe-bottom)); }    /* Platz für die BottomNav inkl. Home-Balken */

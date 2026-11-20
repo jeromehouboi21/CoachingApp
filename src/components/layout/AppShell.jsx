@@ -15,7 +15,7 @@ export function AppShell() {
 
   return (
     <div className="min-h-screen bg-bg flex flex-col max-w-lg mx-auto relative">
-      <main className="flex-1 pb-20">
+      <main className="flex-1 pb-shell">
         <Outlet />
       </main>
       <BottomNav />
