@@ -24,7 +24,7 @@
 // allLegalStrings() sammelt alle Texte dieser Datei automatisch ein.
 // LEGAL_TEXTS_STATUS setzt nur Jerome. Claude Code ändert diesen Wert nie.
 
-export const LEGAL_TEXTS_STATUS = 'entwurf'   // 'entwurf' | 'vorlaeufig' | 'freigegeben'
+export const LEGAL_TEXTS_STATUS = 'vorlaeufig'   // 'entwurf' | 'vorlaeufig' | 'freigegeben'
 
 // Sichtbare Kennzeichnung, solange die Texte nicht 'freigegeben' sind (Screen 3, Vereinbarung,
 // Datenschutzerklärung). Text von Jerome freigegeben am 20.11.2026.
