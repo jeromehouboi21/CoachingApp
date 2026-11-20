@@ -38,7 +38,10 @@ export const RULES: Rule[] = [
   { id: 'mfa_recovery_used',       codes: ['mfa_recovery_used'],       windowMin: 60,    threshold: 1,  label: 'Wiederherstellungscode verwendet' },
   { id: 'mfa_recovery_failed',     codes: ['mfa_recovery_failed'],     windowMin: 60,    threshold: 5,  label: 'Falsche Wiederherstellungscodes' },
   { id: 'mfa_reset_failed',        codes: ['mfa_reset_failed'],        windowMin: 60,    threshold: 1,  label: 'Zweiter Faktor ließ sich nicht entfernen' },
+  // Stripe Checkout (Gerüst):
+  { id: 'checkout_failed',         codes: ['checkout_session_failed', 'checkout_not_configured'], windowMin: 60, threshold: 3, label: 'Bezahlseite ließ sich nicht öffnen' },
   // nur in der Wochenübersicht:
+  { id: 'checkout_usage',          codes: ['checkout_session_created', 'checkout_disabled'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Bezahlseite geöffnet bzw. noch abgeschaltet' },
   // Paket P (PWA): nur Codes aus dem Browser (origin client)
   { id: 'pwa_client_error',        codes: ['pwa_register_failed', 'pwa_update_failed', 'pwa_install_prompt_failed'], windowMin: 1440, threshold: 10, origin: 'client', label: 'Fehler bei App-Installation oder Update' },
   { id: 'pwa_usage',               codes: ['pwa_launched_standalone', 'pwa_update_applied', 'pwa_install_choice'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Installierte App: Starts, Updates, Installationen' },
