@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039)
+> Stand: 19.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041)
 
 ---
 
@@ -116,13 +116,11 @@ CoachingApp/
 │       │   ├── LandingScreen.jsx
 │       │   ├── AuthScreen.jsx
 │       │   └── WelcomeScreen.jsx
-│       ├── onboarding/                  ← 5-stufiger Onboarding-Flow
-│       │   ├── OnboardingFlow.jsx
-│       │   ├── Step1Welcome.jsx
-│       │   ├── Step2Question.jsx
-│       │   ├── Step3Reveal.jsx
-│       │   ├── Step3bAgreement.jsx      ← Coaching-Vereinbarung, nutzt CoachingAgreementContent
-│       │   └── Step4Auth.jsx
+│       ├── start/                       ← Einstieg /start/1–4 (Paket K W3, ersetzt onboarding/)
+│       │   ├── StartFlow.jsx            ← Schritte 1–4, Zustimmung nur im Zustand (kein localStorage)
+│       │   ├── StartExpect.jsx · StartWhyMemory.jsx · StartAccount.jsx · StartDots.jsx
+│       │   ├── ConsentGateScreen.jsx    ← Sperre ohne Zustimmung v2.0 (18+ → Zustimmung; Eingeladene → Passwort)
+│       │   └── InvitedSetPassword.jsx
 │       ├── home/
 │       │   └── HomeScreen.jsx           ← Dashboard mit Tool-Kacheln (Coach/Wellness/Stimmen/Verstehen → Spiegel)
 │       ├── coach/
@@ -220,7 +218,9 @@ CoachingApp/
 │   │   ├── 036_s11_privacy_fixes.sql    ← Feedback-Einwilligung (RLS), age_confirmed_at, confirm_age, consent_ip entfernt
 │   │   ├── 037_s06b_user_mfa.sql        ← mfa_satisfied(), Policy mfa_required auf Client-Tabellen, mfa_recovery_codes
 │   │   ├── 038_u4_access_phases.sql     ← trial_sessions_used, access_state_for/get_access_state, consume_session gesamt
-│   │   └── 039_u5a_insight_rating.sql   ← insights.user_rating/rated_at/follows_insight_id
+│   │   ├── 039_u5a_insight_rating.sql   ← insights.user_rating/rated_at/follows_insight_id
+│   │   ├── 040_k_consent_v2.sql         ← Zustimmung v2.0 nur Server, accept_consent_v2
+│   │   └── 041_k_legal_v2_cleanup.sql   ← Reflexionen gelöscht, Lernbasis-Zustimmung nur v2.0
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
 │   └── config.toml                      ← verify_jwt = false je Function
@@ -249,8 +249,9 @@ CoachingApp/
 | Pfad | Screen | Auth | Zusatz-Guard | AppShell |
 |---|---|---|---|---|
 | `/landing` | LandingScreen | nein (auth → `/home`) | — | nein |
-| `/auth` | AuthScreen (nur Anmeldung; Registrieren → `/onboarding`, Magic Link ohne Kontoanlage) | nein (auth → `/home`) | — | nein |
-| `/onboarding` | OnboardingFlow | nein (auth → `/home`) | — | nein |
+| `/auth` | AuthScreen (nur Anmeldung; Registrieren → `/start/1`, Magic Link ohne Kontoanlage) | nein (auth → `/home`) | — | nein |
+| `/start/:step` | StartFlow (1–4) | nein (auth → `/home`) | `/start/4` ohne Zustimmung → `/start/3` | nein |
+| `/onboarding` | Weiterleitung `/start/1` (angemeldet → `/home`) | — | — | nein |
 | `/welcome` | WelcomeScreen | **ja** | — | nein |
 | `/home` | HomeScreen | **ja** | — | **ja** |
 | `/coach` | CoachScreen | **ja** | — | **ja** |
@@ -289,12 +290,13 @@ function ProtectedRoute({ children }) {
   if (loading) return <LoadingScreen />
   if (!user)   return <Navigate to="/landing" replace />
   if (mfaGate === 'required') return <MfaChallengeScreen />          // S-06b, vor allem anderen
-  if (checkCoachingAgreement(profile) !== 'valid') return <Navigate to="/onboarding" replace />
+  if (checkLegalConsent(profile) !== 'valid') return <LoadingScreen />   // zweite Linie, Sperre sitzt in App
   return children
 }
 
-// App: angemeldet + mfaGate 'required' → nur /impressum, /datenschutz, sonst MfaChallengeScreen
-// (auch /onboarding – ein leeres Profil heißt hier NICHT „neuer Nutzer“)
+// App: angemeldet + mfaGate 'required' → nur /impressum, /datenschutz, /sicherheit, sonst MfaChallengeScreen
+// App: angemeldet, Profil geladen (profileReady), Zustimmung nicht v2.0 → ConsentGateScreen;
+//      erreichbar bleiben /impressum, /datenschutz, /sicherheit, /passwort-neu, /profile (Export, Löschen)
 
 function AdminRoute({ children }) {
   const { user, profile, loading } = useAuth()
@@ -485,9 +487,22 @@ Namensgebung der Stimmen passiert weiterhin **ausschließlich im Chat** — sieh
 
 ---
 
-#### OnboardingFlow (`/onboarding`)
+#### StartFlow (`/start/1–4`, Paket K W3)
 
-**Rolle:** Ersteinrichtung für neue User vor der Registrierung.
+**Rolle:** Einstieg für neue Nutzer vor der Registrierung. Ersetzt den alten OnboardingFlow (unten nur noch als Historie).
+
+| Schritt | Komponente | Inhalt |
+|---|---|---|
+| 1 | StartExpect | Was dich erwartet, Verantwortung, kein Therapieersatz, TelefonSeelsorge · „Anmelden“ |
+| 2 | StartWhyMemory | `WhyMemoryBlock`, „Wie wir deine Daten schützen ›“ als Sheet |
+| 3 | ConsentStep | Kurzfassung, Kennzeichnung „vorläufig“, Links Vereinbarung/Datenschutz/Impressum, zwei getrennte Häkchen (Vereinbarung, Art. 9), „Lieber nicht“ → `DeclineSheet` |
+| 4 | StartAccount | E-Mail, Passwort (12), 18+, Einladungscode; Zustimmung reist als Signup-Metadaten (`consent_art9`, `agreement_accepted`, Versionen 2.0) |
+
+Bestandsnutzer und Eingeladene: `ConsentGateScreen` (siehe ProtectedRoute). Zustimmung über RPC `accept_consent_v2`.
+
+#### OnboardingFlow (entfernt in Paket K W3)
+
+**Rolle (bis W3):** Ersteinrichtung für neue User vor der Registrierung.
 
 **Schritte:**
 | Schritt | Komponente | Inhalt |
@@ -565,7 +580,7 @@ Gemeinsam für `AdminMfaScreen`, `MfaChallengeScreen` und `SecurityCard`: `MfaCo
 
 #### Legal-Komponenten (`src/components/legal/`)
 
-**CoachingAgreementContent:** reiner Vertragstext (4 Abschnitte + Jerome-Signatur), wird sowohl im Onboarding als auch im Rückblick-Screen gerendert.
+**CoachingAgreementContent:** voller Text v2.0 aus `legalTexts.js` (`getAgreementSections()`, Abo-Abschnitte nur mit `PAYMENTS_ENABLED`), mit Kennzeichnung „vorläufig“; im Einstieg, bei der erneuten Zustimmung und im Rückblick. Dazu `ConsentStep`, `LegalSheet`, `DeclineSheet`, `PreliminaryNotice`.
 
 ---
 
@@ -592,6 +607,9 @@ Exports:
   refreshProfile()                    — Profil neu laden (z. B. nach Opt-in oder Einlösen eines Codes)
   checkConsent(profileData)           → 'missing' | 'outdated' | 'valid'
   checkCoachingAgreement(profileData) → 'missing' | 'outdated' | 'valid'
+  checkLegalConsent(profileData)      → beides v2.0? 'valid' | 'missing' | 'outdated'
+  acceptConsentV2()                   — RPC accept_consent_v2, danach Profil neu laden (wirft bei Fehler)
+  profileReady                        — Profil für genau diesen Nutzer geladen (vorher entscheidet App nichts)
 ```
 
 **Besonderheiten:**
@@ -599,7 +617,7 @@ Exports:
 - **Reihenfolge (S-06b):** erst `getAuthenticatorAssuranceLevel()`, dann – nur wenn frei – das Profil. Bei `aal1` mit Faktor bleibt `profile = null` und `mfaGate = 'required'`; das führt nie ins Onboarding. Beim Zurückkehren in den Tab (`visibilitychange`) wird die Stufe erneut geprüft.
 - **Kein gemeinsamer Context:** Jede Komponente mit `useAuth()` hat einen eigenen Zustand. Der globale Fehlerpfad (`403 mfa_required` aus Functions, `42501 mfa_required` aus RPCs → `checkMfaResponse` / `reportIfMfaRpcError`) erneuert deshalb einmal die Sitzung; das Ereignis `TOKEN_REFRESHED` lässt jede Instanz neu prüfen.
 - Pending Invite Code: Wenn ein Code in `localStorage` liegt (gesetzt im Onboarding), wird er nach E-Mail-Verifikation automatisch eingelöst
-- Consent-Versioning: `consent_version = '1.0'`, `coaching_agreement_version = '1.0'`, Lernbasis `learning_opt_in_version = '1.0'` (Konstanten in `src/lib/consent.js`)
+- Consent-Versioning: `consent_version = '2.0'`, `coaching_agreement_version = '2.0'` (aus `src/content/legalTexts.js`), Lernbasis `learning_opt_in_version = '2.0'` (`src/lib/consent.js`)
 - `profile` enthält seit v3.x auch Admin-/Beta-/Invite-Felder — keine eigenen Hook-Exporte dafür nötig, da `select('*')` bereits alles lädt
 
 ---
@@ -738,7 +756,7 @@ Zentrale Datei für alle UI-nahen Texte und Konfigurationen.
 
 #### `src/lib/consent.js`
 
-Versionen der Zustimmungstexte: `CONSENT_VERSION`, `COACHING_AGREEMENT_VERSION`, `LEARNING_CONSENT_VERSION`. Bei inhaltlicher Änderung eines Textes die Version erhöhen.
+Nur noch `LEARNING_CONSENT_VERSION = '2.0'`. Einwilligung und Vereinbarung: `CONSENT_VERSION` / `AGREEMENT_VERSION` in `src/content/legalTexts.js`. Bei inhaltlicher Änderung eines Textes die Version erhöhen (Server-seitig in Migration 040/041 festgelegt).
 
 ---
 
@@ -772,6 +790,8 @@ Alle Edge Functions laufen in Deno und haben Zugriff auf `ANTHROPIC_API_KEY`, `S
 ---
 
 ### `chat` — Haupt-KI-Proxy
+
+> **Paket K W3:** Nach `requireUser` ruft `chat` `requireConsent` (`_shared/consent.ts`): ohne Zustimmung v2.0 → `403 consent_required` (alle Modi, auch Howto/Extraktion), DB-Fehler → `503 consent_check_failed`. RAG (`findSimilarExperiences`) ruft OpenAI nur mit `RAG_LEARNING_ENABLED=1` und mindestens einem freigegebenen Eintrag; sonst `ragStatus` `skipped_learning_disabled` / `skipped_no_entries`.
 
 **Aufgerufen von:** `useChat.js` bei jedem `sendMessage` und bei allen `start*`-Funktionen, `HowItWorksScreen` (Howto).
 
@@ -869,6 +889,8 @@ Eigenständiges Modul, importiert von `chat/index.ts`. Ein Haiku-Call pro Nutzer
 
 ### `post-conversation` — Post-Processing
 
+> **Paket K W3:** ebenfalls `requireConsent`. Coach-Reflexionen: Prompt mit Anonymitätsregel, danach Prüfschritt `reviewLearningEntry` (ohne `low_quality`); abgelehnt oder Prüfung ausgefallen → nichts gespeichert (`reflection_rejected`, Alarm `reflection_review_failed`). Lernbasis nur mit `learning_opt_in_version = '2.0'`.
+
 **Aufgerufen von:** `CoachScreen.runPostConversation()` — vier Trigger-Pfade (siehe CoachScreen-Sektion oben), nicht nur der Button-Klick.
 
 **Input (seit S-12 Welle 2a):**
@@ -927,7 +949,7 @@ Die Function hat anonyme Erfahrungen anderer Nutzer an den Client geliefert. Die
 
 ### `validate-invite-code` — Beta-Zugang (Selbstregistrierung)
 
-**Aufgerufen von:** `OnboardingFlow` Step 4, nach Eingabe eines Invite-Codes.
+**Aufgerufen von:** `StartAccount` (`/start/4`), nach Eingabe eines Invite-Codes.
 
 - Validiert Code-Syntax + Gültigkeit + Max-Uses
 - Ruft `redeem_invite_code` RPC über den `service_role`-Client auf (SECURITY DEFINER, **nur für service_role ausführbar**), ausschließlich für `user.id` aus dem JWT
@@ -1105,7 +1127,7 @@ learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S
 learning_opt_in_updated_at        TIMESTAMPTZ
 learning_opt_in_version           TEXT ("1.0")
 ```
-Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, (seit 038) `trial_sessions_used`, `invited_at`, `invited_by`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` und (seit 036) `age_confirmed_at` nicht änderbar (`42501`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version`, `coaching_agreement_version` und (seit 036) `age_confirmed` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. Bestandsnutzer ohne `age_confirmed_at` sehen in der AppShell einmal `AgeConfirmSheet` (RPC `confirm_age`; „Ich bin jünger“ → 116 111 und Löschweg im Profil, kein automatisches Löschen). So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
+Trigger **`trg_protect_profile_privileges`** (Migration 024): Für die Client-Rollen `authenticated`/`anon` sind `id`, `is_admin`, `is_beta_tester`, `plan`, `session_limit`, `sessions_used_this_month`, (seit 038) `trial_sessions_used`, `invited_at`, `invited_by`, `created_at` sowie (seit 032) `learning_opt_in`, `learning_opt_in_updated_at`, `learning_opt_in_version` und (seit 036) `age_confirmed_at` sowie (seit 040) `consent_given_at`, `consent_version`, `coaching_agreement_accepted_at`, `coaching_agreement_version` nicht änderbar (`42501`). **Seit 040:** `handle_new_user` setzt die Zustimmung nur bei `consent_art9`/`agreement_accepted` = `true` und Version `'2.0'` (andere Versionen werden ignoriert); `onboarding_data` wird nicht mehr gesetzt. Bestandsnutzer und Eingeladene stimmen über RPC `accept_consent_v2()` zu (SECURITY DEFINER, MFA-Prüfung, setzt auch `onboarding_completed`). service_role, Cron und SECURITY-DEFINER-Funktionen sind nicht betroffen. Clients legen keine Profile an — das macht `handle_new_user` (Migration 027): Name, `onboarding_completed`, `onboarding_data.area`, `consent_version`, `coaching_agreement_version` und (seit 036) `age_confirmed` kommen aus `signUp({ options: { data: … } })`, die Zeitstempel setzt der Server. Bestandsnutzer ohne `age_confirmed_at` sehen in der AppShell einmal `AgeConfirmSheet` (RPC `confirm_age`; „Ich bin jünger“ → 116 111 und Löschweg im Profil, kein automatisches Löschen). So funktioniert die Registrierung auch bei aktiver E-Mail-Bestätigung. Im Onboarding fragt nur der Invite-Flow (`user.invited_at`) nach einem Passwort; andere eingeloggte Nutzer ohne gültige Vereinbarung bestätigen nur die Vereinbarung.
 
 **`conversations`**
 ```
@@ -1360,7 +1382,7 @@ RLS: `USING (false) WITH CHECK (false)` für **alle** — auch der eigene Nutzer
 
 **`match_experiences()`** — pgvector-Suche, nur für `service_role` (Aufrufer: `_shared/rag.ts`). Seit 032 nur `review_status = 'approved'`; `source_user_id` ist nicht Teil der Rückgabe.
 
-**`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`. Seit 037 zuerst MFA-Prüfung (`42501 mfa_required`).
+**`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`. Seit 037 zuerst MFA-Prüfung (`42501 mfa_required`). Seit 041 nur Version `'2.0'` (sonst `22023 invalid_version`).
 
 **`confirm_age()`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 036, S-11). Setzt `profiles.age_confirmed_at` für `auth.uid()` (bleibt beim ersten Wert). Seit 037 zuerst MFA-Prüfung.
 

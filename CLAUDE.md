@@ -25,8 +25,9 @@
 
 ```
 /landing              → LandingScreen (öffentlich)
-/auth                 → AuthScreen (öffentlich, nur Anmeldung · Registrieren → /onboarding)
-/onboarding           → OnboardingFlow (öffentlich, 4 Schritte)
+/auth                 → AuthScreen (öffentlich, nur Anmeldung · Registrieren → /start/1)
+/start/1 … /start/4   → StartFlow (öffentlich, Paket K W3): Was dich erwartet · Warum sich die App etwas merkt · Zustimmung · Zugang
+/onboarding           → Weiterleitung /start/1 (alte Links, Einladungs-Mails)
 /welcome              → WelcomeScreen (nach Registrierung)
 
 /howto                → HowItWorksScreen (kein AppShell)
@@ -49,7 +50,7 @@
 
 **BottomNav (seit U1):** drei Tabs Heute · Gespräch · Spiegel, ohne Zähler. Profil über `ProfileButton` in den Tab-Headern.
 
-**Routing-Logik:** Nicht-authentifizierte User → `/landing`. Authentifizierte User auf `/landing` → `/home`.
+**Routing-Logik:** Nicht-authentifizierte User → `/landing`. Authentifizierte User auf `/landing` → `/home`. Angemeldet ohne Zustimmung v2.0 → `ConsentGateScreen` vor allen Routen (nach der Code-Abfrage; 18+ → Zustimmung; Eingeladene: Zustimmung → Passwort). Erreichbar bleiben `/impressum`, `/datenschutz`, `/sicherheit`, `/passwort-neu`, `/profile`.
 
 ---
 
@@ -62,7 +63,7 @@
 id                                UUID (PK, FK → auth.users)
 display_name                      TEXT
 onboarding_completed              BOOLEAN DEFAULT FALSE
-onboarding_data                   JSONB  -- Antworten aus Onboarding
+onboarding_data                   JSONB  -- Altbestand (seit 040 nicht mehr gesetzt)
 streak_count                      INTEGER DEFAULT 0
 streak_last_date                  DATE
 plan                              TEXT CHECK ('free' | 'premium' | 'tester')
@@ -71,7 +72,7 @@ session_limit                     INTEGER DEFAULT 3   -- Starts im Kennenlernen 
 trial_sessions_used               INTEGER DEFAULT 0   -- U4 (038): begonnene Gespräche insgesamt (server-only)
 last_return_greeting_at           TIMESTAMPTZ  -- v2.1: Wiederkehr-Begrüßung Throttle
 consent_given_at                  TIMESTAMPTZ  -- DSGVO Art. 6/7: Zeitstempel Datenschutz-Zustimmung
-consent_version                   TEXT         -- z.B. '1.0'
+consent_version                   TEXT         -- '2.0' seit Paket K W3 (nur Server: Signup-Metadaten bzw. RPC accept_consent_v2)
 coaching_agreement_accepted_at    TIMESTAMPTZ  -- Zeitstempel Coaching-Vereinbarungs-Zustimmung
 coaching_agreement_version        TEXT         -- z.B. '1.0'
 age_confirmed_at                  TIMESTAMPTZ  -- S-11 (036): 18+ bestätigt (server-only)
@@ -268,7 +269,7 @@ Alle Tabellen haben Row Level Security. Jeder User sieht nur seine eigenen Daten
 | `chat` | Jede Chat-Nachricht | Anthropic API Proxy, Streaming, buildSystemPrompt |
 | `pre-session-briefing` | CoachScreen Mount / Einstieg | Nur Eckdaten (`daysSince`, `conversationCount`, `openThread.intensity`) + seit U3 `recent` (3 Gespräche: id, Kurztitel, Zeit, offen/bewegt) und `latestActiveConversation` – keine Akte, keine Inhalte (S-12) |
 | `post-conversation` | Nach Gespräch (fire-and-forget) | RAG-Eintrag, Selbstreflexion, open_thread, pattern_references |
-| `validate-invite-code` | Onboarding Step 4 (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
+| `validate-invite-code` | Einstieg `/start/4` (Registrierung) | Code validieren + redeem_invite_code RPC aufrufen → plan='tester' |
 | `supervision` | Wöchentlicher Cron | Supervision-Protokoll aus Reflektionen + Feedback |
 | `security-monitor` | Cron stündlich :07 (`x-cron-secret`) | Monitoring S-22: Log-Codes zählen (`_shared/monitorRules.ts`), Lebenszeichen der Cron-Jobs, Alarm-Mail über One.com-SMTP 465, montags Wochenübersicht (nur intern) |
 | `admin-security` | Admin-Tab „Sicherheit“ | Alarme + Wochenübersicht (`requireAdmin`, aal2) |
@@ -335,7 +336,7 @@ BASE_SYSTEM_PROMPT          (Haltung, Sprachprinzip, Widerstand, Muster-Erkennun
 
 | Hook | Zuständigkeit |
 |---|---|
-| `useAuth` | User, Session, Profile · signUp/signIn/signOut/updateProfile |
+| `useAuth` | User, Session, Profile · signUp/signIn/signOut/updateProfile · `profileReady`, `checkLegalConsent`, `acceptConsentV2` (Paket K W3) |
 | `useChat` | Gesprächs-State · Streaming · startNewConversation / startWellnessConversation / startEntryContextConversation / resumeWithOpening / loadConversation / sendMessage / extractMemoryAndInsight |
 | `useMemory` | user_memory lesen & schreiben (Legacy-Fallback) |
 | `useStreak` | Streak-Berechnung |
@@ -443,22 +444,25 @@ perfektionismus_blockade → Perfektionismus-Blockade
 
 ### Sprache (absolut)
 - Im Chat/Home/Impulsfragen: KEIN Coaching-Vokabular ("Coaching", "systemisch", "Methode", "Innere Anteile")
-- Im Profil/Info-Seite/Onboarding-Schritt 3: Systemisches Coaching darf genannt werden
+- Im Profil/Info-Seite/Einstieg (`/start/1–3`): Systemisches Coaching darf genannt werden
 - Verbotene Wörter überall: müssen · immer (als Absolutum) · nie (als Absolutum) · können nicht · du bist X (Urteil)
 
 ### Code
 - Mobile-first, 390px optimiert
 - Streaming ist Pflicht (token-by-token)
-- Spracheingabe landet im Textarea, wird nie automatisch gesendet
+- Spracheingabe ist derzeit **aus** (`VOICE_MISTRAL_ENABLED = false` in `legalTexts.js`, bis sie über Mistral/EU läuft). Wenn an: landet im Textarea, wird nie automatisch gesendet
 - Coach-Gedächtnis ist für den User unsichtbar
 - Fehlermeldung im Chat: "Das Gespräch hatte einen kurzen Aussetzer. Schreib einfach weiter — ich bin noch da."
 - Alle Edge Functions verwenden `_shared/logger.ts` für strukturiertes Logging
 - Imports in Edge Functions **immer mit fester Version** (`npm:@supabase/supabase-js@2.119.0`, `npm:@anthropic-ai/sdk@1.10.0`) — ohne Version zieht jeder Deploy die neueste Version (Ausfall 19.11.2026: frisch veröffentlichtes Paket nicht abrufbar). Updates bewusst und mit Test.
 - **Nur der Server schreibt `messages`** — kein `supabase.from('messages').insert` im Frontend (S-12)
 - **Neue Tabellen mit Personenbezug** brauchen eine `ON DELETE CASCADE`-Kette zu `auth.users`/`profiles`/`conversations`, gehören ggf. in `apply_retention()` (Migration 033), in den Datenexport (`EXPORT_TABLES` in `export-my-data`, sonst mit Begründung in `EXCLUDED_TABLES`) und werden mit dem Löschtest geprüft (`npm run security:deletion-test` + `supabase/security/deletion-check.sql`, Erwartung überall 0).
-- **Lernbasis (S-13):** Inhalte gelangen nur mit `RAG_LEARNING_ENABLED=1`, Opt-in (`profiles.learning_opt_in`, nur über RPC `set_learning_opt_in`) und über `reviewLearningEntry` (`_shared/learning.ts`) in `experience_patterns`. Das gilt für jeden neuen nutzerübergreifenden Kanal. RAG-Treffer stehen im Prompt nur als gekennzeichneter Datenblock.
+- **Lernbasis (S-13):** Inhalte gelangen nur mit `RAG_LEARNING_ENABLED=1`, Opt-in (`profiles.learning_opt_in`, nur über RPC `set_learning_opt_in`) und über `reviewLearningEntry` (`_shared/learning.ts`) in `experience_patterns`. Das gilt für jeden neuen nutzerübergreifenden Kanal. RAG-Treffer stehen im Prompt nur als gekennzeichneter Datenblock. Seit Paket K: Opt-in nur mit Text v2.0 (`set_learning_opt_in` nimmt nur `'2.0'`), und OpenAI wird nur aufgerufen, wenn `RAG_LEARNING_ENABLED=1` ist und freigegebene Einträge existieren (`findSimilarExperiences`).
 - **Function-Aufrufe im Frontend** nur über `src/lib/functions.js` (`functionUrl`, `functionHeaders` mit `x-region: eu-west-1` – dieselbe Region wie die Datenbank, S-09, seit 20.11.2026); CORS-Header der Functions nur aus `_shared/cors.ts`.
 - **ZIPs für Chats nur über `npm run share:zip`** (nur eingecheckte Dateien, nie `.env*`). Der Build prüft `dist/` automatisch auf Schlüssel (`postbuild`), `npm run security:secrets` scannt die Historie.
+- **Rechtstexte nur in `src/content/legalTexts.js`** (Einwilligung, Vereinbarung, Hinweise, Empfänger `DATA_RECIPIENTS`; die Datenschutzerklärung rendert Abschnitt 5 daraus). Claude Code schreibt keine Rechtstexte, nur Vorschläge zur Freigabe. `LEGAL_TEXTS_STATUS` (`entwurf` · `vorlaeufig` · `freigegeben`) setzt **nur Jerome**; seit 20.11.2026 `vorlaeufig` mit sichtbarer Kennzeichnung, offene Anwaltsfragen in `LEGAL_REVIEW_OPEN` (`docs/konto/anwaltstermin-fragen.md`). Abo- und Mistral-Texte hinter `PAYMENTS_ENABLED` / `VOICE_MISTRAL_ENABLED`. Text ↔ Code: `docs/konto/legaltexte-abgleich.md`, Verträge: `docs/DPA/` + `docs/konto/dpa-auswertung.md`. Nach der Anwaltsprüfung: Version 2.1 → erneute Zustimmung für alle.
+- **Zustimmung v2.0 ist Pflicht für Verarbeitung:** `chat` und `post-conversation` rufen `requireConsent` (`_shared/consent.ts`) → `403 consent_required`, DB-Fehler `503` (fail-closed). Neue Functions, die Gesprächsinhalte verarbeiten, ebenso.
+- **Sicherheitsaussagen** nur über `src/content/securityMeasures.js` mit Beleg (Build-Prüfung `check-content.mjs`).
 - Keine Drittanbieter-Ressourcen im Frontend; jeder neue externe Dienst muss in die CSP in `vercel.json` (S-08). Schriften liegen lokal (`@fontsource`, S-10). Kein `dangerouslySetInnerHTML`.
 
 ### Sicherheitsmuster (Security-Paket A, Pflicht)
@@ -469,7 +473,7 @@ perfektionismus_blockade → Perfektionismus-Blockade
 - Fehlerantworten nur als `{ error: <code> }` (`errorResponse`), keine `error.message`-Texte an den Client.
 - Gateway-Schalter „Verify JWT“ bleibt aus — festgeschrieben in `supabase/config.toml` (`verify_jwt = false` je Function). Neue Function → dort eintragen.
 - **RLS:** Jede neue Tabelle bekommt RLS, Policies **nur `to authenticated`** (nie `public`/`anon`) und gezielte GRANTs nach tatsächlicher Frontend-Nutzung. `anon` hat keine Tabellenrechte. Neue SECURITY-DEFINER-Funktionen: `set search_path = ''`, schema-qualifizierte Namen, `revoke … from public, anon`, `grant` nur an die Rolle, die sie braucht.
-- Privilegierte Profilfelder (`is_admin`, `plan`, `session_limit`, `sessions_used_this_month`, `trial_sessions_used`, `is_beta_tester`, `invited_*`, `learning_opt_in*`, `age_confirmed_at`) sind per Trigger server-only (`consent_ip` seit 036 entfernt; 18+ über Signup-Metadaten `age_confirmed` bzw. RPC `confirm_age`). Der Client legt keine Profile an (Name über `signUp({ options: { data: { display_name } } })`).
+- Privilegierte Profilfelder (`is_admin`, `plan`, `session_limit`, `sessions_used_this_month`, `trial_sessions_used`, `is_beta_tester`, `invited_*`, `learning_opt_in*`, `age_confirmed_at`, seit 040 `consent_given_at`, `consent_version`, `coaching_agreement_accepted_at`, `coaching_agreement_version`) sind per Trigger server-only (`consent_ip` seit 036 entfernt; 18+ über Signup-Metadaten `age_confirmed` bzw. RPC `confirm_age`). Der Client legt keine Profile an (Name über `signUp({ options: { data: { display_name } } })`).
 
 ### Log-Codes = Schnittstelle zum Monitoring (S-22)
 - Überwachte Codes stehen in `supabase/functions/_shared/monitorRules.ts` (Regel mit Schwelle oder `infoOnly`). **Codes dort nicht umbenennen, ohne die Regel mitzuziehen.** Neue sicherheitsrelevante Ereignisse bekommen einen festen snake_case-Code (`logger.warn('mein_code', { … })`) und einen Eintrag in `monitorRules.ts`.
@@ -544,6 +548,8 @@ MFA_CODE_PEPPER=             # mfa-recovery: HMAC-Schlüssel der Wiederherstellu
 | `037_s06b_user_mfa.sql` | S-06b: `mfa_satisfied()` · restriktive Policy `mfa_required` auf allen Client-Tabellen (ohne app_logs) · set_learning_opt_in/confirm_age mit MFA-Prüfung · `mfa_recovery_codes` (nur Hash, nur service_role) |
 | `038_u4_access_phases.sql` | U4: `trial_sessions_used`, `session_limit` Default 3 (free 20 → 3), `access_state_for()` / `get_access_state()`, `consume_session` zählt gesamt, Cron `reset-monthly-sessions` abgeschaltet |
 | `039_u5a_insight_rating.sql` | U5a: `insights.user_rating` (Check) · `rated_at` · `follows_insight_id` (FK, SET NULL) |
+| `040_k_consent_v2.sql` | Paket K W3: `handle_new_user` setzt Zustimmung nur bei v2.0 (`consent_art9`/`agreement_accepted`) · Zustimmungsspalten im Schutz-Trigger · RPC `accept_consent_v2` (MFA-Prüfung) |
+| `041_k_legal_v2_cleanup.sql` | Paket K (E1/E2): alle `coach_reflections` gelöscht · Lernbasis-Zustimmungen < 2.0 zurückgesetzt + Einträge gelöscht · `set_learning_opt_in` nur Version 2.0 |
 
 Hinweis: 001–022 wurden ursprünglich per SQL-Editor eingespielt und am 18.11.2026 per `supabase migration repair` als angewendet markiert. Ab 023 läuft alles über `supabase db push`.
 

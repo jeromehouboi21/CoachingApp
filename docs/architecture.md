@@ -38,7 +38,7 @@ Nutzer (Browser / PWA)
 | `src/screens/wellness/WellnessCheckScreen.jsx` | Score-Auswahl + Kontext-Chips |
 | `src/screens/verstehen/` | 3 Screens: Übersicht, Muster-Detail, Aus Gesprächen |
 | `src/screens/mirror/MirrorScreen.jsx` | "Mein Spiegel" — gespeicherte Erkenntnisse |
-| `src/screens/onboarding/` | 4-Schritt-Onboarding inkl. Registrierung + Invite-Code |
+| `src/screens/start/` | Einstieg `/start/1–4` inkl. Zustimmung v2.0, Registrierung + Invite-Code (Paket K W3) |
 | `src/hooks/useAuth.js` | Supabase Auth + Profile + Pending-Invite-Code-Logik |
 | `src/hooks/useChat.js` | Streaming-Chat, 3 Start-Funktionen, Memory-Extraktion |
 | `src/hooks/useMemory.js` | Lesen + Schreiben des Coach-Gedächtnisses (Legacy-Fallback) |
