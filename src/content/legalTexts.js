@@ -413,10 +413,11 @@ export const DATA_RECIPIENTS = [
   {
     // Supabase Auth → SMTP Settings: send.one.com:465, Absender hallo@friedensstifter.coach (20.11.2026)
     name: 'one.com (E-Mail-Postfach hallo@friedensstifter.coach)',
-    location: 'Dänemark (EU)',
+    // Quelle: one.com DPA vom 17.06.2025 (docs/DPA/One.com DPA.pdf), Anlage 1 und 3
+    location: 'Dänemark (EU, Rechenzentrum Kopenhagen); Zugriff zur Systemüberwachung auch aus Indien',
     purpose: 'Versand von Anmelde-, Bestätigungs- und Erinnerungs-E-Mails',
     data: 'E-Mail-Adresse, Inhalt der E-Mail',
-    safeguard: 'Verarbeitung in der EU, Auftragsverarbeitungsvertrag [Prüfen: mit one.com abgeschlossen? Standort des Mailservers bestätigen]',
+    safeguard: 'Auftragsverarbeitungsvertrag (one.com DPA, Fassung vom 17.06.2025). Für den Zugriff aus Indien (One.com India) sieht der Vertrag geeignete Garantien wie die EU-Standardvertragsklauseln vor. [Prüfen: Gehört das Postfach zum Webhosting-Paket („Mass hosting product“ in Anlage 3)?]',
   },
 ]
 
