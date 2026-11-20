@@ -4,7 +4,8 @@ import { AppShell } from './components/layout/AppShell'
 import { LandingScreen } from './screens/landing/LandingScreen'
 import { AuthScreen } from './screens/landing/AuthScreen'
 import { WelcomeScreen } from './screens/landing/WelcomeScreen'
-import { OnboardingFlow } from './screens/onboarding/OnboardingFlow'
+import { StartFlow } from './screens/start/StartFlow'
+import { ConsentGateScreen } from './screens/start/ConsentGateScreen'
 import { HomeScreen } from './screens/home/HomeScreen'
 import { CoachScreen } from './screens/coach/CoachScreen'
 import { MirrorScreen } from './screens/mirror/MirrorScreen'
@@ -45,15 +46,14 @@ function LegacyPatternRedirect() {
 }
 
 function ProtectedRoute({ children }) {
-  const { user, profile, loading, mfaGate, checkCoachingAgreement } = useAuth()
+  const { user, profile, loading, mfaGate, checkLegalConsent } = useAuth()
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/landing" replace />
   // S-06b: Code-Abfrage vor allem anderen – ein leeres Profil heißt hier NICHT „Onboarding“
   if (mfaGate === 'required') return <MfaChallengeScreen />
-  // Eingeladene Nutzer sind zwar authentifiziert, haben die Coaching-
-  // Vereinbarung aber ggf. noch nicht akzeptiert — dann zurück ins Onboarding
-  // statt in die App zu lassen.
-  if (checkCoachingAgreement(profile) !== 'valid') return <Navigate to="/onboarding" replace />
+  // Paket K W3: ohne Zustimmung v2.0 entscheidet die Sperre in App (ConsentGateScreen).
+  // Zweite Linie, falls diese Instanz schneller lädt: nichts von der App zeigen.
+  if (checkLegalConsent(profile) !== 'valid') return <LoadingScreen />
   return children
 }
 
@@ -70,7 +70,7 @@ function AdminRoute({ children }) {
 }
 
 export default function App() {
-  const { user, profile, loading, mfaGate, checkCoachingAgreement } = useAuth()
+  const { user, profile, profileReady, loading, mfaGate, checkLegalConsent, acceptConsentV2, refreshProfile, signOut } = useAuth()
 
   if (loading) return <LoadingScreen />
 
@@ -87,14 +87,46 @@ export default function App() {
     )
   }
 
-  const onboardingDone = user && checkCoachingAgreement(profile) === 'valid'
+  // Paket K W3: erst entscheiden, wenn das Profil dieses Nutzers geladen ist (kein Aufblitzen nach Login/Registrierung)
+  if (user && !profileReady) return <LoadingScreen />
+
+  // Paket K W3 (Handoff 5.5): angemeldet ohne Zustimmung v2.0 → Sperre vor der App.
+  // Reihenfolge: Code-Abfrage (oben) → 18+ → Zustimmung (beides im ConsentGateScreen).
+  // Erreichbar bleiben Rechtliches und das Profil (Export, Konto löschen).
+  const consentState = user ? checkLegalConsent(profile) : null
+  if (user && consentState !== 'valid') {
+    return (
+      <Routes>
+        <Route path="/impressum" element={<ImpressumScreen />} />
+        <Route path="/datenschutz" element={<DatenschutzScreen />} />
+        <Route path="/sicherheit" element={<SecurityInfoScreen />} />
+        <Route path="/passwort-neu" element={<PasswordResetScreen />} />
+        <Route element={<AppShell />}>
+          <Route path="/profile" element={<ProfileScreen />} />
+        </Route>
+        <Route path="*" element={
+          <ConsentGateScreen
+            user={user}
+            profile={profile}
+            consentState={consentState}
+            acceptConsentV2={acceptConsentV2}
+            refreshProfile={refreshProfile}
+            signOut={signOut}
+          />
+        } />
+      </Routes>
+    )
+  }
 
   return (
     <Routes>
       {/* Öffentliche Einstiegs-Screens */}
       <Route path="/landing" element={user ? <Navigate to="/home" replace /> : <LandingScreen />} />
       <Route path="/auth" element={user ? <Navigate to="/home" replace /> : <AuthScreen />} />
-      <Route path="/onboarding" element={onboardingDone ? <Navigate to="/home" replace /> : <OnboardingFlow />} />
+      {/* Paket K W3: neuer Einstieg; /onboarding bleibt als Weiterleitung (alte Links, Einladungs-Mails) */}
+      <Route path="/start/:step" element={user ? <Navigate to="/home" replace /> : <StartFlow />} />
+      <Route path="/start" element={<Navigate to="/start/1" replace />} />
+      <Route path="/onboarding" element={<Navigate to={user ? '/home' : '/start/1'} replace />} />
       <Route path="/welcome" element={<ProtectedRoute><WelcomeScreen /></ProtectedRoute>} />
 
       {/* "Wie es funktioniert" — kein AppShell, eigenes Layout */}

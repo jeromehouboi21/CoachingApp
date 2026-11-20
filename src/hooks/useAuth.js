@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { createLogger, setLoggerUserId } from '../lib/logger'
 import { functionHeaders, functionUrl } from '../lib/functions'
-import { requestMfaCheck } from '../lib/mfa'
+import { requestMfaCheck, reportIfMfaRpcError } from '../lib/mfa'
+import { CONSENT_VERSION, AGREEMENT_VERSION } from '../content/legalTexts'
 
 const logger = createLogger('useAuth')
-const CURRENT_CONSENT_VERSION = '1.0'
-const CURRENT_COACHING_AGREEMENT_VERSION = '1.0'
+// Paket K W3: aktuelle Versionen kommen aus den Rechtstexten (v2.0); ältere → erneute Zustimmung
+const CURRENT_CONSENT_VERSION = CONSENT_VERSION
+const CURRENT_COACHING_AGREEMENT_VERSION = AGREEMENT_VERSION
 
 // S-06b: aal1 + verifizierter Faktor → Code-Abfrage, BEVOR das Profil geladen wird.
 // (Die RLS-Policy mfa_required liefert sonst 0 Zeilen, und ein leeres Profil sähe aus wie
@@ -24,6 +26,7 @@ export function useAuth() {
   const [user, setUser] = useState(null)
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
+  const [profileFor, setProfileFor] = useState(null)   // W3: für welchen Nutzer das Profil geladen ist
   const [loading, setLoading] = useState(true)
   const [mfaGate, setMfaGate] = useState('ok')   // 'ok' | 'required'
   const seqRef = useRef(0)                        // nur das jüngste Auth-Ereignis zählt
@@ -36,6 +39,7 @@ export function useAuth() {
       setSession(session ?? null)
       if (!session?.user) {
         setProfile(null)
+        setProfileFor(null)
         setMfaGate('ok')
         setLoggerUserId(null)
         setLoading(false)
@@ -123,6 +127,7 @@ export function useAuth() {
       logger.error('Failed to load profile', error)
     }
     setProfile(data)
+    setProfileFor(userId)
     setLoading(false)
   }
 
@@ -214,5 +219,30 @@ export function useAuth() {
     return 'valid'
   }
 
-  return { user, session, profile, loading, mfaGate, refreshMfa: requestMfaCheck, signUp, signIn, sendMagicLink, signOut, updateProfile, refreshProfile, checkConsent, checkCoachingAgreement }
+  // Einwilligung UND Vereinbarung in der aktuellen Version → 'valid'; sonst 'missing' | 'outdated'
+  function checkLegalConsent(profileData) {
+    const a = checkConsent(profileData)
+    const b = checkCoachingAgreement(profileData)
+    if (a === 'valid' && b === 'valid') return 'valid'
+    return a === 'missing' && b === 'missing' ? 'missing' : 'outdated'
+  }
+
+  // Paket K W3: Zustimmung v2.0 nachholen – nur der Server setzt die Felder (Migration 040).
+  // Wirft bei Fehler; Erfolg erst nach neu geladenem, gültigem Profil.
+  async function acceptConsentV2() {
+    const { error } = await supabase.rpc('accept_consent_v2')
+    if (error) {
+      reportIfMfaRpcError(error)
+      logger.error('accept_consent_failed', { code: error.code ?? 'unknown' })
+      throw error
+    }
+    logger.info('consent_v2_accepted')
+    if (user) await loadProfile(user.id)
+  }
+
+  // W3: Profil für den angemeldeten Nutzer geladen (auch wenn leer) – erst dann über Zustimmung entscheiden.
+  // Token-Erneuerungen ändern das nicht, es gibt also kein Flackern mitten im Gespräch.
+  const profileReady = !!user && profileFor === user.id
+
+  return { user, session, profile, profileReady, loading, mfaGate, refreshMfa: requestMfaCheck, signUp, signIn, sendMagicLink, signOut, updateProfile, refreshProfile, checkConsent, checkCoachingAgreement, checkLegalConsent, acceptConsentV2 }
 }

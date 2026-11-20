@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { AgeConfirmSheet } from './AgeConfirmSheet'
 import { useAuth } from '../../hooks/useAuth'
@@ -7,8 +7,10 @@ import { useAuth } from '../../hooks/useAuth'
 export function AppShell() {
   const { profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
-  // „Ich bin jünger“ → Profil (Löschweg) ohne erneutes Sheet in dieser Sitzung (S-11)
-  const [ageSheetDeferred, setAgeSheetDeferred] = useState(false)
+  const location = useLocation()
+  // „Ich bin jünger“ → Profil (Löschweg) ohne erneutes Sheet in dieser Sitzung (S-11);
+  // aus der Zustimmungs-Sperre (W3) kommt die Entscheidung über den Navigationszustand mit.
+  const [ageSheetDeferred, setAgeSheetDeferred] = useState(() => !!location.state?.ageDeferred)
   const needsAgeConfirmation = !!profile && !profile.age_confirmed_at && !ageSheetDeferred
 
   return (

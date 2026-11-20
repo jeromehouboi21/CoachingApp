@@ -872,6 +872,33 @@ async function testsK(b) {
   }
 }
 
+// ── Paket K W3: Einwilligung v2.0 (Migration 040) ───────────────────────────
+// K4: Zustimmungsfelder sind server-only (mit Wertänderung, sonst greift der Trigger nicht).
+// K5: B stimmt über die RPC zu. Ein Zurücksetzen ginge nur mit service_role, die der Test bewusst
+//     nicht hat; B bleibt auf v2.0 – das ist ohnehin der Zielzustand nach dem Deploy.
+// K6: anon darf die RPC nicht aufrufen. K7 (Signup mit fremder Version) läuft manuell (J-K4).
+async function testsKW3(b) {
+  for (const [field, value] of [['consent_version', '9.9'], ['coaching_agreement_accepted_at', '2000-01-01T00:00:00Z']]) {
+    const { data, error } = await b.client.from('profiles').update({ [field]: value }).eq('id', b.userId).select('id');
+    record('K4', `update profiles.${field} (als B)`, '42501',
+      error?.code === '42501' ? PASS : FAIL, error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+  }
+  {
+    const { error } = await b.client.rpc('accept_consent_v2');
+    const { data: p } = await b.client.from('profiles')
+      .select('consent_version, coaching_agreement_version, consent_given_at, coaching_agreement_accepted_at')
+      .eq('id', b.userId).single();
+    const ok = !error && p?.consent_version === '2.0' && p?.coaching_agreement_version === '2.0'
+      && !!p?.consent_given_at && !!p?.coaching_agreement_accepted_at;
+    record('K5', 'rpc accept_consent_v2 (als B)', 'ok, Felder v2.0', ok ? PASS : FAIL,
+      error ? errCode(error) : `consent=${p?.consent_version ?? '-'}, agreement=${p?.coaching_agreement_version ?? '-'}`);
+  }
+  {
+    const { error } = await newClient().rpc('accept_consent_v2');
+    record('K6', 'rpc accept_consent_v2 (anon)', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+}
+
 // ── S-06b (Paket C, C-5): Zweiter Faktor für alle ───────────────────────────
 // Immer: #33 Codes-Tabelle gesperrt, codes:generate ohne aal2 abgelehnt.
 // Mit ATTACK_TEST_MFA=1: #34–#38. TOTP-Schlüssel, Codes und Wiederherstellungscodes bleiben im
@@ -1117,6 +1144,7 @@ function printResults() {
   await testsU4(a, b);   // vor den Rate-Limit-Tests (chat-Zählung)
   await testsU5a(a, b);
   await testsK(b);       // Paket K W1 (B bekommt sein Passwort ggf. sofort zurück)
+  await testsKW3(b);     // Paket K W3 (Einwilligung v2.0)
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)

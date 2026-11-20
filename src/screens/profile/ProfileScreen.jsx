@@ -106,7 +106,7 @@ export function ProfileScreen() {
 
   const handleSignOut = async () => {
     await signOut()
-    navigate('/onboarding')
+    navigate('/landing')
   }
 
   const handleDeleteAccount = async () => {

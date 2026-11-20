@@ -7,7 +7,7 @@ import { ForgotPasswordForm } from '../../components/auth/ForgotPasswordForm'
 
 export function AuthScreen() {
   const navigate = useNavigate()
-  // Registrierung läuft ausschließlich über /onboarding (Einwilligung + Vereinbarung).
+  // Registrierung läuft ausschließlich über /start (Paket K W3) (Einwilligung + Vereinbarung).
   // Dieser Screen ist nur noch für die Anmeldung bestehender Konten.
   const { signIn, sendMagicLink } = useAuth()
   const [mode, setMode] = useState('login') // login | magic | forgot (Paket K W1)
@@ -167,7 +167,7 @@ export function AuthScreen() {
 
             <button
               type="button"
-              onClick={() => navigate('/onboarding')}
+              onClick={() => navigate('/start/1')}
               className="text-[13px] text-ink-3 text-center hover:text-ink-2 transition-colors"
             >
               Noch kein Konto? Registrieren

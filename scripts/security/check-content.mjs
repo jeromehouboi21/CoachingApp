@@ -24,9 +24,24 @@ for (const h of SECURITY_HONESTY) {
   if (h.status === 'live' && /[[<]/.test(h.text ?? '')) problems.push('Block „Was du wissen solltest“: Platzhalter im angezeigten Text');
 }
 
+// ── Rechtstexte des Einstiegs (Paket K, W3 = R-1) ──────────────────────────
+// Produktion nur mit freigegebenen Texten; freigegebene Texte ohne offene [Stellen].
+const legal = await import(pathToFileURL(resolve('src/content/legalTexts.js')).href);
+const isProduction = process.env.VERCEL_ENV === 'production';
+if (isProduction && legal.LEGAL_TEXTS_APPROVED !== true) {
+  problems.push('Rechtstexte v2.0 nicht freigegeben (LEGAL_TEXTS_APPROVED in src/content/legalTexts.js)');
+}
+if (legal.LEGAL_TEXTS_APPROVED === true) {
+  const open = legal.allLegalStrings().filter((t) => /\[/.test(t ?? '')).length;
+  if (open) problems.push(`Rechtstexte freigegeben, aber ${open} Stelle(n) noch in [eckigen Klammern]`);
+}
+if (!isProduction && legal.LEGAL_TEXTS_APPROVED !== true) {
+  console.log('• Rechtstexte v2.0: Entwurf (nur Vorschau-Builds, Produktion gesperrt)');
+}
+
 const live = SECURITY_MEASURES.filter((m) => m.status === 'live').length;
 if (problems.length) {
-  console.error(`✖ Sicherheitsseite: ${problems.length} Problem(e)`);
+  console.error(`✖ Inhaltsprüfung (Sicherheitsseite, Rechtstexte): ${problems.length} Problem(e)`);
   for (const p of problems) console.error(`  - ${p}`);
   process.exit(1);
 }

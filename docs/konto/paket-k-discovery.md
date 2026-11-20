@@ -87,3 +87,35 @@ Stand 19.11.2026 · Basis `main` nach U5a (`79fe86c4` + Doku) · Teil 2.1 (W1); 
 - **OpenAI-Schlüssel ist gesetzt** (Supabase-Secrets, von Jerome per Screenshot bestätigt, nur Prüfsummen sichtbar). Damit gehen die erste Nachricht jedes Gesprächs (RAG-Suche) und – mit Opt-in – die geprüften Lernbasis-Einträge zur Vektorberechnung an OpenAI.
 - **Die Datenschutzerklärung nennt OpenAI nicht** (`DatenschutzScreen.jsx` erwähnt nur Anthropic). → Für R-2/R-3: OpenAI als Empfänger bzw. Auftragsverarbeiter aufnehmen (Zweck, Rechtsgrundlage, Speicherfrist laut Vertrag). Die Sicherheitsseite zeigt den OpenAI-Satz erst danach (`text_offen`).
 - **Widersprüchliche Aussagen zu Anthropic:** `DatenschutzScreen.jsx:107` sagt „Es gilt die Zero Data Retention Policy von Anthropic“, das Löschmodal im Profil (`ProfileScreen.jsx`) sagt „Deine Daten bei Anthropic (API-Logs) werden nach 30 Tagen automatisch von Anthropic gelöscht“. Zero Data Retention gilt bei Anthropic nur mit einer ausdrücklichen Vereinbarung. → Für R-3 klären, welche Aussage für den eigenen Vertrag stimmt; danach beide Stellen und den Anthropic-Satz der Sicherheitsseite einheitlich fassen. Keine Textänderung durch Claude Code (Handoff, Spielregel 4).
+
+## 2.2 Antworten für W3 (20.11.2026)
+
+| Frage | Befund (Datei:Zeile) |
+|---|---|
+| 11 Onboarding | `src/screens/onboarding/OnboardingFlow.jsx`: Steps 1 Welcome · 2 Bereichswahl (`onboarding_data.area`) · 3 Reveal · 3b Vereinbarung · 4 `Step4Auth` (Konto, Häkchen Datenschutz + Art. 9 + 18+, Einladungscode eingeklappt, Login/Magic-Link-Umschalter). Zustand nur im React-State. Eingeladene (`user.invited_at`) sehen Vereinbarung + `InvitedSetPassword`; eingeloggte Nutzer ohne gültige Vereinbarung sehen nur die Vereinbarung. Einstiege: `LandingScreen.jsx:75`, `AuthScreen.jsx:170` (→ `/onboarding`), Einladungs-Link `admin-invite-user` → `redirectTo …/onboarding`. |
+| 12 `handle_new_user` | Fassung aus **036**: liest `consent_version`, `coaching_agreement_version` (beliebiger Text bis 20 Zeichen!), `age_confirmed`, `display_name`, `onboarding_*`. Zeitstempel setzt der Server. **Die vier Zustimmungsspalten stehen nicht im Schutz-Trigger** und werden heute vom Client geschrieben: `OnboardingFlow.acceptAgreement` (Vereinbarung) und `InvitedSetPassword` (Einwilligung + Vereinbarung) per `updateProfile`. |
+| 13 `checkConsent()` | In `useAuth` vorhanden, **nirgends aufgerufen**. Gesperrt wird nur über `checkCoachingAgreement` (`App.jsx` `ProtectedRoute` → `/onboarding`), Versionen `'1.0'` in `useAuth.js:8–9`. |
+| 14–16 | Für W4 (Konto löschen) – folgt dort. |
+
+## W3 – Abweichungen und Bauentscheidungen
+
+- **W3-1 Eigener Branch bis zur Freigabe:** Die Build-Sperre (5.4) würde auf `main` jeden Produktions-Deploy blockieren, und Migration 040 (nur noch Version 2.0) passt nicht zur heutigen App (sendet 1.0). → W3 bleibt auf `konto/paket-k-w3` (Vercel-Vorschau), Merge + `db push` erst nach J-K4.
+- **W3-2 Eingeladene:** Handoff deckt sie nicht ab. → Einladungs-Link führt in den neuen Einstieg ab Screen 3 (Zustimmung über RPC `accept_consent_v2`), danach Passwort festlegen; kein Client-Schreiben der Zustimmungsfelder mehr.
+- **W3-3 Bereichswahl entfällt:** Step 2 (Bereich) gibt es im neuen Einstieg nicht mehr; `onboarding_data` wird nicht mehr gesetzt (wird nur im Profil gespeichert, nirgends ausgewertet – zu prüfen beim Bau).
+- **W3-4 Migrationsnummer 040**, Schutz-Trigger-Vorlage 038.
+- **W3-3 geprüft:** `onboarding_data` wird im Frontend und in den Edge Functions nirgends gelesen. `handle_new_user` (040) schreibt die Spalte nicht mehr; Bestandswerte bleiben unverändert stehen.
+- **W3-5 Eingeladene, Reihenfolge:** Zustimmung (Screen 3, nur im Zustand) → Passwort festlegen → `accept_consent_v2`. So entsteht keine Zustimmung ohne Passwort. Scheitert nur die RPC, wiederholt „Nochmal versuchen“ nur sie. Als „eingeladen und neu“ gilt: `invited_at` gesetzt **und** noch keine Zustimmung (`missing`). Eingeladene mit Zustimmung 1.0 bekommen die normale erneute Zustimmung, kein zweites Passwort.
+- **W3-6 Sperre in `App.jsx`:** Angemeldet ohne Zustimmung v2.0 → `ConsentGateScreen` vor allen Routen (nach der Code-Abfrage), wie die MFA-Sperre. Erreichbar bleiben `/impressum`, `/datenschutz`, `/sicherheit`, `/passwort-neu` und `/profile` (Export, Konto löschen). 18+ kommt im selben Screen vor der Zustimmung (Reihenfolge 5.5). `ProtectedRoute` zeigt ohne gültige Zustimmung nur noch den Ladezustand (zweite Linie).
+- **W3-7 Kein Aufblitzen:** `useAuth` kennt jetzt `profileReady` (Profil für genau diesen Nutzer geladen). Erst dann entscheidet `App.jsx` über die Sperre; Token-Erneuerungen ändern daran nichts.
+- **W3-8 Screen 4 ohne Anmelden/Magic Link:** Anmelden liegt auf Screen 1 (→ `/auth`). Ohne Sitzung nach der Registrierung (E-Mail-Bestätigung an) zeigt Screen 4 „Bestätige deine E-Mail“ statt wie bisher still auf `/landing` zu landen.
+- **W3-9 `accept_consent_v2`** setzt zusätzlich `onboarding_completed = true` (früher vom Client gesetzt) und meldet `profile_not_found`, wenn keine Zeile betroffen ist (kein stilles Scheitern).
+- **W3-10 K5 ohne Zurücksetzen:** Der Angriffstest hat bewusst keine service_role. B bleibt nach K5 auf v2.0, was ohnehin der Zielzustand nach dem Deploy ist. K7 (Signup mit `consent_version: '9.9'`) läuft manuell bei J-K4.
+
+## W3 – Beobachtungen (nicht gebaut)
+
+- **Zustimmung nur im Frontend durchgesetzt:** `chat` und die anderen Functions prüfen die Zustimmung nicht. Wer die App-Sperre umgeht, könnte mit Version 1.0 weiter Gespräche führen. Ein Server-Check wäre eine eigene Tranche.
+- **„Keine Weitergabe an Dritte – niemals“** steht noch auf `LandingScreen` und `AuthScreen` (R-2, Jerome). Der alte Satz in `Step4Auth` ist mit dem Screen entfallen.
+- **Vereinbarung v2.0 = Entwurf aus v1.0** mit zwei `[Prüfen: …]`-Stellen (Betreiberzugang, Anthropic/OpenAI als Auftragsverarbeiter). Die Build-Sperre lässt keinen Produktions-Build mit `[` zu, sobald `LEGAL_TEXTS_APPROVED = true` ist.
+- **Links im „Lieber nicht“-Sheet** zeigen vorläufig alle auf `https://friedensstifter.coach/`; Buch- und Kontaktseite trägt Jerome ein.
+- `admin-invite-user` leitet weiter auf `/onboarding`; das bleibt als Weiterleitung bestehen, ein Function-Deploy ist dafür nicht nötig.
+- `docs/architecture.md:41` nennt noch `src/screens/onboarding/` – Update mit der Doku nach Verifikation.
