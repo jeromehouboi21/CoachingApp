@@ -157,6 +157,12 @@ Auf dem Branch `feature/stripe-checkout-geruest` (nicht gemergt) liegen:
 - **Konto löschen mit laufendem Abo:** `delete-account` müsste das Abo bei Stripe kündigen. Das steht nicht in der Vorgabe.
 - **Datenschutz:** Neue Tabellen gehören in die Löschkette, in `EXPORT_TABLES` und gegebenenfalls in `apply_retention`. Für Rechnungsdaten gibt es Aufbewahrungsfristen. Stripe kommt als Empfänger in `DATA_RECIPIENTS`, der AVV nach `docs/DPA/`.
 
+## Entscheidungen Jerome (20.11.2026)
+
+- **Z-E1 Krisenantwort an der Monatsgrenze:** wird nie blockiert und **nicht gebucht**.
+- **Z-E2 Stufe im Plan:** Variante a. `plan = 'premium'` bleibt der eine Abo-Plan, die Stufe (`begleitung` | `intensiv`) steht in `subscriptions.tier`. Der CHECK auf `plan` bleibt unverändert.
+- **Z-E3 Konto löschen mit laufendem Abo:** offen. Vorschlag: Die Löschung beendet das Abo bei Stripe sofort, ohne Erstattung, mit Hinweis im Löschdialog. Scheitert die Kündigung, bricht die Löschung ab. Die Alternative „erst kündigen, dann löschen“ ist auch möglich (DSGVO-Frage beim Anwalt).
+
 ## Beobachtungen
 
 - **Prompt-Caching fehlt:** Kein `cache_control` in `supabase/functions`. `coach_usage` loggt zwar `cacheReadTokens` (chat Z. 1723), der Wert ist aber immer 0. Laut Vorgabe 1 ist das die Voraussetzung, um „Begleitung intensiv“ live zu schalten.
