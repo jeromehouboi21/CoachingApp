@@ -19,8 +19,9 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
   | OpenAI | Vektorberechnung | Vertragspartner OpenAI Ireland Ltd., Verarbeitung auch in den USA |
   | Vercel | Auslieferung | USA |
   | one.com | E-Mail | Dänemark, Systemüberwachung auch aus Indien |
+  | Stripe *(geplant, mit dem Abo)* | Zahlung und Rechnungen | Vertragspartner für Kunden im EWR: Stripe Payments Europe, Ltd., Irland; Verarbeitung auch in den USA |
 
-  Alle Verträge zur Auftragsverarbeitung (DPAs) liegen vor. Die Auswertung steht in `dpa-auswertung.md`.
+  Für die ersten fünf liegen die Verträge zur Auftragsverarbeitung (DPAs) vor. Die Auswertung steht in `dpa-auswertung.md`. Für Stripe fehlt der Vertrag noch. Er wird mit dem Abo eingeholt und ausgewertet. Siehe Teil C.
 - **Abo:** Ein bezahltes Abo ist geplant, aber noch nicht gebaut. Die Abo-Texte werden erst mit dem Start der Zahlung angezeigt. Details und Fragen in Teil C.
 
 ---
@@ -103,7 +104,7 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
 - **Stufen:** „Begleitung“ für 9,90 € im Monat oder 99 € im Jahr, mit 150 eigenen Nachrichten pro Monat. „Begleitung intensiv“ für 19,90 € oder 199 €, mit 800 Nachrichten. „Begleitung intensiv“ bleibt zunächst abgeschaltet.
 - **Monatsgrenze:** Ab 80 % erscheint ein ruhiger Hinweis. Danach gibt es 10 Nachrichten Kulanz. Ist die Grenze erreicht, startet bis zum nächsten Abrechnungstag kein neues Gespräch. Spiegel, Erkenntnisse und Verlauf bleiben sichtbar. Krisenantworten sind nie gesperrt und werden nicht gezählt.
 - **Zahlung:** über die gehostete Bezahlseite von Stripe (Stripe Checkout). Kündigen, Wechseln und Zahlungsart ändern laufen über das Kundenportal von Stripe. Ein Upgrade gilt sofort und wird anteilig verrechnet. Ein Downgrade gilt zum Ende des Abrechnungszeitraums.
-- **An Stripe gehen:** Nutzer-ID und E-Mail-Adresse, keine Namen und keine Gesprächsinhalte. Stripe kommt damit als neuer Empfänger hinzu (DPA noch einzuholen).
+- **An Stripe gehen:** Nutzer-ID und E-Mail-Adresse, keine Namen und keine Gesprächsinhalte. Stripe kommt damit als neuer Empfänger hinzu (siehe Tabelle oben, DPA noch einzuholen). Offen ist, ob Stripe für Zahlungsdaten als Auftragsverarbeiter oder als eigener Verantwortlicher auftritt (ähnlich wie bei Vercel, Nr. 10).
 - **Kleinunternehmer** nach § 19 UStG, keine Umsatzsteuer.
 - **Konto löschen:** beendet ein laufendes Abo sofort, ohne anteilige Erstattung. Darauf weist der Löschdialog hin. Scheitert die Kündigung bei Stripe, wird nichts gelöscht.
 
