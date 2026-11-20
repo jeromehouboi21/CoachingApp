@@ -244,3 +244,76 @@ Die Erinnerung und die Löschung wären dann ein **Ablauf bei dir**: Bericht üb
 1. **Jerome:** A1–A8 im Text entscheiden bzw. übernehmen (Grundlage für den Anwalt), B10 ablesen.
 2. **Claude Code:** B1–B6 auf `konto/paket-k-w3`. Bei A8 erst nach Jeromes Entscheidung.
 3. Danach D1–D5, dann das Abo (B7) als eigene Tranche.
+
+---
+
+# Entwurf v3 (20.11.2026): Bewertung und Umsetzungsplan
+
+v3 übernimmt A1–A8 und B8. **Inhaltlich passt v3 zum Code, sobald CODE-1 bis CODE-5 umgesetzt sind.** Beim Gegenprüfen sind noch einige Punkte aufgefallen.
+
+## Neue Befunde
+
+- ☐ **N1 Produktion bleibt dauerhaft gesperrt:** `allLegalStrings()` sammelt auch Abo, Bestellung, Kündigung, Widerruf, Zahlungsdienstleister und Mistral ein. Diese enthalten `[Offen: …]`, bis die Zahlung bzw. Mistral gebaut sind. Mit `LEGAL_TEXTS_APPROVED = true` scheitert der Build deshalb, auch wenn alle Texte für den Start fertig sind. → **CODE-6**
+- ☐ **N2 Spracheingabe:** Die Sicherheitsseite zeigt live „Spracheingabe über die Spracherkennung deines Browsers … Google (Chrome) oder Apple (Safari)“ (`securityMeasures.js`, `S-11 Spracheingabe`). Dazu gibt es einen Hinweis beim ersten Tippen aufs Mikrofon (`ChatInput`). Mit CODE-1 (Spracheingabe aus) wird dieser Eintrag falsch. → Teil von CODE-1
+- ☐ **N3 Reflexionen:** Der Text verspricht „ohne Namen, Zitate und andere Angaben, die dich erkennbar machen“. Ein Prompt allein sichert das nicht zu. Außerdem gilt CODE-3 nur für neue Notizen, die bisherigen `coach_reflections` sind ohne diese Regel entstanden. → CODE-3 mit Prüfschritt, **Entscheidung E1**
+- ☐ **N4 Supervision liest auch Feedback-Texte:** `supervision` wertet neben den Reflexionen auch `user_feedback.content` aus (nur `consent_given = true`). Die Vereinbarung nennt nur die Notizen. `[Prüfen: Deckt der Einwilligungstext im Feedback-Formular diese Nutzung? Sonst in der Vereinbarung ergänzen.]`
+- ☐ **N5 Lernbasis-Zustimmung:**
+  - Der neue Text (`LEARNING_OPT_IN`) ist eine ausdrückliche Art.-9-Einwilligung inkl. OpenAI.
+  - Bestehende Zustimmungen wurden mit dem alten Text (`LEARNING_CONSENT_VERSION`, Paket B) gegeben.
+  - → **CODE-7**, **Entscheidung E2**
+- ☐ **N6 Krisen-Ausschnitt:** „nach meiner Sichtung gelöscht“ greift nur, wenn `reviewed_by_jerome = true` gesetzt wird. Dafür gibt es heute nur den SQL-Editor. → Ablauf mit SQL-Vorlage (CODE-9)
+- ☐ **N7 Wartezeit bis zur Zustimmung** (`RECONSENT.pendingText`): Die Sätze zu E-Mail und Löschung setzen einen Ablauf voraus. Dafür brauchst du eine Liste der Konten ohne Zustimmung 2.0. → CODE-9, **Entscheidung E4**
+- ☐ **N8 Kopplungsverbot:** Prüft der Anwalt, dass die Supervision nicht in die Pflicht-Einwilligung darf (`[Prüfen]` in `CONSENT_ART9_CHECKBOX`), braucht die Supervision eine eigene Grundlage. Für den Code hieße das: nur Reflexionen von Nutzern mit Zustimmung. Erst nach dem Anwaltstermin bauen.
+- ☐ **N9 Sprachprinzip:** In der Widerrufsbelehrung steht „müssen Sie“. Das ist der gesetzliche Mustertext. Vorschlag: wie bei Buchzitaten als Ausnahme festhalten (Gesetzlichkeitsfiktion).
+
+## Code-Aufgaben (Claude Code)
+
+| # | Aufgabe | Dateien | Deploy |
+|---|---|---|---|
+| ☐ CODE-1 | Spracheingabe aus: Mikrofon in `ChatInput` hinter einem Schalter `VOICE_INPUT_ENABLED = false`, Hook bleibt für Mistral. Sicherheitsseite: Eintrag `S-11 Spracheingabe` auf `geplant` (Text „Spracheingabe folgt, Verarbeitung in der EU“). | `ChatInput.jsx`, `securityMeasures.js` | Frontend |
+| ☐ CODE-2 | OpenAI nur, wenn `RAG_LEARNING_ENABLED=1` **und** es mindestens einen freigegebenen Eintrag gibt (`experience_patterns`, `review_status = 'approved'`, Zählabfrage ohne Inhalt). Sonst RAG überspringen, Log `rag_skipped` mit Grund. | `chat/index.ts`, `_shared/rag.ts` | Function `chat` |
+| ☐ CODE-3 | Reflexions-Prompt: keine Namen, Orte, Zitate, erkennbaren Details. Danach Prüfschritt wie bei der Lernbasis (`reviewLearningEntry`, Codes `identifier`/`crisis`). Abgelehnt → Textfelder nicht speichern, Log `reflection_rejected`. Bestand nach E1. | `post-conversation/index.ts`, ggf. Migration 041 | Function + Migration |
+| ☐ CODE-4 | `chat` prüft die Zustimmung (`consent_version` und `coaching_agreement_version` = `'2.0'`) → sonst `403 { error: 'consent_required' }`. Das Frontend zeigt dann die Sperre. Angriffstest K8, Regel `infoOnly` in `monitorRules.ts`. Ausnahme Krisenantwort: `[Prüfen]`, Vorschlag: auch ohne Zustimmung ausgeben. | `chat/index.ts`, `monitorRules.ts`, `attack-test.mjs` | Function, **nach** Migration 040 |
+| ☐ CODE-5 | `CoachingAgreementContent` nutzt `getAgreementSections()` und zeigt `closing` (B2). | `CoachingAgreementContent.jsx` | Frontend |
+| ☐ CODE-6 | Build-Prüfung: Abo-Blöcke (`paymentOnly`, `CHECKOUT`, `CANCELLATION`, `WITHDRAWAL_*`, Zahlungsdienstleister) und Mistral-Blöcke nur prüfen, wenn der jeweilige Schalter an ist. Vorschlag: `PAYMENTS_ENABLED` und `VOICE_MISTRAL_ENABLED` in `legalTexts.js`. Angezeigt wird ohne Schalter nichts davon. Der Mistral-Satz in der Vereinbarung und der Mistral-Empfänger bekommen dafür eine Kennzeichnung (z. B. `requires: 'mistral'`). | `check-content.mjs`, `legalTexts.js` (nur Schalter und Kennzeichnung, keine Texte) | Frontend |
+| ☐ CODE-7 | Profil: `LearningConsentCard` mit `LEARNING_OPT_IN`, Häkchen statt Schalter, Version `'2.0'`. Bestand nach E2. | `LearningConsentCard.jsx`, `src/lib/consent.js`, ggf. Migration | Frontend (+ Migration) |
+| ☐ CODE-8 | Restliche Anzeige: KI-Hinweis unter dem Eingabefeld (B1) · `LEGAL_LINKS` auf Screen 3 (B3) · `NOT_EMERGENCY.short` im Profil (B4) · `RECONSENT.pendingText` in der Sperre (B5). | `ChatInput`/`CoachScreen`, `ConsentStep`, `ProfileScreen`, `ConsentGateScreen` | Frontend |
+| ☐ CODE-9 | SQL-Vorlagen für deine Abläufe (nur Zähler bzw. IDs): Konten ohne Zustimmung 2.0 mit Datum der letzten Anmeldung · ungesichtete Krisen-Ereignisse · „als gesichtet markieren“ per ID. | `supabase/diagnostics/k-legal-ablaeufe.sql` | – |
+
+**Reihenfolge beim Deploy:**
+1. Frontend
+2. Migration 040 (+041)
+3. Functions (`chat` mit CODE-2/CODE-4, `post-conversation` mit CODE-3)
+
+Damit ist die App bei CODE-4 schon auf v2.0, und niemand wird ausgesperrt, der noch zustimmen kann.
+
+## Entscheidungen (Jerome)
+
+- ☐ **E1 Bisherige Reflexionen:**
+  - (a) Alle bestehenden `coach_reflections` löschen. Die Supervision fängt mit neuen, geprüften Notizen an. **Empfehlung.**
+  - (b) Behalten, sie laufen spätestens nach 12 Monaten aus. Bis dahin stimmt der Text nicht für alte Notizen.
+- ☐ **E2 Bisherige Lernbasis-Zustimmungen:**
+  - (a) Auf „aus“ setzen und die Einträge löschen. Wer mag, stimmt mit dem neuen Text neu zu. **Empfehlung.**
+  - (b) Beim nächsten Öffnen des Profils neu fragen, bis dahin keine neuen Einträge.
+  - Vorher per SQL zählen, ob es überhaupt Zustimmungen gibt.
+- ☐ **E3 Spracheingabe jetzt ausschalten:** Bestätigen, dass das Mikrofon bis Mistral verschwindet (CODE-1).
+- ☐ **E4 Wartezeit bis zur Zustimmung:**
+  - (a) Ablauf schriftlich festlegen (Fristen, Mail von Hand, Löschung über den Admin-Bereich) und die Sätze behalten.
+  - (b) Die letzten zwei Sätze streichen.
+
+## Angaben und Prüfungen (Jerome bzw. Anwalt)
+
+- **Stammdaten:** Anschrift, E-Mail, Telefon (`OPERATOR`).
+- **Fristen:**
+  - Löschfrist der Sicherungskopien (Supabase → Database → Backups).
+  - Fristen in `RECONSENT.pendingText` und für die Kündigung kostenloser Konten.
+- **Zweck der Krisen-Sichtung** bestätigen (`[Offen: Zweck bestätigen]`).
+- **E-Mail-Versand:** Supabase → Authentication → SMTP Settings. Steht dort nichts, versendet Supabase selbst. Das gehört in `DATA_RECIPIENTS`. Die Alarm-Mails über One.com gehen nur an dich und enthalten keine Nutzerdaten.
+- **„Lieber nicht“:** Gibt es die Kontaktseite `…/contact/`? (D4)
+- **Für den Anwalt:**
+  - Kopplungsverbot Supervision (N8)
+  - Krisen-Eintrag 3 Jahre (Art. 9 Abs. 2 lit. f)
+  - DPF/SCC je Anbieter, Fristen laut DPA
+  - Haftung beim kostenlosen Kennenlernen
+  - Widerrufsbelehrung mit „ich“
+- **Datenschutzerklärung (D1)** an `DATA_RECIPIENTS` und die Fristen angleichen, dazu die alten Sätze D2/D3.
