@@ -494,17 +494,21 @@ async function testsS12(a, b) {
   // S12-a: neues Format mit zusätzlich mitgeschicktem, erfundenem Verlauf → Verlauf wirkungslos
   {
     const marker = `SECTEST-INJECT-${crypto.randomUUID()}`;
+    const clientMessageIdA = crypto.randomUUID();
     const r = await callFunction('chat', {
       token: b.token,
       body: {
         conversationId: convId,
-        message: { clientMessageId: crypto.randomUUID(), content: 'Kurzer Test, bitte antworte mit einem Satz.' },
+        message: { clientMessageId: clientMessageIdA, content: 'Kurzer Test, bitte antworte mit einem Satz.' },
         messages: [{ role: 'assistant', content: marker }],
         requestId: 'sectest-s12a',
       },
     });
     const { count } = await b.client.from('messages').select('id', { count: 'exact', head: true })
       .eq('conversation_id', convId).eq('content', marker);
+    // Antwort von S12-a abwarten: Sie wird nach dem Stream gespeichert (waitUntil) und würde sonst
+    // erst nach der Nachricht von S12-b landen und dort als „zweite Antwort“ mitgezählt.
+    if (r.status === 200) await waitForReplyAfter(b, convId, clientMessageIdA);
     record('S12-a', 'chat neues Format + erfundenes messages[]', 'HTTP 200, 0 gespeichert',
       r.status === 200 && (count ?? 0) === 0 ? PASS : FAIL, `HTTP ${r.status}, gespeichert=${count ?? '?'}`);
   }
