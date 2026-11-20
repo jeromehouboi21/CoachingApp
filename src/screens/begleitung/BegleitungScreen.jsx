@@ -4,6 +4,8 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check } from 'lucide-react'
 import { useAccessState, COACHING_CONTACT_URL } from '../../lib/accessState'
+import { PAYMENTS_ENABLED } from '../../content/legalTexts'
+import { CheckoutButton, CheckoutReturnNotice, useCheckoutReturn } from '../../components/begleitung/CheckoutButton'
 
 const ALWAYS = [
   'Heute mit Tagesimpuls und „Wie geht’s dir?“',
@@ -27,6 +29,9 @@ const PHASE_TEXT = {
 export function BegleitungScreen() {
   const navigate = useNavigate()
   const { access } = useAccessState()
+  const checkoutResult = useCheckoutReturn()
+  // Stripe-Gerüst: nur mit PAYMENTS_ENABLED und nicht, wenn die Begleitung schon läuft
+  const showCheckout = PAYMENTS_ENABLED && access?.phase !== 'begleitung'
 
   return (
     <div className="min-h-screen bg-bg flex flex-col max-w-lg mx-auto">
@@ -42,6 +47,7 @@ export function BegleitungScreen() {
       </div>
 
       <div className="flex-1 px-5 pb-10">
+        {PAYMENTS_ENABLED && <CheckoutReturnNotice result={checkoutResult} />}
         <h1 className="font-display text-[28px] text-ink leading-[1.25] mb-3">
           Was dir gehört,<br />bleibt dir.
         </h1>
@@ -66,7 +72,7 @@ export function BegleitungScreen() {
 
         <div className="bg-accent-light rounded-xl p-5 mb-6">
           <p className="text-[15px] font-medium text-ink mb-1">Mit Begleitung</p>
-          <p className="text-[13px] text-ink-3 mb-3">Der Preis steht noch nicht fest.</p>
+          {!PAYMENTS_ENABLED && <p className="text-[13px] text-ink-3 mb-3">Der Preis steht noch nicht fest.</p>}
           <ul className="flex flex-col gap-2">
             {COMPANION.map(f => (
               <li key={f} className="flex items-start gap-2 text-[14px] text-ink-2">
@@ -75,11 +81,18 @@ export function BegleitungScreen() {
               </li>
             ))}
           </ul>
+          {showCheckout && (
+            <div className="mt-5">
+              <CheckoutButton />
+            </div>
+          )}
         </div>
 
         <div className="bg-surface border border-[var(--color-border)] rounded-xl p-5">
           <p className="text-[14px] text-ink-2 leading-relaxed mb-4">
-            Bis die Begleitung startet, schreib mir gern, wenn du weitermachen möchtest. Oder wir sprechen persönlich miteinander.
+            {PAYMENTS_ENABLED
+              ? 'Lieber persönlich? Schreib mir gern, dann sprechen wir miteinander.'
+              : 'Bis die Begleitung startet, schreib mir gern, wenn du weitermachen möchtest. Oder wir sprechen persönlich miteinander.'}
           </p>
           <a
             href={COACHING_CONTACT_URL}

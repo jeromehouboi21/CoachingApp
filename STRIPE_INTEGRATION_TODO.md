@@ -80,16 +80,18 @@ supabase/functions/create-checkout-session/index.ts   neu – erzeugt die Checko
 supabase/functions/_shared/rateLimit.ts               + RATE_LIMITS.checkout (10/Stunde, fail-closed)
 supabase/functions/_shared/monitorRules.ts            + checkout_failed (Alarm ab 3/Stunde), checkout_usage (Wochenübersicht)
 supabase/config.toml                                  + [functions.create-checkout-session]
+src/components/begleitung/CheckoutButton.jsx          neu – Button „Weiter zur Bezahlung“, Rückkehr-Hinweis
+src/screens/begleitung/BegleitungScreen.jsx           Button + Hinweis nur mit PAYMENTS_ENABLED
 STRIPE_INTEGRATION_TODO.md                            diese Datei
 ```
 
 ## So funktioniert es
 
-1. Frontend (noch nicht gebaut): `POST` an `functionUrl('create-checkout-session')` mit `functionHeaders`.
+1. Frontend ([CheckoutButton.jsx](src/components/begleitung/CheckoutButton.jsx), versteckt hinter `PAYMENTS_ENABLED` in `legalTexts.js`, nicht sichtbar in der Phase Begleitung): `POST` an `functionUrl('create-checkout-session')` mit `functionHeaders`.
 2. Function prüft Anmeldung, Schalter, Zustimmung, Rate-Limit und Konfiguration.
 3. Function erzeugt die Session bei Stripe und antwortet mit `{ url }`.
-4. Frontend leitet mit `window.location.assign(url)` auf die Bezahlseite von Stripe.
-5. Stripe schickt nach der Zahlung zurück auf `success_url` bzw. bei Abbruch auf `cancel_url`.
+4. Frontend prüft, dass die Adresse mit `https://checkout.stripe.com/` beginnt, und leitet mit `window.location.assign(url)` weiter.
+5. Stripe schickt nach der Zahlung zurück auf `success_url` bzw. bei Abbruch auf `cancel_url`. `/begleitung` zeigt dann einen kurzen Hinweis und entfernt `checkout` und `session_id` aus der Adresse.
 6. **Fehlt noch:** Webhook `checkout.session.completed` → `plan = 'premium'` serverseitig setzen. Ohne Webhook bekommt niemand Zugang durch eine Zahlung.
 
 Log-Codes: `checkout_session_created`, `checkout_disabled`, `checkout_not_configured`, `checkout_session_failed` (nur Stripe-Fehlertyp und -Code, keine Meldungstexte).
@@ -106,7 +108,7 @@ Log-Codes: `checkout_session_created`, `checkout_disabled`, `checkout_not_config
 1. **Rechtstexte:** Abo, Bestellung, Kündigung, Widerruf und Zahlungsdienstleister freigeben (Jerome bzw. Anwalt). Stripe als Empfänger in `DATA_RECIPIENTS`, AVV mit Stripe nach `docs/DPA/`. Erst dann `PAYMENTS_ENABLED = true` in `legalTexts.js`. Klären: Button-Beschriftung „zahlungspflichtig bestellen“ (`submit_type`), Widerrufsbelehrung, Steuern (`automatic_tax` ist aus).
 2. **Webhook** `stripe-webhook`: Signatur prüfen (`STRIPE_WEBHOOK_SECRET`), Nutzer über `client_reference_id`, `plan` per service_role setzen (privilegiertes Feld, Schutz-Trigger), Ereignisse für Verlängerung, Zahlungsausfall und Kündigung (`customer.subscription.*`, `invoice.payment_failed`).
 3. **Datenmodell:** Spalten für `stripe_customer_id` / `stripe_subscription_id` (Migration, server-only, in Löschung, Export und `apply_retention` aufnehmen; Löschtest). Beim Löschen eines Kontos das Abo bei Stripe kündigen.
-4. **Frontend:** Button auf `/begleitung`, Auswertung von `?checkout=success|cancel`, Kundenportal für Kündigung. Sprachprinzip: keine Verknappung, kein Drängen.
+4. **Frontend:** Button und Rückkehr-Hinweis sind vorbereitet (UI-Texte sind Vorschläge, bitte freigeben). Offen: Preisangabe auf `/begleitung` vor dem Klick (heute nur auf der Stripe-Seite – mit dem Anwalt klären), Kundenportal für Kündigung, Aktualisieren der Phase nach erfolgreicher Zahlung. Sprachprinzip: keine Verknappung, kein Drängen.
 5. **Angriffstest** und Monitoring-Regeln für den Webhook ergänzen; Sicherheitsseite (`securityMeasures.js`) nur mit Beleg.
 
 ## Ressourcen
