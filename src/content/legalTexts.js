@@ -417,7 +417,7 @@ export const DATA_RECIPIENTS = [
     location: 'Dänemark (EU, Rechenzentrum Kopenhagen); Zugriff zur Systemüberwachung auch aus Indien',
     purpose: 'Versand von Anmelde-, Bestätigungs- und Erinnerungs-E-Mails',
     data: 'E-Mail-Adresse, Inhalt der E-Mail',
-    safeguard: 'Auftragsverarbeitungsvertrag (one.com DPA, Fassung vom 17.06.2025). Für den Zugriff aus Indien (One.com India) sieht der Vertrag geeignete Garantien wie die EU-Standardvertragsklauseln vor. [Prüfen: Gehört das Postfach zum Webhosting-Paket („Mass hosting product“ in Anlage 3)?]',
+    safeguard: 'Auftragsverarbeitungsvertrag (one.com DPA, Fassung vom 17.06.2025). Für den Zugriff aus Indien (One.com India) sieht der Vertrag geeignete Garantien wie die EU-Standardvertragsklauseln vor.',   // Postfach gehört zum Webhosting („Mass hosting product“, Anlage 3), von Jerome bestätigt 20.11.2026
   },
 ]
 
