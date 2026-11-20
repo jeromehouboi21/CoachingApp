@@ -21,7 +21,7 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
   | one.com | E-Mail | Dänemark, Systemüberwachung auch aus Indien |
   | Stripe *(geplant, mit dem Abo)* | Zahlung und Rechnungen | Vertragspartner laut Stripe-Servicevertrag; Weitergabe an Stripe, LLC (USA) und weltweit |
 
-  Alle Verträge zur Auftragsverarbeitung (DPAs) liegen vor. Die Auswertung steht in `dpa-auswertung.md`. Stripe kommt erst mit dem Abo dazu, siehe Teil C.
+  Alle Verträge zur Auftragsverarbeitung (DPAs) liegen vor, auch das von Stripe für das Abo. Die Auswertung steht in `dpa-auswertung.md`. Fragen zum Abo stehen in Teil C.
 - **Abo:** Ein bezahltes Abo ist geplant, aber noch nicht gebaut. Die Abo-Texte werden erst mit dem Start der Zahlung angezeigt. Details und Fragen in Teil C.
 
 ---
@@ -104,7 +104,7 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
 - **Stufen:** „Begleitung“ für 9,90 € im Monat oder 99 € im Jahr, mit 150 eigenen Nachrichten pro Monat. „Begleitung intensiv“ für 19,90 € oder 199 €, mit 800 Nachrichten. „Begleitung intensiv“ bleibt zunächst abgeschaltet.
 - **Monatsgrenze:** Ab 80 % erscheint ein ruhiger Hinweis. Danach gibt es 10 Nachrichten Kulanz. Ist die Grenze erreicht, startet bis zum nächsten Abrechnungstag kein neues Gespräch. Spiegel, Erkenntnisse und Verlauf bleiben sichtbar. Krisenantworten sind nie gesperrt und werden nicht gezählt.
 - **Zahlung:** über die gehostete Bezahlseite von Stripe (Stripe Checkout). Kündigen, Wechseln und Zahlungsart ändern laufen über das Kundenportal von Stripe. Ein Upgrade gilt sofort und wird anteilig verrechnet. Ein Downgrade gilt zum Ende des Abrechnungszeitraums.
-- **An Stripe gehen:** Nutzer-ID und E-Mail-Adresse, keine Namen und keine Gesprächsinhalte. Stripe kommt damit als neuer Empfänger hinzu (siehe Tabelle oben, DPA noch einzuholen). Laut DPA (Ziffer 2) ist Stripe nur für Betrieb und Bereitstellung Auftragsverarbeiter, für Betrugserkennung, Geldwäsche- und KYC-Pflichten, Behördenanfragen und Produktentwicklung eigener Verantwortlicher. Wie gehört diese Doppelrolle in die Datenschutzerklärung (ähnlich wie bei Vercel, Nr. 10)?
+- **An Stripe gehen:** Nutzer-ID und E-Mail-Adresse, keine Namen und keine Gesprächsinhalte. Stripe kommt damit als neuer Empfänger hinzu (siehe Tabelle oben). Das Stripe-DPA liegt vor (Stand 28.09.2026, ausgewertet in `dpa-auswertung.md`). Nicht gelesen sind bisher das Data Transfers Addendum und der Stripe-Servicevertrag. Laut DPA (Ziffer 2) ist Stripe nur für Betrieb und Bereitstellung Auftragsverarbeiter, für Betrugserkennung, Geldwäsche- und KYC-Pflichten, Behördenanfragen und Produktentwicklung eigener Verantwortlicher. Wie gehört diese Doppelrolle in die Datenschutzerklärung (ähnlich wie bei Vercel, Nr. 10)?
 - **Kleinunternehmer** nach § 19 UStG, keine Umsatzsteuer.
 - **Konto löschen:** beendet ein laufendes Abo sofort, ohne anteilige Erstattung. Darauf weist der Löschdialog hin. Scheitert die Kündigung bei Stripe, wird nichts gelöscht.
 
@@ -127,7 +127,7 @@ Friedensstifter ist eine Web-App (PWA) für Erwachsene ab 18. Ein KI-Begleiter f
 ## Unterlagen
 
 - **Texte:** `src/content/legalTexts.js`, alle Texte der Vereinbarung und Einwilligung (als Ausdruck mitnehmen)
-- **Verträge:** `docs/DPA/` (one.com, Anthropic, OpenAI, Supabase, Vercel) und `docs/konto/dpa-auswertung.md`
+- **Verträge:** `docs/DPA/` (one.com, Anthropic, OpenAI, Supabase, Vercel, Stripe) und `docs/konto/dpa-auswertung.md`
 - **Abgleich Text ↔ App:** `docs/konto/legaltexte-abgleich.md`
 - **Abläufe zu den Betroffenenrechten:** `docs/konto/ablaeufe-rechte.md`
 - **Noch fehlend:** Commercial Terms bzw. Datenrichtlinien von Anthropic und OpenAI (Training, Speicherfristen)
