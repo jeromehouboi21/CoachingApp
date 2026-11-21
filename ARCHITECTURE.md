@@ -1,6 +1,6 @@
 # Friedensstifter — Architektur-Dokumentation
 
-> Stand: 20.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket Z Zahlung & Abo** (20.11.2026: Stripe Checkout, Webhook, Kundenportal, Monatskontingent mit Kulanz, Kontolöschung beendet das Abo, Migration 042; deployt und in der Stripe-Sandbox getestet (J-Z2), **Bezahlung noch aus** (`PAYMENTS_ENABLED = false`), live erst mit J-Z3; Bericht: `docs/billing/paket-z-abschlussbericht.md`)
+> Stand: 21.11.2026 · nach v3.2 + Admin-Bereich, Krisenprotokoll, Gesprächsverlauf, Coaching-Vereinbarung-Rückblick · Security-Paket A (S-01 bis S-04) · Rate-Limits · Security-Paket B Welle 1 (Header/CSP, Schriften lokal, Admin-MFA), Welle 2a/2b (Server schreibt Nachrichten, Client ohne Schreibrecht), Welle 3 (Lernbasis mit Opt-in und Prüfschritt) und Welle 4 (Löschregeln, Fristen, Löschtest) · CSP erzwingend · **Paket B abgeschlossen** (Bericht: `docs/security/paket-b-abschlussbericht.md`) · **T0 Modellwechsel Sonnet 5.5** (19.11.2026, `_shared/models.ts`) · **U1 Navigation** (19.11.2026: Heute · Gespräch · Spiegel, Profil über Avatar) · **U2 Spiegel** (19.11.2026: drei Ebenen, wertfrei, ohne Anzeige-Sperren) · **U3 Heute & Einstieg** (19.11.2026: Zustände A–D/C2, Weitermachen ohne neues Gespräch, Migration 035) · **Paket C abgeschlossen** (19.11.2026: C-1 Secret-Scan/Build-Prüfung/ZIP + feste Function-Region (seit 20.11.2026 Irland, neben der Datenbank) · C-2 Monitoring, Alarm-Mails, Notfallplan, Migration 034 · C-3 Feedback nur mit Einwilligung, 18+, Hinweis Spracheingabe, Migration 036 · C-4 Datenexport als Selbstauskunft · C-5 zweiter Faktor für alle, Migration 037; Bericht: `docs/security/paket-c-abschlussbericht.md`) · **U4 Kennenlernen · Ruhemodus · Begleitung** (19.11.2026: 3 Starts insgesamt, Kappung 100 Nachrichten, Übergangstexte, `/begleitung`, Migration 038) · **U5a Weiterarbeiten & Deine Einschätzung** (19.11.2026: Ursprungsgespräch fortsetzen mit Folgesitzungs-Einstieg, ✦ / ? / ≠, Filter, Migration 039) · **Paket K W1 Passwort** (20.11.2026: ändern, vergessen, neu setzen, 12 Zeichen) · **Paket K W2 Sicherheitsseite** (`/sicherheit`, „Warum sich die App etwas merkt“, Profil-Gliederung) · **Paket K W3 Einstieg & Einwilligung v2.0** (20.11.2026: `/start/1–4`, Zustimmung nur Server, erneute Zustimmung, Rechtstexte `vorlaeufig` mit Kennzeichnung, Spracheingabe aus, OpenAI nur mit Lernbasis, Reflexionen geprüft, Datenschutzerklärung 2.0, Migrationen 040/041) · **Paket K W4 Konto löschen** (Bestätigungsmail, ehrlicher Text, Export davor, Fehler sichtbar; Sitzung gelöschter Konten wird beendet) · **Paket K abgeschlossen** (Bericht: `docs/konto/paket-k-abschlussbericht.md`) · **Paket P App installierbar** (20.11.2026, live; Gerätetest und Offline-Test stehen noch aus: Update-Hinweis statt stiller Updates, Installations-Karte/-Anleitung, Code-Anmeldung in der installierten App, Offline-Zeile, sichere Ränder, neue Icons, Name „Frieden“ auf dem Startbildschirm, Build-Prüfung `check-sw.mjs`) · **Paket Z Zahlung & Abo** (20.11.2026: Stripe Checkout, Webhook, Kundenportal, Monatskontingent mit Kulanz, Kontolöschung beendet das Abo, Migration 042; deployt und in der Stripe-Sandbox getestet (J-Z2), **Bezahlung noch aus** (`PAYMENTS_ENABLED = false`), live erst mit J-Z3; Bericht: `docs/billing/paket-z-abschlussbericht.md`) · **Paket R Einstiegs-Rundgang** (21.11.2026: fünf Schritte nach dem Login auf Heute, einmal pro Sitzung, bis „Nicht mehr anzeigen“ oder 3 geführte Gespräche, Profil-Eintrag, Migration 043, `npm test`; Bericht: `docs/rundgang/paket-r-abschlussbericht.md`)
 
 ---
 
@@ -65,6 +65,7 @@ CoachingApp/
 │   │   ├── useMemory.js                 ← Legacy Coach-Gedächtnis (user_memory)
 │   │   ├── useStreak.js                 ← Tage-in-Folge (streak_count), seit U1 nirgends angezeigt
 │   │   ├── useVoiceInput.js             ← Web Speech API (de-DE); Mikrofon derzeit aus (VOICE_MISTRAL_ENABLED)
+│   │   ├── useWelcomeTour.js            ← Paket R: Rundgang auf Heute (Startroute der App-Shell, Sitzung, Haken per RPC)
 │   │   ├── useInstallPrompt.js          ← Paket P: Installationsweg je Gerät (prompt · ios_manual · open_in_browser · installed · unsupported)
 │   │   ├── useOnline.js                 ← Paket P: online/offline
 │   │   └── useChatBusy.js               ← Paket P: „Coach antwortet gerade“ (aus lib/chatActivity.js)
@@ -80,12 +81,14 @@ CoachingApp/
 │   │   ├── passwordRecovery.js          ← erkennt den Reset-Link vor dem Supabase-Client (erster Import in main.jsx, W1)
 │   │   ├── installPrompt.js             ← Paket P: fängt beforeinstallprompt vor dem ersten Rendern ab (Import in main.jsx)
 │   │   ├── chatActivity.js              ← Paket P: globaler Merker „Antwort läuft“ (von useChat gesetzt)
+│   │   ├── tourState.js                 ← Paket R: shouldShowTour (reine Funktion) + tourState.test.js (npm test)
 │   │   └── logger.ts                    ← Frontend-Logger (console + app_logs)
 │   │
 │   ├── content/                         ← Inhalte mit Freigabe-/Belegpflicht (Paket K)
 │   │   ├── legalTexts.js                ← Rechtstexte v2.0, LEGAL_TEXTS_STATUS, LEGAL_REVIEW_OPEN, DATA_RECIPIENTS, Schalter
 │   │   ├── securityMeasures.js          ← Aussagen der Sicherheitsseite mit Status und Beleg
 │   │   ├── plans.js                     ← Paket Z: Stufen und Preise NUR zur Anzeige, shortDate/longDate
+│   │   ├── welcomeTour.js               ← Paket R: Texte und feste Beispielinhalte des Rundgangs (TOUR_STEPS, TOUR_EXAMPLES)
 │   │   └── whyMemory.js                 ← „Warum sich die App etwas merkt“ (W2)
 │   │
 │   ├── styles/
@@ -124,6 +127,7 @@ CoachingApp/
 │   │   ├── begleitung/                  ← Paket Z: CheckoutButton (+ Rückkehr-Hinweis), PortalButton
 │   │   ├── app/                         ← Paket P: UpdateBanner, OfflineBar (beide in main.jsx neben <App />), InstallCard (Heute), InstallSheet, ShareIcon
 │   │   ├── auth/                        ← PasswordField (Sichtbar-Schalter), ForgotPasswordForm (W1)
+│   │   ├── tour/                        ← Paket R: WelcomeTour (Vollbild-Dialog) + illustrations/ (fünf Grafiken, MiniTabBar)
 │   │   ├── WhyMemoryBlock.jsx           ← Baustein „Warum sich die App etwas merkt“ (Wie es funktioniert, /start/2)
 │   │   └── legal/
 │   │       ├── CoachingAgreementContent.jsx ← Vertragstext v2.0 aus legalTexts.js
@@ -246,7 +250,8 @@ CoachingApp/
 │   │   ├── 039_u5a_insight_rating.sql   ← insights.user_rating/rated_at/follows_insight_id
 │   │   ├── 040_k_consent_v2.sql         ← Zustimmung v2.0 nur Server, accept_consent_v2
 │   │   ├── 041_k_legal_v2_cleanup.sql   ← Reflexionen gelöscht, Lernbasis-Zustimmung nur v2.0
-│   │   └── 042_z_billing.sql            ← Paket Z: subscriptions, message_quota_periods, message_charges, stripe_events, consume_message/refund_message
+│   │   ├── 042_z_billing.sql            ← Paket Z: subscriptions, message_quota_periods, message_charges, stripe_events, consume_message/refund_message
+│   │   └── 043_r_tour_dismissed.sql     ← Paket R: profiles.tour_dismissed_at, RPC set_tour_dismissed
 │   ├── security/                        ← Audit-SQL (nur Metadaten) für Jerome
 │   ├── diagnostics/                     ← SQL-Vorlagen für Tests/Auswertung (u. a. z-quota-test.sql: Kontingent setzen, Testuhr-Kunde zuordnen)
 │   ├── templates/                       ← Auth-Mail-Vorlagen (Quelle fürs Dashboard)
@@ -357,6 +362,8 @@ function AdminRoute({ children }) {
 
 `AppShell` rendert einen `<Outlet>` mit darunter liegendem `<BottomNav>`. Nur `/home`, `/coach`, `/mirror`, `/mirror/muster`, `/mirror/entwicklung`, `/profile`, `/feedback` sind davon umschlossen. Die BottomNav zeigt seit U1 drei Tabs (Heute `/home` · Gespräch `/coach` · Spiegel `/mirror`). Das Profil ist kein Tab mehr, sondern über den `ProfileButton` oben rechts in den drei Tab-Screens erreichbar; auf `/profile` ist kein Tab aktiv.
 
+**Seit Paket R** merkt sich `AppShell` die erste Route, mit der sie nach dem Laden der App für einen Nutzer gerendert wird (`noteShellStart` in `useWelcomeTour.js`). Nur wenn das `/home` ist, darf der Rundgang erscheinen (Deep Link, „Daran weiterarbeiten“ oder laufendes Gespräch → nicht in dieser Sitzung).
+
 ---
 
 ## 4. Frontend-Architektur
@@ -376,7 +383,8 @@ function AdminRoute({ children }) {
 - **C – Ruhe:** Tagesimpuls (`DailyImpulseCard`) · „Erst mal ankommen → Wie geht's dir?“ · „Ins Gespräch →“
 - Dauerhaft: Erklärzeile unter verdeckten Karten („Verdeckt, damit niemand mitliest …“), Link „Wie funktioniert die App?“
 - **E – Ende des Kennenlernens (U4):** im Ruhemodus mit Standardgrenze 3 eine Karte über dem jeweiligen Zustand (nicht in A/D): „Drei Gespräche liegen hinter dir …“ · „Begleitung →“ · „Oder ein persönliches Gespräch mit Jerome →“ · „Schließen“ (einmal pro Gerät, `TrialEndCard`)
-- Ladefehler → Zustand C + `today_load_failed`
+- Ladefehler → Zustand C + `today_load_failed` (und kein Rundgang)
+- **Einstiegs-Rundgang (Paket R):** `useWelcomeTour` entscheidet über `shouldShowTour` (`src/lib/tourState.js`): nicht bei `profiles.tour_dismissed_at`, nicht ab 3 geführten Gesprächen (`message_count >= 3`, gleicher Zähler wie die Installations-Karte, gilt für alle Pläne), nur wenn die Sitzung auf `/home` begann, höchstens einmal pro Sitzung (`sessionStorage` `fs_tour_session_v1` mit der Nutzer-ID, ersatzweise Modul-Variable), nicht solange `AgeConfirmSheet` offen ist, nicht bei Ladefehler. Dann `WelcomeTour mode="auto"`; Kennenlern-Satz auf Schritt 5 nur bei `access.phase = 'kennenlernen'` (Zahl aus `starts_limit`). Ändert nichts an Heute-Zuständen oder `surfaced_at`.
 
 **Navigiert zu:** `/coach` (mit Entry-Kontext `tagesimpuls`), `/wellness`, `/mirror`, `/howto`
 
@@ -487,6 +495,7 @@ Vollbild ohne BottomNav, Zurück → `/mirror/muster`. Nur die fünf Bibliotheks
 
 - **„Zur Lernbasis beitragen“** (`LearningConsentCard`, S-13): Schalter (Standard aus) → Erklär-Sheet → RPC `set_learning_opt_in`; Rücknahme über Bestätigungs-Sheet, danach „Erledigt. N Beiträge wurden gelöscht.“ Der Schalter zeigt immer den Stand aus dem Profil (kein Erfolg ohne Erfolg); Sheets per `createPortal`.
 - **„Konto zusätzlich schützen“** (`SecurityCard`, S-06b, freiwillig): ohne Faktor Text + „Einrichten →“ → `MfaEnrollFlow` (Gerätename „Friedensstifter“) → `mfa-recovery codes:generate { afterEnroll: true }` → `RecoveryCodesView` (10 Codes einmalig, „Codes kopieren“, „Ich habe sie gesichert“) → Mail „Zweiter Faktor eingerichtet“. Scheitert das Erzeugen der Codes, bleibt ein sichtbarer Hinweis mit „Noch einmal versuchen“. Mit Faktor: Geräteliste, „Weiteres Gerät hinzufügen“, „Neue Wiederherstellungscodes“ (alte werden ungültig), „Zweiten Faktor entfernen“ (Bestätigungs-Sheet → `disable`). Nach einer Wiederherstellung Hinweis „Du bist wieder angemeldet. Dein zweiter Faktor wurde entfernt …“ mit „Jetzt einrichten →“.
+- **„Rundgang durch die App“** (Paket R, Gruppe „Dein Begleiter“ nach „Wie es funktioniert“, `Compass`, Unterzeile „Die fünf Einstiegs-Screens noch mal ansehen“ über das optionale Feld `hint` in `MenuList`): öffnet `WelcomeTour mode="manual"` (kein Haken, „Schließen“, letzter Knopf „Fertig“), danach zurück im Profil. Derselbe Rundgang auch über „Rundgang durch die App ansehen ›“ am Ende der Info-Blöcke in `HowItWorksScreen`.
 - **„Meine Daten herunterladen“** (`DataExportSheet`, S-16): Erklärtext → „Datei erstellen“ → `export-my-data` → Download als Blob; 429 → „Du hast heute schon drei Exporte erstellt. Morgen geht es wieder.“
 - **Phase (U4):** unter dem Namen eine ruhige Zeile aus `get_access_state()` („Kennenlernen · Gespräch n von m“, „Ruhemodus – alles, was du erkannt hast, bleibt sichtbar“, „Begleitung“); bei Testern zusätzlich „Beta“. Kein Countdown. **Mit Abo (Paket Z):** „Begleitung · verlängert sich am TT.MM.JJJJ“ bzw. „… endet am …“ (`cancel_at_period_end`) bzw. „… ab dem … Begleitung“ (geplante Herabstufung `pending_tier`), darunter „Abo verwalten →“ (`PortalButton`).
 - **Konto löschen mit Abo (Paket Z):** zusätzlicher Satz „Dein Abo endet damit sofort. Bereits bezahlte Tage werden nicht erstattet.“; `502 subscription_cancel_failed` → eigener Hinweis, nichts gelöscht.
@@ -580,6 +589,7 @@ Bestandsnutzer ohne `age_confirmed_at` sehen einmalig `AgeConfirmSheet` (in `App
 - 3 Tabs: Heute (`Sun`) · Gespräch (`MessageCircle`) · Spiegel (`Sparkles`)
 - Aktiver Tab: accent-Farbe + stärkere Strichstärke
 - Kein Zähler für Ungelesenes (CLAUDE.md „Einladen statt drängen“, seit U1)
+- `NAV_ITEMS` exportiert (Paket R: dieselben Icons in der Mini-Tab-Leiste des Rundgangs)
 
 **ProfileButton:**
 - Avatar (`sm`) mit `aria-label="Profil öffnen"` → `/profile`, in den Headern von Heute, Gespräch und Spiegel
@@ -610,6 +620,18 @@ Bestandsnutzer ohne `age_confirmed_at` sehen einmalig `AgeConfirmSheet` (in `App
 **CrisisResponseCard:**
 - Eigenständige Card statt Chat-Bubble (voller Breite, kein Sprechblasen-Layout, warmer `accent-light`-Ton statt Alarmfarben)
 - `linkify()` erkennt Telefonnummern/URL im Fließtext per Regex und macht sie zu echten `tel:`/`https:`-Links (kein starres Parsen der Modell-Ausgabe); zweite Linie `safeHref()` lässt nur `tel:` und `https:` zu (S-08). Kein `dangerouslySetInnerHTML` im ganzen Frontend.
+
+#### Rundgang (`src/components/tour/`, Paket R)
+
+**WelcomeTour** (`mode: 'auto' | 'manual'`, `onClose({ dismiss })`, `kennenlernenLimit`):
+- Vollbild-Overlay per `createPortal`, `z-[70]` (unter `OfflineBar` z-75 und `UpdateBanner` z-80), `max-w-lg`, sichere Ränder
+- Kopfzeile: Zurück (ab Schritt 2) · Punkte (`role="img"`, „Schritt n von 5“) · „Überspringen“ bzw. „Schließen“ (auf Schritt 5 ausgeblendet, wie im Design)
+- Grafikfläche (`accent-light`, 300 px, `aria-hidden`), Text aus `src/content/welcomeTour.js`, Fußzeile mit Haken „Nicht mehr anzeigen“ (nur `auto`, ein Zustand für den ganzen Rundgang) und „Weiter →“ / „Los geht's“ bzw. „Fertig“
+- `role="dialog"`, `aria-modal`, `aria-labelledby` auf die Überschrift; Fokus beim Schrittwechsel auf die Überschrift, eigene Fokusfalle (Tab), Esc schließt, Körper-Scroll gesperrt, Fokus wird zurückgegeben; Übergang 150 ms nur mit `motion-safe`
+- Schließen mit Haken (`auto`) → `useWelcomeTour.close({ dismiss: true })` → RPC `set_tour_dismissed`; Fehler nur geloggt (`tour_dismiss_failed`), keine Meldung
+- Logs: `tour_shown {mode}`, `tour_completed {mode}`, `tour_skipped {mode, step}`, `tour_dismissed {via}`
+
+**illustrations/**: `WelcomeIllustration`, `TodayIllustration`, `ConversationIllustration` (mit Mikrofon, Spracheingabe kommt vor dem Start), `MirrorIllustration`, `CycleIllustration`, `MiniTabBar` + `ExampleAvatar` – nur feste Beispielinhalte aus `TOUR_EXAMPLES`, keine Props mit Nutzerdaten.
 
 #### Profil-Komponenten (`src/components/profile/`)
 
@@ -1120,7 +1142,7 @@ Scheitert das Entfernen eines Faktors oder der Codes → `500 mfa_reset_failed` 
 
 Body `{ "probe": true }` schickt eine Testmail („Test: Alarmkanal Friedensstifter“) und legt eine `probe`-Zeile an. Mails enthalten nur Regel, Anzahl und Zeitfenster (keine IDs, keine Inhalte); ein Mailfehler steht als Code in `security_alerts.mail_error`, der Alarm bleibt im Admin-Tab sichtbar. Jeder Lauf loggt `security_monitor_run`. Secrets: `SMTP_HOST`, `SMTP_PORT` (465), `SMTP_USER`, `SMTP_PASS`, `ALERT_EMAIL_FROM`, `ALERT_EMAIL_TO`.
 
-**Überwachte Codes** (Schnittstelle, Änderungen nur zusammen mit `monitorRules.ts`): `auth_rejected` (aus `errorResponse` bei 401/403), `userId mismatch`, `mfa_required` (Admin), `mfa_verify_failed` (nur Client-Herkunft), `assistant_insert_failed`, `user_message_insert_failed`/`opening_insert_failed`, `rate_limit_db_error`, `delete_incomplete`/`auth_delete_failed`, `learning_review_failed` (technischer Ausfall des Prüfschritts in post-conversation und supervision), `supervision_rejected`; ab C-4/C-5 `export_created`, `mfa_recovery_used`, `mfa_recovery_failed`; Info: `user_mfa_required`, `legacy_format`, `learning_entry_saved`, `learning_rejected`, `supervision_protocol_rejected`. Lebenszeichen: `retention_applied`, `supervision_run`. **Paket Z:** Alarm `stripe_webhook_signature_invalid` (ab 5/Std), `stripe_webhook_failed`, `stripe_webhook_unmatched`, `stripe_webhook_not_configured`, `quota_check_failed`, `quota_refund_failed`, `subscription_cancel_failed` (je ab 1/Std), `portal_session_failed` (ab 3/Std); Info: `subscription_started/changed/renewed/ended`, `payment_failed`, `quota_warned/reached/refunded`, `stripe_webhook_ignored`/`stripe_webhook_orphan_ended`, `portal_session_created`, `checkout_session_created`/`checkout_disabled`.
+**Überwachte Codes** (Schnittstelle, Änderungen nur zusammen mit `monitorRules.ts`): `auth_rejected` (aus `errorResponse` bei 401/403), `userId mismatch`, `mfa_required` (Admin), `mfa_verify_failed` (nur Client-Herkunft), `assistant_insert_failed`, `user_message_insert_failed`/`opening_insert_failed`, `rate_limit_db_error`, `delete_incomplete`/`auth_delete_failed`, `learning_review_failed` (technischer Ausfall des Prüfschritts in post-conversation und supervision), `supervision_rejected`; ab C-4/C-5 `export_created`, `mfa_recovery_used`, `mfa_recovery_failed`; Info: `user_mfa_required`, `legacy_format`, `learning_entry_saved`, `learning_rejected`, `supervision_protocol_rejected`. Lebenszeichen: `retention_applied`, `supervision_run`. **Paket Z:** Alarm `stripe_webhook_signature_invalid` (ab 5/Std), `stripe_webhook_failed`, `stripe_webhook_unmatched`, `stripe_webhook_not_configured`, `quota_check_failed`, `quota_refund_failed`, `subscription_cancel_failed` (je ab 1/Std), `portal_session_failed` (ab 3/Std); Info: `subscription_started/changed/renewed/ended`, `payment_failed`, `quota_warned/reached/refunded`, `stripe_webhook_ignored`/`stripe_webhook_orphan_ended`, `portal_session_created`, `checkout_session_created`/`checkout_disabled`. **Paket R (nur `origin = 'client'`):** Alarm `tour_dismiss_failed` (ab 10/Tag); Info `tour_shown`, `tour_completed`, `tour_skipped`, `tour_dismissed`.
 
 **Hinweis:** Der Angriffstest löst absichtlich `auth_rejected`, `userid_mismatch` und ggf. `admin_mfa_required` aus — danach sind Alarm-Mails zu erwarten.
 
@@ -1198,6 +1220,7 @@ session_limit                     INTEGER DEFAULT 3          -- Starts im Kennen
 invited_at                        TIMESTAMPTZ                -- v3.x, gesetzt bei admin-invite-user
 invited_by                        UUID → auth.users ON DELETE SET NULL  -- v3.x (seit 033; vorher NO ACTION, blockierte das Löschen des Einladenden)
 age_confirmed_at                  TIMESTAMPTZ                 -- S-11 (036): 18+ bestätigt (handle_new_user aus Signup-Metadaten oder RPC confirm_age); consent_ip entfernt
+tour_dismissed_at                 TIMESTAMPTZ                 -- Paket R (043): Rundgang dauerhaft ausgeblendet (RPC set_tour_dismissed); nicht im Schutz-Trigger (harmloser Zeitstempel am eigenen Konto)
 learning_opt_in                   BOOLEAN DEFAULT false      -- Migration 032 (S-13), nur über RPC set_learning_opt_in
 learning_opt_in_updated_at        TIMESTAMPTZ
 learning_opt_in_version           TEXT ("1.0")
@@ -1492,6 +1515,8 @@ updated_at             TIMESTAMPTZ
 **`set_learning_opt_in(p_opt_in, p_version)`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 032). Setzt die Zustimmung für `auth.uid()`; bei Rücknahme löscht sie in derselben Transaktion alle eigenen `experience_patterns` und liefert `{ opt_in, deleted }`. Seit 037 zuerst MFA-Prüfung (`42501 mfa_required`). Seit 041 nur Version `'2.0'` (sonst `22023 invalid_version`).
 
 **`confirm_age()`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 036, S-11). Setzt `profiles.age_confirmed_at` für `auth.uid()` (bleibt beim ersten Wert). Seit 037 zuerst MFA-Prüfung.
+
+**`set_tour_dismissed()`** — `SECURITY DEFINER`, `search_path = ''`, ausführbar für `authenticated` (Migration 043, Paket R). Zuerst MFA-Prüfung (`42501 mfa_required`), dann `profiles.tour_dismissed_at = coalesce(tour_dismissed_at, now())` für `auth.uid()` – nur diese Spalte, der erste Zeitpunkt bleibt.
 
 **`mfa_satisfied()`** — `SECURITY DEFINER`, `stable`, `search_path = ''`, ausführbar für `authenticated` (Migration 037, S-06b). `true`, wenn der JWT-Claim `aal = 'aal2'` ist **oder** der Nutzer keinen verifizierten Faktor in `auth.mfa_factors` hat. Grundlage der restriktiven Policy `mfa_required` und der MFA-Prüfung in Client-RPCs.
 
@@ -1804,7 +1829,9 @@ Seit Paket A kapselt `_shared/auth.ts` das Zwei-Client-Muster: `requireUser()` p
 
 **Prüfschritt (`_shared/learning.ts`, S-13):** Alles, was nutzerübergreifend wirkt (Lernbasis, Supervision-Empfehlung), läuft durch `reviewLearningEntry`: Regex-Vorfilter (E-Mail, Telefon, URL, Anweisungsmuster) → Haiku-Prüfung (`identifier`, `instruction`, `contact`, `crisis`, `low_quality`), fail-closed. Geloggt werden nur die Gründe als Codes.
 
-**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), S-11 (Feedback nur mit Einwilligung, `age_confirmed_at` server-only), S-22 (#31 Monitoring nur intern), S-16 (#27 Export enthält nur B-Daten, ohne Vektoren/Hashes), S-06b (#33 Codes-Tabelle gesperrt; mit `ATTACK_TEST_MFA=1` #34–#38: aal1 mit Faktor gesperrt an Tabelle, Functions und RPC, Wiederherstellung, Aufräumen – TOTP ohne Zusatzpaket nach RFC 6238), Function-Region eu-west-1 (#32), Paket Z (Z1/Z2 Webhook ohne bzw. mit gefälschter Signatur → 400, Z3 `plan` nicht selbst setzbar, Z4/Z4b Abo-Tabellen und Kontingent-RPCs gesperrt, Z5 „intensiv“ abgeschaltet, Z7 ungültige Stufe/Laufzeit), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+**Angriffstest:** `npm run security:test` (`scripts/security/attack-test.mjs`, Zugangsdaten zweier Testkonten in `.env.security.local`, Vorlage `.env.security.example`) prüft RLS-Trennung, Profil-Schutz, Eigentumsprüfung der Functions, Admin-Schutz, anonymen Zugriff, S-12 (kein Client-Insert in `messages` — auch nicht in eigene Gespräche, erfundener Verlauf wirkungslos, Idempotenz der `clientMessageId`, altes Format → 409), S-13 (Opt-in nur per RPC), S-15 (Fristen-/Berichtsfunktionen gesperrt), S-11 (Feedback nur mit Einwilligung, `age_confirmed_at` server-only), S-22 (#31 Monitoring nur intern), S-16 (#27 Export enthält nur B-Daten, ohne Vektoren/Hashes), S-06b (#33 Codes-Tabelle gesperrt; mit `ATTACK_TEST_MFA=1` #34–#38: aal1 mit Faktor gesperrt an Tabelle, Functions und RPC, Wiederherstellung, Aufräumen – TOTP ohne Zusatzpaket nach RFC 6238), Function-Region eu-west-1 (#32), Paket Z (Z1/Z2 Webhook ohne bzw. mit gefälschter Signatur → 400, Z3 `plan` nicht selbst setzbar, Z4/Z4b Abo-Tabellen und Kontingent-RPCs gesperrt, Z5 „intensiv“ abgeschaltet, Z7 ungültige Stufe/Laufzeit), Paket R (R1 RPC ohne Anmeldung gesperrt, R2 setzt nur die eigene Zeile, R3 `tour_dismissed_at` + `plan` direkt → 42501, R4 erster Zeitpunkt bleibt; setzt bei B den Haken dauerhaft), Rate-Limits und die Security-Header der App (`HDR`). Netzwerkaussetzer werden wiederholt und zählen nicht als „kein Zugriff“. Nur Zähler/Status-Ausgabe, keine Inhalte. `ATTACK_TEST_SUPERVISION=1` bezieht `supervision` ein. Der Test legt bei Testkonto B zwei dauerhafte Gespräche „SECTEST S-12“ an und sperrt B danach kurz (Rate-Limit-Prüfung).
+
+**Unit-Tests:** `npm test` (`node --test "src/**/*.test.js"`, eingebauter Test-Runner von Node, kein Zusatzpaket), bisher `src/lib/tourState.test.js`.
 
 **Löschtest:** `npm run security:deletion-test` (`scripts/security/deletion-test.mjs`, frisches Testkonto C in `.env.security.local`) erzeugt Daten über die normalen Wege, löscht das Konto und prüft den Login; `supabase/security/deletion-check.sql` zählt danach die Reste je Tabelle (Erwartung überall 0; Stand 19.11.2026 nach C-5: 32 Prüfpunkte inkl. `mfa_recovery_codes` und `auth.mfa_factors`, alle 0). `DELETION_TEST_MFA=1` richtet vorher einen zweiten Faktor ein, erzeugt Codes, prüft den Export und löscht mit `aal2`. `DELETION_TEST_SUBSCRIPTION=1` (Paket Z): C hat vorher in der Sandbox ein Abo abgeschlossen; geprüft wird zusätzlich, dass es bei Stripe beendet ist. Stand 20.11.2026: Löschung mit Abo von Hand geprüft (J-Z2 Test 10), 36 Prüfpunkte inkl. `subscriptions`, `message_quota_periods`, `message_charges`, alle 0.
 
