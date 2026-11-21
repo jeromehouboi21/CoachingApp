@@ -2,7 +2,7 @@
 
 **Stand:** 21.11.2026 · **Handoff:** `docs/Neues_Zielbild/handoff-einstiegs-rundgang.md` v1 · **Bestandsaufnahme:** `docs/rundgang/paket-r-discovery.md`
 **Code:** Commit `9376055d` (auf `main`) · Migration 043 eingespielt · `security-monitor` neu deployt
-**Status:** Gerätetest J-R2 bis auf Schritt 9 (VoiceOver) bestanden. Für die Abnahme J-R3 fehlen noch Schritt 9 und deine Bestätigung des Textes zu Schritt 2.
+**Status:** ✅ **Abgenommen (J-R3, 21.11.2026).** Gerätetest J-R2 bestanden, Schritt 9 (VoiceOver) als SKIP gewertet, Text Schritt 2 bestätigt.
 
 ---
 
@@ -32,7 +32,7 @@ Nach dem Login zeigt Heute neuen Nutzern einen Rundgang in fünf Schritten: Will
 | A7 | `MenuList` hat ein optionales Feld `hint` bekommen (zweite Zeile nur beim Rundgang-Eintrag). |
 
 **Zusätzlich:**
-- **Schritt 2:** „Heute zeigt dir ~~immer~~ nur das, was gerade dran ist.“ Das absolute „immer“ ist wegen des Sprachprinzips raus. **Deine Bestätigung steht noch aus.**
+- **Schritt 2:** „Heute zeigt dir ~~immer~~ nur das, was gerade dran ist.“ Das absolute „immer“ ist wegen des Sprachprinzips raus. Von Jerome bestätigt (21.11.2026).
 - **Schritt 3:** mit „sprechen“ und Mikrofon in der Grafik (deine Entscheidung: die Spracheingabe kommt vor dem Start). Bis dahin zeigt der Rundgang ein Mikrofon, das es in der App noch nicht gibt.
 - **Schritt 5:** Oben steht kein „Überspringen“, wie im Design. Dort schließt „Los geht's“ bzw. „Fertig“ den Rundgang, Esc geht auch.
 - **Ladefehler auf Heute:** Der Rundgang erscheint dann nicht. Sonst sähen ihn Nutzer mit vielen Gesprächen.
@@ -83,14 +83,13 @@ Der Datenexport (alle `profiles`-Spalten) und die Kontolöschung (Zeile in `prof
 | 6 | Profil → Rundgang ohne Haken, „Fertig“, zurück ins Profil | ✅ |
 | 7 | Tester-Konto: Schritt 5 ohne Kennenlern-Satz | ✅ |
 | 8 | Start direkt in `/coach` → kein Rundgang (Konto `+test-b`) | ✅ |
-| 9 | VoiceOver | **offen** |
+| 9 | VoiceOver | SKIP (Jerome, 21.11.2026) |
 | 10 | `app_logs`: nur `tour_*`-Codes, `origin = client`, `metadata` nur `mode`/`step`/`via`, kein `tour_dismiss_failed` | ✅ |
 
 ## 6. Offene Punkte
 
-1. **Schritt 9 (VoiceOver):** nachreichen oder als SKIP werten.
-2. **Text Schritt 2** ohne „immer“ bestätigen.
-3. **Kreislauf-Konzept** (Handoff 7.3): Beim nächsten Update in Abschnitt 7 „Was gleich bleibt“ ergänzen, dass es nach dem Login einen Rundgang gibt. Das Dokument liegt nicht im Repo, das machst du im Design-Chat.
+1. **VoiceOver** wurde nicht geprüft (SKIP). Fokus, Dialog-Rolle und Beschriftungen sind gebaut, ein Test mit einem Screenreader steht aus. Gut wäre er beim nächsten Gerätetest.
+2. **Kreislauf-Konzept** (Handoff 7.3): Beim nächsten Update in Abschnitt 7 „Was gleich bleibt“ ergänzen, dass es nach dem Login einen Rundgang gibt. Das Dokument liegt nicht im Repo, das machst du im Design-Chat.
 
 ## 7. Beobachtungen (nicht umgesetzt, kein Scope)
 
