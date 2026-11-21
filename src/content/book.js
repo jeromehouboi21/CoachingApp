@@ -74,4 +74,6 @@ export const BOOK_UI_TEXT = {
   howtoTextLive: ' Darin stellt Mara die Fragen, so wie hier dein Begleiter. Wenn du das Buch kennst, erinnert er dich ab und zu an eine passende Szene. Die App funktioniert auch ohne das Buch.',
   // Heute, Zustand A
   todayLink: 'Zur App gibt es auch ein Buch →',
+  // Spiegel, Muster-Detail (B1, Handoff 5.4)
+  mirrorEyebrow: 'Im Buch',
 }

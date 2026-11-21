@@ -9,7 +9,7 @@ import { ExampleAvatar } from '../../components/tour/illustrations/MiniTabBar'
 import { createLogger } from '../../lib/logger'
 
 const logger = createLogger('BookScreen')
-const FROM_VALUES = ['profile', 'howto', 'today']
+const FROM_VALUES = ['profile', 'howto', 'today', 'mirror']
 
 export function BookScreen() {
   const navigate = useNavigate()

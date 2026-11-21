@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase'
 import { createLogger } from '../../lib/logger'
 import { getPattern } from '../../lib/patterns'
 import { formatDay } from './shared'
+import { BookHints } from '../../components/book/BookHints'
 
 const logger = createLogger('PatternDetailScreen')
 
@@ -76,6 +77,9 @@ export function PatternDetailScreen() {
       </div>
 
       <div className="px-5 pb-24">
+        {/* B1: Fundstellen im Buch, nur für Leser */}
+        <BookHints patternKey={key} profile={profile} />
+
         {momentsFailed && (
           <p role="alert" className="text-[13px] text-ink-2 bg-surface-2 rounded-lg px-4 py-3 mt-6">
             Deine Momente ließen sich gerade nicht laden.

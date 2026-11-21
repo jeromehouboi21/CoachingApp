@@ -65,6 +65,10 @@ export const RULES: Rule[] = [
   // T1 (Buch-Seite): nur Codes aus dem Browser (origin client), ohne Inhalte
   { id: 'book_usage',              codes: ['book_page_viewed', 'book_link_clicked', 'book_status_set'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Buch-Seite: aufgerufen, Amazon-Link, Status gesetzt' },
   { id: 'book_error',              codes: ['book_status_failed', 'book_status_invalid_input'], windowMin: 1440, threshold: 5, origin: 'client', label: 'Buch-Status nicht gespeichert' },
+  // B1 (Buch-Bezüge im Gespräch): Server-Codes aus chat; Spiegel-Fehler aus dem Browser
+  { id: 'book_chat_usage',         codes: ['book_check', 'book_block_sent', 'book_check_skipped', 'book_block_omitted', 'book_blocked_set'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Buch-Bezüge: geprüft, mitgegeben, übersprungen, gesperrt' },
+  { id: 'book_select_error',       codes: ['book_select_failed', 'book_blocked_set_failed'], windowMin: 1440, threshold: 10, label: 'Buch-Auswahl oder Buch-Sperre fehlgeschlagen' },
+  { id: 'book_hints_error',        codes: ['book_hints_failed'],       windowMin: 1440,  threshold: 10, origin: 'client', label: 'Spiegel: Fundstellen im Buch nicht ladbar' },
   { id: 'account_deleted_mail_failed', codes: ['account_deleted_mail_failed'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Löschbestätigung nicht zugestellt' },
   { id: 'consent_required',        codes: ['consent_required'],        windowMin: 10080, threshold: 0, infoOnly: true, label: 'Anfragen ohne Zustimmung v2.0' },
   { id: 'user_mfa_required',       codes: ['user_mfa_required'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Nutzer-Anfragen ohne zweiten Faktor' },

@@ -12,6 +12,12 @@ import {
   COACH_MODEL, COACH_REQUEST_DEFAULTS, COACH_MAX_TOKENS, COACH_CRISIS_MAX_TOKENS, HAIKU_MODEL,
   extractText, ensureEndsWithUser,
 } from '../_shared/models.ts';
+import {
+  modeAllows, bookPathOpen, eligiblePassages, bookStep, buildSelectionIndex, parseSelection,
+  buildSelectionTranscript, buildSelectionUserContent, buildBookBlock,
+  BOOK_SELECT_SYSTEM, BOOK_BASE_LINE, BOOK_SELECT_TIMEOUT_MS, BOOK_SELECT_MAX_TOKENS,
+  type BookStatus, type Passage,
+} from '../_shared/bookSelection.ts';
 
 const BASE_SYSTEM_PROMPT = `Du bist der digitale Begleiter von Jerome Houboi,
 zertifizierter systemischer Coach und Gründer von friedensstifter.coach.
@@ -628,8 +634,9 @@ const SCALING_HINTS: Record<number, string> = {
   10: "Wie hast du das erreicht? Was kannst du daraus für andere Bereiche mitnehmen?",
 };
 
-function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice, resume?: ResumeContext, continueCtx?: ContinueContext): string {
-  let prompt = BASE_SYSTEM_PROMPT + '\n\n' + SYSTEMIC_WITNESSING_BLOCK;
+function buildSystemPrompt(memory?: UserMemory, ragContext?: string[], supervisionNote?: string, wellnessCheck?: WellnessCheck, briefing?: PreSessionBriefing, coachFile?: CoachFile, entryContext?: EntryContext, offerMechanism?: boolean, introduceVoice?: InnerVoice, namingVoice?: InnerVoice, resume?: ResumeContext, continueCtx?: ContinueContext, bookBlock?: string): string {
+  // B1-1: feste Zeile zum Buch im statischen Teil (gilt für alle Nutzer)
+  let prompt = BASE_SYSTEM_PROMPT + '\n\n' + BOOK_BASE_LINE + '\n\n' + SYSTEMIC_WITNESSING_BLOCK;
 
   // Nur für den Turn, in dem der Rhythmus greift, zusätzlich anhängen.
   // Wichtig: NACH SYSTEMIC_WITNESSING_BLOCK, damit die konkrete
@@ -920,6 +927,11 @@ Maximal 1 Satz.`;
     prompt += entryBlock;
   }
 
+  // BLOCK 8: Buch-Stellen (B1) – direkt vor FORTSETZUNG/WEITERARBEITEN, nie danach
+  if (bookBlock) {
+    prompt += '\n\n' + bookBlock;
+  }
+
   // Fortsetzen (U3) bzw. Weiterarbeiten (U5a): als LETZTER Block, damit die Pflichtstruktur
   // der ersten Nachricht Vorrang vor allem anderen hat.
   if (continueCtx) {
@@ -931,6 +943,117 @@ Maximal 1 Satz.`;
   return prompt;
 }
 
+
+// ── B1 Buch-Bezüge ──────────────────────────────────────────────────────────
+// Regeln in _shared/bookSelection.ts. Jeder Fehler im Buch-Pfad endet ohne Block, nie mit einem
+// Fehler im Gespräch. Logs nur mit Codes und Stellen-Kennungen, ohne Inhalte und ohne IDs.
+// Schalter BOOK_REFERENCES_MODE: off (Standard) · admin · all.
+const BOOK_REFERENCES_MODE = (Deno.env.get('BOOK_REFERENCES_MODE') ?? 'off').trim();
+
+interface BookState {
+  status: BookStatus;
+  progress: number | null;
+  isAdmin: boolean;
+  blocked: boolean;
+  offeredReply: number | null;
+  passageIds: string[];
+  ownThreadHigh: boolean;
+  lastThreadHigh: boolean;
+}
+
+const PASSAGE_COLUMNS = 'id, kind, position, part_title, title, situation_summary, key_quote, bridge_question, fits_when, book_questions, themes, coach_note, is_resolution, is_sensitive, sensitive_rule, is_active, approved_by_jerome_at';
+
+// deno-lint-ignore no-explicit-any
+async function loadBookState(admin: any, userId: string, convId: string, logger: any): Promise<BookState | null> {
+  try {
+    const [profileRes, convRes, lastRes] = await Promise.all([
+      admin.from('profiles').select('book_status, book_progress, is_admin').eq('id', userId).maybeSingle(),
+      admin.from('conversations')
+        .select('book_blocked, book_offered_reply, book_passage_ids, open_thread_intensity')
+        .eq('id', convId).eq('user_id', userId).maybeSingle(),
+      admin.from('conversations')
+        .select('open_thread_intensity')
+        .eq('user_id', userId).neq('id', convId).not('summary', 'is', null)
+        .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    if (profileRes.error || convRes.error || lastRes.error || !profileRes.data || !convRes.data) {
+      logger.warn('book_select_failed', { reason: 'load' });
+      return null;
+    }
+    const st = profileRes.data.book_status;
+    return {
+      status: st === 'read' || st === 'reading' || st === 'not_yet' ? st : null,
+      progress: Number.isInteger(profileRes.data.book_progress) ? profileRes.data.book_progress : null,
+      isAdmin: profileRes.data.is_admin === true,
+      blocked: convRes.data.book_blocked === true,
+      offeredReply: Number.isInteger(convRes.data.book_offered_reply) ? convRes.data.book_offered_reply : null,
+      passageIds: Array.isArray(convRes.data.book_passage_ids) ? convRes.data.book_passage_ids : [],
+      ownThreadHigh: convRes.data.open_thread_intensity === 'high',
+      lastThreadHigh: lastRes.data?.open_thread_intensity === 'high',
+    };
+  } catch (err) {
+    logger.warn('book_select_failed', { reason: 'load', ...describeError(err) });
+    return null;
+  }
+}
+
+// Auswahlschritt (E2): Haiku wählt 0–2 Kennungen aus der Liste erlaubter Stellen.
+async function selectBookPassages(
+  anthropic: Anthropic, eligible: Passage[], transcript: string,
+  // deno-lint-ignore no-explicit-any
+  logger: any,
+): Promise<string[] | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), BOOK_SELECT_TIMEOUT_MS);
+  const started = Date.now();
+  try {
+    const response = await anthropic.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: BOOK_SELECT_MAX_TOKENS,
+      system: BOOK_SELECT_SYSTEM,
+      messages: [{ role: 'user', content: buildSelectionUserContent(buildSelectionIndex(eligible), transcript) }],
+    }, { signal: controller.signal, maxRetries: 0 });
+    // deno-lint-ignore no-explicit-any
+    const usage = (response as any).usage;
+    logger.info('book_select_usage', {
+      label: 'chat_book_select', ms: Date.now() - started,
+      inputTokens: usage?.input_tokens ?? 0, outputTokens: usage?.output_tokens ?? 0,
+      stopReason: response.stop_reason ?? null,
+    });
+    const parsed = parseSelection(extractText(response, 'chat_book_select', logger), new Set(eligible.map((p) => p.id)));
+    if (!parsed.ok) {
+      logger.warn('book_select_failed', { reason: parsed.reason });
+      return null;
+    }
+    return parsed.ids;
+  } catch (err) {
+    logger.warn('book_select_failed', { reason: controller.signal.aborted ? 'timeout' : 'api', ms: Date.now() - started, ...describeError(err) });
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// deno-lint-ignore no-explicit-any
+async function loadPassages(admin: any, filterIds: string[] | null, logger: any): Promise<Passage[] | null> {
+  let q = admin.from('book_passages').select(PASSAGE_COLUMNS).eq('is_active', true).not('approved_by_jerome_at', 'is', null);
+  if (filterIds) q = q.in('id', filterIds);
+  const { data, error } = await q;
+  if (error) {
+    logger.warn('book_select_failed', { reason: 'load', code: error.code ?? 'unknown' });
+    return null;
+  }
+  return (data ?? []) as Passage[];
+}
+
+// Sicherheitsregel 4: Merker am Gespräch (E1). Kein Wert, kein Grund gespeichert.
+// deno-lint-ignore no-explicit-any
+async function setBookBlocked(admin: any, userId: string, convId: string, reason: 'wellness' | 'crisis', logger: any): Promise<void> {
+  const { error } = await admin.from('conversations').update({ book_blocked: true })
+    .eq('id', convId).eq('user_id', userId);
+  if (error) logger.error('book_blocked_set_failed', { reason, code: error.code ?? 'unknown' });
+  else logger.info('book_blocked_set', { reason });
+}
 
 // ── Serverseitiger Gesprächskontext (Security S-12) ─────────────────────────
 // Akte, Profil, Resonanzkarte, Briefing, Legacy-Gedächtnis, RAG und Supervision
@@ -1474,6 +1597,57 @@ Deno.serve(async (req) => {
       ? loadCoachContext(admin, user.id, convId, firstUserMessage, logger)
       : Promise.resolve({});
 
+    // B1 (E1/A1): Eröffnung mit Wellness-Wert ≤ 3 → in diesem Gespräch keine Buch-Bezüge.
+    // Unabhängig vom Schalter, damit ein späteres Einschalten nichts nachholt.
+    if (isCoaching && start === 'wellness' && wellnessCheck && wellnessCheck.score <= 3 && convId) {
+      await setBookBlocked(admin, user.id, convId, 'wellness', logger);
+    }
+
+    // B1: Buch-Pfad vorbereiten – nur bei echter Nutzernachricht (A3) und nur mit Schalter.
+    // Läuft parallel zu Krisenerkennung und Kontext; ob Stimmen/Mechanismus kollidieren, steht
+    // erst später fest (A6) – dann wird das Ergebnis ggf. verworfen.
+    const replyNo = assistantTurnCount + 1;
+    const pendingUser = !!newMessage && !existingUserMessage;
+    const bookHistoryLength = history.length + (pendingUser ? 1 : 0);
+    const bookWanted = isCoaching && isV2 && !!convId && !!newMessage
+      && (BOOK_REFERENCES_MODE === 'admin' || BOOK_REFERENCES_MODE === 'all');
+    const bookTranscriptSource = [
+      ...history.map((m) => ({ role: m.role, content: m.content })),
+      ...(pendingUser && newMessage ? [{ role: 'user', content: newMessage.content }] : []),
+    ];
+    type BookPrep = { st: BookState; step: 'window' | 'check'; passages: Passage[]; ids: string[]; failed?: boolean };
+    const bookPrepPromise: Promise<BookPrep | null> = !bookWanted ? Promise.resolve(null) : (async () => {
+      const st = await loadBookState(admin, user.id, convId as string, logger);
+      if (!st) return null;
+      const open = bookPathOpen({
+        modeAllowed: modeAllows(BOOK_REFERENCES_MODE, st.isAdmin), status: st.status, bookBlocked: st.blocked,
+        crisisNow: false, ownThreadHigh: st.ownThreadHigh, lastThreadHigh: st.lastThreadHigh,
+      });
+      if (!open) return null;
+      const step = bookStep({ replyNo, historyLength: bookHistoryLength, offeredReply: st.offeredReply, collision: false });
+      if (step === 'window') {
+        const ps = await loadPassages(admin, st.passageIds, logger);
+        const ordered = (ps ?? []).length === 0 ? [] : st.passageIds
+          .map((id) => (ps as Passage[]).find((p) => p.id === id))
+          .filter((p): p is Passage => !!p);
+        return ordered.length === 0 ? null : { st, step, passages: ordered, ids: ordered.map((p) => p.id) };
+      }
+      if (step === 'check') {
+        const all = await loadPassages(admin, null, logger);
+        if (!all) return null;
+        const eligible = eligiblePassages(all, st.status, st.progress);
+        if (eligible.length === 0) return { st, step, passages: [], ids: [] };
+        const ids = await selectBookPassages(anthropic, eligible, buildSelectionTranscript(bookTranscriptSource), logger);
+        if (ids === null) return { st, step, passages: [], ids: [], failed: true };
+        const chosen = ids.map((id) => eligible.find((p) => p.id === id)).filter((p): p is Passage => !!p);
+        return { st, step, passages: chosen, ids: chosen.map((p) => p.id) };
+      }
+      return null;
+    })().catch((err) => {
+      logger.warn('book_select_failed', { reason: 'api', ...describeError(err) });
+      return null;
+    });
+
     // 9. Krisenerkennung — nur bei echter Nutzer-Nachricht im Gesprächsmodus. Läuft VOR der
     //    Limit-Prüfung, damit eine Krisenantwort auch bei erreichtem Limit ausgeliefert wird.
     let crisisDetected = false;
@@ -1613,6 +1787,13 @@ Deno.serve(async (req) => {
       if (crisisInsertError) {
         logger.error('crisis_events insert failed', { code: crisisInsertError.code, requestId: safeRequestId });
       }
+      // B1 (E1): nach einem Krisenhinweis keine Buch-Bezüge mehr in diesem Gespräch.
+      // Im Hintergrund, die Krisenantwort wartet nicht darauf (A2).
+      if (convId) {
+        const blockWork = setBookBlocked(admin, user.id, convId, 'crisis', logger)
+          .catch((err) => logger.error('book_blocked_set_failed', { reason: 'crisis', ...describeError(err) }));
+        if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(blockWork);
+      }
     }
 
     // Alle 4 Antworten (ab der 3.) aktiv ein Wirkmechanismus-Angebot einstreuen.
@@ -1672,6 +1853,45 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 11b. B1: Buch-Block für diese Antwort. Kollision mit Stimmen oder Mechanismus (E4, A5: auch die
+    //      offene Namensgebung) steht erst jetzt fest; die bestehenden Blöcke haben Vorrang.
+    let bookBlock: string | undefined;
+    if (bookWanted && !crisisDetected) {
+      const prep = await bookPrepPromise;
+      if (prep) {
+        const collision = offerMechanism || !!introduceVoice || !!namingVoice;
+        const status = prep.st.status === 'reading' ? 'reading' : 'read';
+        if (prep.step === 'window') {
+          if (collision) {
+            logger.info('book_block_omitted', { reason: 'collision' });
+          } else {
+            const windowReply = Math.min(3, Math.max(1, replyNo - (prep.st.offeredReply ?? replyNo) + 1)) as 1 | 2 | 3;
+            bookBlock = buildBookBlock({ passages: prep.passages, status, progress: prep.st.progress, windowReply });
+            logger.info('book_block_sent', { ids: prep.ids, window_reply: windowReply });
+          }
+        } else if (collision) {
+          logger.info('book_check_skipped', { reason: 'collision' });
+        } else if (!prep.failed) {
+          if (prep.ids.length === 0) {
+            logger.info('book_check', { result: 'none', count: 0 });
+          } else {
+            // Merken, bevor der Block mitgeht (E3: schon das Angebot zählt); nur wenn noch nie angeboten
+            const { data: stored, error: storeError } = await admin.from('conversations')
+              .update({ book_offered_reply: replyNo, book_passage_ids: prep.ids })
+              .eq('id', convId).eq('user_id', user.id).is('book_offered_reply', null)
+              .select('id');
+            if (storeError || !stored || stored.length === 0) {
+              logger.warn('book_select_failed', { reason: 'store', code: storeError?.code ?? 'no_row' });
+            } else {
+              logger.info('book_check', { result: 'selected', count: prep.ids.length });
+              bookBlock = buildBookBlock({ passages: prep.passages, status, progress: prep.st.progress, windowReply: 1 });
+              logger.info('book_block_sent', { ids: prep.ids, window_reply: 1 });
+            }
+          }
+        }
+      }
+    }
+
     // 12. System-Prompt
     const { memory, ragContext, supervisionNote, briefing, coachFile } =
       crisisDetected || !isCoaching ? {} as CoachContext : await contextPromise;
@@ -1682,7 +1902,7 @@ Deno.serve(async (req) => {
         : resumeContext
           // Fortsetzen: kein Wellness-/Entry-Kontext, kein Briefing über ein anderes Gespräch
           ? buildSystemPrompt(memory, ragContext, supervisionNote, undefined, undefined, coachFile, undefined, offerMechanism, introduceVoice, namingVoice, resumeContext, continueContext)
-          : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice);
+          : buildSystemPrompt(memory, ragContext, supervisionNote, wellnessCheck, briefing, coachFile, entryContext, offerMechanism, introduceVoice, namingVoice, undefined, undefined, bookBlock);
 
     if (wellnessCheck && isCoaching) {
       const tone = wellnessCheck.score <= 3 ? 'behutsam' : wellnessCheck.score <= 6 ? 'neugierig' : 'ressourcenorientiert';

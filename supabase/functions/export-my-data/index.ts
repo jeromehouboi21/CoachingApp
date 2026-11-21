@@ -58,6 +58,7 @@ export const EXCLUDED_TABLES: Record<string, string> = {
   supervision_logs: 'Wochen-Zähler und allgemeine Empfehlungen ohne Personenbezug.',
   security_alerts: 'Zusammengefasste Alarme ohne Bezug zu einzelnen Personen.',
   invite_codes: 'Einladungscodes ohne Bezug zu einzelnen Personen.',
+  book_passages: 'Kuratierte Stellen aus dem Buch „Friedensstifter“, keine Nutzerdaten.',
   stripe_events: 'Technische Ereignis-IDs von Stripe zur Vermeidung doppelter Verarbeitung, ohne Bezug zu einzelnen Personen.',
 };
 

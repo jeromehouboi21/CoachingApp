@@ -103,3 +103,14 @@ Die Datei liegt bei dir lokal als `docs/Neues_Zielbild/friedensstifter-buch-land
 | A11 | Landkarte ablegen (J-B1, Jerome) | Datei liegt schon lokal, Format geprüft | Ich kopiere sie mit deinem OK nach `docs/buch/buch-landkarte-v1.md` und setze nur die Kopfzeile auf „freigegeben“ |
 
 **Sonst:** keine Änderung an `post-conversation`, keine neue Abhängigkeit. Migrationen **045** und **046** sind frei.
+
+---
+
+## 13. J-B1 – Entscheidungen von Jerome (21.11.2026)
+
+- **A4:** Variante a, geprüft wird vor den Antworten **3, 6 und 8** (`BOOK_CHECK_REPLIES`).
+- **A5:** Variante a, auch die offene Namensgebung zählt als Kollision. Die bestehende Funktion hat Vorrang.
+- **A1–A3 und A6–A11:** bestätigt.
+- **E1–E7, B1-1 und B1-2:** bestätigt.
+- **Texte aus Abschnitt 5:** freigegeben.
+- **Landkarte:** nach `docs/buch/buch-landkarte-v1.md` kopiert, nur die Kopfzeile auf „freigegeben am 21.11.2026 (B-8)“ geändert.

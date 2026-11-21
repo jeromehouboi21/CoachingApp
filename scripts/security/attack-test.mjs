@@ -1346,6 +1346,71 @@ async function testsT1(a, b) {
     'gleiche MFA-Prüfung wie set_learning_opt_in; eigener aal1-Lauf nur mit ATTACK_TEST_MFA=1 (nicht erweitert)');
 }
 
+// ── B1: Buch-Bezüge (Handoff B1 6.3) ─────────────────────────────────────────
+// Akteur B. Setzt B's Buch-Status nacheinander (not_yet, reading/2, read) und hinterlässt 'read'.
+// B1-f/B1-g setzen die Seed-Migration 046 voraus.
+async function testsB1(b) {
+  const anon = newClient();
+  {
+    const rA = await countRows(anon, 'book_passages');
+    const rB = await countRows(b.client, 'book_passages');
+    record('B1-a', 'select book_passages (anon / B)', 'Fehler oder 0 Zeilen',
+      noAccessOrZero(rA) === PASS && noAccessOrZero(rB) === PASS ? PASS : FAIL,
+      `anon: ${rA.error ? errCode(rA.error) : rA.count} · B: ${rB.error ? errCode(rB.error) : rB.count}`);
+  }
+  {
+    const { error } = await b.client.from('book_passages').insert({
+      id: 'X-9', kind: 'dialog', position: 1, part_title: 'x', title: 'x', situation_summary: 'x', key_quote: 'x',
+    });
+    record('B1-b', 'insert book_passages (als B)', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'eingefügt');
+  }
+  {
+    const convId = await ensureBConversation(b, 'SECTEST B1');
+    const results = [];
+    for (const patch of [{ book_blocked: true }, { book_offered_reply: 3 }, { book_passage_ids: ['T3-D1'] }]) {
+      const { data, error } = await b.client.from('conversations').update(patch).eq('id', convId).select('id');
+      results.push(error ? errCode(error) : `betroffen=${data?.length ?? 0}`);
+    }
+    record('B1-c', 'update conversations.book_* (eigene Zeile)', '42501 (3×)',
+      results.every((r) => r === '42501') ? PASS : FAIL, results.join(', '));
+  }
+  {
+    const { error } = await anon.rpc('get_book_hints', { p_pattern_key: 'uebernahme_reflex' });
+    record('B1-d', 'anon rpc get_book_hints', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+  const hints = async (key) => {
+    const { data, error } = await b.client.rpc('get_book_hints', { p_pattern_key: key });
+    return { ids: (data ?? []).map((r) => r.passage_id), error };
+  };
+  const setStatus = async (status, progress = null) =>
+    (await b.client.rpc('set_book_status', { p_status: status, p_progress: progress })).error;
+  {
+    const e = await setStatus('not_yet');
+    const r = await hints('uebernahme_reflex');
+    record('B1-e', 'get_book_hints bei „Noch nicht“', 'leer',
+      !e && !r.error && r.ids.length === 0 ? PASS : FAIL, e ? errCode(e) : r.error ? errCode(r.error) : `treffer=${r.ids.length}`);
+  }
+  {
+    const e = await setStatus('reading', 2);
+    const r = await hints('uebernahme_reflex');
+    record('B1-f', 'get_book_hints bei „lese Teil 2“ (uebernahme_reflex)', 'genau T2-J',
+      !e && !r.error && r.ids.join(',') === 'T2-J' ? PASS : FAIL, e ? errCode(e) : r.error ? errCode(r.error) : r.ids.join(',') || 'leer');
+  }
+  {
+    const e = await setStatus('read');
+    const r = await hints('rueckzug_unter_druck');
+    record('B1-g', 'get_book_hints bei „gelesen“ (rueckzug_unter_druck)', 'T2-D3, T3-D3',
+      !e && !r.error && r.ids.join(',') === 'T2-D3,T3-D3' ? PASS : FAIL, e ? errCode(e) : r.error ? errCode(r.error) : r.ids.join(',') || 'leer');
+  }
+  {
+    const r1 = await hints("x'; drop table public.book_passages; --");
+    const r2 = await hints('');
+    const ok = !r1.error && !r2.error && r1.ids.length === 0 && r2.ids.length === 0;
+    record('B1-h', 'get_book_hints mit Unsinn bzw. leer', 'leer, kein Fehler', ok ? PASS : FAIL,
+      `${r1.error ? errCode(r1.error) : r1.ids.length} / ${r2.error ? errCode(r2.error) : r2.ids.length}`);
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`Friedensstifter Angriffstest · ${new Date().toISOString()}`);
@@ -1381,6 +1446,7 @@ async function testsT1(a, b) {
   await testsZ(a, b);    // Paket Z (Zahlung und Abo), vor den Rate-Limit-Tests
   await testsR(a, b);    // Paket R (Einstiegs-Rundgang)
   await testsT1(a, b);   // T1 (Buch-Status)
+  await testsB1(b);      // B1 (Buch-Bezüge, nach T1)
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
