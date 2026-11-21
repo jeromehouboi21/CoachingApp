@@ -17,6 +17,7 @@ import { SecurityCard } from '../../components/profile/SecurityCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
 import { WelcomeTour } from '../../components/tour/WelcomeTour'
+import { BookProfileCard } from '../../components/book/BookProfileCard'
 
 const logger = createLogger('ProfileScreen')
 
@@ -237,6 +238,9 @@ export function ProfileScreen() {
           Termin buchen →
         </a>
       </div>
+
+      {/* T1: Das Buch zur App, unter der Coaching-Karte */}
+      <BookProfileCard status={profile?.book_status ?? null} progress={profile?.book_progress ?? null} />
 
       {/* Paket K W2: Gliederung nach Konzept 7 – Dein Begleiter · Konto & Sicherheit · Rechtliches */}
       <ProfileSection title="Dein Begleiter">

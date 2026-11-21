@@ -27,6 +27,7 @@ import { PasswordChangeScreen } from './screens/account/PasswordChangeScreen'
 import { PasswordResetScreen } from './screens/account/PasswordResetScreen'
 import { SecurityInfoScreen } from './screens/legal/SecurityInfoScreen'
 import { ProfileMissingScreen } from './screens/start/ProfileMissingScreen'
+import { BookScreen } from './screens/book/BookScreen'
 
 function LoadingScreen() {
   return (
@@ -183,6 +184,8 @@ export default function App() {
         <Route path="/mirror/entwicklung" element={<ProtectedRoute><MirrorScreen level="entwicklung" /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
         <Route path="/feedback" element={<ProtectedRoute><BetaSurveyScreen /></ProtectedRoute>} />
+        {/* T1: Das Buch zur App – hinter Login, ohne aktiven Tab, mit Zurück-Pfeil */}
+        <Route path="/buch" element={<ProtectedRoute><BookScreen /></ProtectedRoute>} />
       </Route>
 
       {/* Admin-Nutzerverwaltung — eigenständiger Vollbild-Screen, kein Bestandteil der normalen Nutzer-Navigation */}

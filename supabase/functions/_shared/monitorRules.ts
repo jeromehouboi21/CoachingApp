@@ -62,6 +62,9 @@ export const RULES: Rule[] = [
   // Paket R (Einstiegs-Rundgang): nur Codes aus dem Browser (origin client), ohne Inhalte
   { id: 'tour_usage',              codes: ['tour_shown', 'tour_completed', 'tour_skipped', 'tour_dismissed'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Rundgang: gezeigt, beendet, übersprungen, ausgeblendet' },
   { id: 'tour_error',              codes: ['tour_dismiss_failed'],     windowMin: 1440,  threshold: 10, origin: 'client', label: 'Rundgang: „Nicht mehr anzeigen“ nicht gespeichert' },
+  // T1 (Buch-Seite): nur Codes aus dem Browser (origin client), ohne Inhalte
+  { id: 'book_usage',              codes: ['book_page_viewed', 'book_link_clicked', 'book_status_set'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Buch-Seite: aufgerufen, Amazon-Link, Status gesetzt' },
+  { id: 'book_error',              codes: ['book_status_failed', 'book_status_invalid_input'], windowMin: 1440, threshold: 5, origin: 'client', label: 'Buch-Status nicht gespeichert' },
   { id: 'account_deleted_mail_failed', codes: ['account_deleted_mail_failed'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Löschbestätigung nicht zugestellt' },
   { id: 'consent_required',        codes: ['consent_required'],        windowMin: 10080, threshold: 0, infoOnly: true, label: 'Anfragen ohne Zustimmung v2.0' },
   { id: 'user_mfa_required',       codes: ['user_mfa_required'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Nutzer-Anfragen ohne zweiten Faktor' },

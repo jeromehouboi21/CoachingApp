@@ -12,6 +12,7 @@ import { PAYMENTS_ENABLED } from '../../content/legalTexts'
 import { PLANS } from '../../content/plans'
 import { WelcomeTour } from '../../components/tour/WelcomeTour'
 import { useAccessState } from '../../lib/accessState'
+import { BOOK_UI_TEXT, BOOK_REFERENCES_LIVE } from '../../content/book'
 
 const OPENING = "Hast du Fragen zur App — wie sie funktioniert, was sie kostet, oder ob sie das Richtige für dich ist? Ich beantworte sie gerne."
 
@@ -218,6 +219,21 @@ export function HowItWorksScreen() {
               Der Ansatz hilft dir, einen Schritt zurückzutreten und das Muster zu sehen — statt mittendrin zu stecken. Nicht Analyse. Nicht Therapie. Sondern Klarheit durch Fragen.
             </p>
           </div>
+
+          {/* T1: Das Buch zur App (nach „Was steckt dahinter?“, vor dem Rundgang-Link) */}
+          <section>
+            <h2 className="text-[16px] font-medium text-ink mb-2">{BOOK_UI_TEXT.howtoHeading}</h2>
+            <p className="text-[14px] text-ink-2 leading-[1.7]">
+              {BOOK_UI_TEXT.howtoLead}<em>{BOOK_UI_TEXT.howtoTitle}</em>
+              {BOOK_REFERENCES_LIVE ? BOOK_UI_TEXT.howtoTextLive : BOOK_UI_TEXT.howtoText}
+            </p>
+            <button
+              onClick={() => navigate('/buch', { state: { from: 'howto' } })}
+              className="text-[13px] text-ink-3 hover:text-ink-2 mt-2 hover:underline min-h-[44px]"
+            >
+              {BOOK_UI_TEXT.moreLink}
+            </button>
+          </section>
 
           {/* Paket R: Rundgang durch die App */}
           <button onClick={() => setShowTour(true)} className="self-start text-[14px] text-accent font-medium hover:underline min-h-[44px]">

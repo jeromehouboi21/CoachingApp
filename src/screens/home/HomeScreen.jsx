@@ -16,6 +16,7 @@ import { InstallCard } from '../../components/app/InstallCard'
 import { useAccessState, seenOnce, markSeen, TRIAL_END_CARD_KEY } from '../../lib/accessState'
 import { useWelcomeTour } from '../../hooks/useWelcomeTour'
 import { WelcomeTour } from '../../components/tour/WelcomeTour'
+import { BOOK_UI_TEXT } from '../../content/book'
 
 const logger = createLogger('HomeScreen')
 
@@ -120,6 +121,13 @@ export function HomeScreen() {
               Du bringst ein Thema mit. Der Begleiter stellt Fragen. Was du erkennst, sammelt sich im Spiegel.
             </p>
           </div>
+          {/* T1: dezenter Link zum Buch, nur in Zustand A */}
+          <button
+            onClick={() => navigate('/buch', { state: { from: 'today' } })}
+            className="block min-h-[44px] text-[14px] text-ink-2 hover:underline mb-2 text-left"
+          >
+            {BOOK_UI_TEXT.todayLink}
+          </button>
           <button
             onClick={() => navigate('/coach')}
             className="w-full bg-accent text-white text-[15px] font-medium py-4 rounded-full hover:bg-accent-2 transition-colors mb-4"

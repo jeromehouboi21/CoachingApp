@@ -1287,6 +1287,65 @@ async function testsR(a, b) {
   }
 }
 
+// ── T1: Buch-Status (Handoff T1 6.2) ─────────────────────────────────────────
+// Akteur ist B (wie in den übrigen Tests), A ist das fremde Konto. Hinterlässt bei B book_status = 'read'.
+async function testsT1(a, b) {
+  const readBook = async (who) => {
+    const { data, error } = await who.client.from('profiles')
+      .select('book_status, book_progress, book_status_at').eq('id', who.userId).maybeSingle();
+    return { row: data ?? null, error };
+  };
+  const same = (x, y) => JSON.stringify(x?.row ?? null) === JSON.stringify(y?.row ?? null);
+  {
+    const aBefore = await readBook(a);
+    const { data, error } = await b.client.from('profiles').update({ book_status: 'read' }).eq('id', a.userId).select('id');
+    const aAfter = await readBook(a);
+    const ok = !aBefore.error && !aAfter.error && (error || (data?.length ?? 0) === 0) && same(aBefore, aAfter);
+    record('T1-a', "update profiles.book_status (A's Zeile)", '0 Zeilen, A unverändert', ok ? PASS : FAIL,
+      `${error ? errCode(error) : `betroffen=${data?.length ?? 0}`}, A unverändert=${same(aBefore, aAfter)}`);
+  }
+  {
+    const before = await readBook(b);
+    const cases = [['gelesen', null], ['reading', null], ['reading', 0], ['reading', 8], ['read', 3]];
+    const codes = [];
+    for (const [st, pr] of cases) {
+      const { error } = await b.client.rpc('set_book_status', { p_status: st, p_progress: pr });
+      codes.push(error ? errCode(error) : 'ok');
+    }
+    const after = await readBook(b);
+    const ok = codes.every(c => c === '22023') && same(before, after);
+    record('T1-b', 'rpc set_book_status mit ungültigen Werten (5 Fälle)', '22023, unverändert', ok ? PASS : FAIL,
+      `${codes.join(',')}, unverändert=${same(before, after)}`);
+  }
+  {
+    const { error } = await newClient().rpc('set_book_status', { p_status: 'read', p_progress: null });
+    record('T1-c', 'anon rpc set_book_status', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+  {
+    const before = await readBook(b);
+    const { data, error } = await b.client.from('profiles').update({ book_status: 'not_yet' }).eq('id', b.userId).select('id');
+    const after = await readBook(b);
+    record('T1-d', 'update profiles.book_status direkt (eigene Zeile)', '42501, unverändert',
+      error?.code === '42501' && same(before, after) ? PASS : FAIL,
+      `${error ? errCode(error) : `betroffen=${data?.length ?? 0}`}, unverändert=${same(before, after)}`);
+  }
+  {
+    const { error: e1 } = await b.client.rpc('set_book_status', { p_status: 'reading', p_progress: 4 });
+    const r1 = await readBook(b);
+    await new Promise(r => setTimeout(r, 50));
+    const { error: e2 } = await b.client.rpc('set_book_status', { p_status: 'read', p_progress: null });
+    const r2 = await readBook(b);
+    const ok1 = !e1 && r1.row?.book_status === 'reading' && r1.row?.book_progress === 4 && !!r1.row?.book_status_at;
+    const ok2 = !e2 && r2.row?.book_status === 'read' && r2.row?.book_progress === null
+      && !!r2.row?.book_status_at && r2.row.book_status_at !== r1.row?.book_status_at;
+    record('T1-e', "rpc set_book_status ('reading',4) dann ('read')", 'reading/4, dann read/null, Zeit neu',
+      ok1 && ok2 ? PASS : FAIL,
+      e1 || e2 ? errCode(e1 ?? e2) : `1: ${r1.row?.book_status}/${r1.row?.book_progress}, 2: ${r2.row?.book_status}/${r2.row?.book_progress}, Zeit neu=${r2.row?.book_status_at !== r1.row?.book_status_at}`);
+  }
+  record('T1-f', 'rpc set_book_status mit aal1 trotz Faktor', 'mfa_required', SKIP,
+    'gleiche MFA-Prüfung wie set_learning_opt_in; eigener aal1-Lauf nur mit ATTACK_TEST_MFA=1 (nicht erweitert)');
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`Friedensstifter Angriffstest · ${new Date().toISOString()}`);
@@ -1321,6 +1380,7 @@ async function testsR(a, b) {
   await testsKW3(b);     // Paket K W3 (Einwilligung v2.0)
   await testsZ(a, b);    // Paket Z (Zahlung und Abo), vor den Rate-Limit-Tests
   await testsR(a, b);    // Paket R (Einstiegs-Rundgang)
+  await testsT1(a, b);   // T1 (Buch-Status)
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)
