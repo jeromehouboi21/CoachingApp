@@ -97,3 +97,12 @@
 | A10 | `book_status_set { status, progress }` im Log | Log-Regel: keine Profil-Felder in Logs. Der Buch-Status ist harmlos, aber eine Selbstauskunft am Profil | **Jerome entscheidet:** so lassen (Auswertung „wie viele lesen gerade Teil 3“) **oder** nur `book_status_set` ohne Werte |
 
 **Sonst:** Keine Änderung an Gespräch, Prompts oder Edge Functions außer `monitorRules.ts`. Keine neue Abhängigkeit.
+
+---
+
+## 12. J-T1 – Entscheidungen von Jerome (21.11.2026)
+
+- A1 bis A9 bestätigt. A10: Variante a, `book_status_set` mit Status und Teil.
+- Cover nach `public/buch-cover.webp` kopiert (Freigabe).
+- T1-6: Der Hinweis bleibt drin (`BOOK_REFERENCES_LIVE = false`). B1 soll direkt nach T1 folgen, sobald die Landkarte geprüft ist (B-8, B-9). Mit B1 verschwindet der Hinweis.
+- T1-7 bis T1-9 und die Texte aus Abschnitt 5.2 sind freigegeben.
