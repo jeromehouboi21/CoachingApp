@@ -95,7 +95,7 @@ KENNST DU DAS BUCH SCHON?
 
 **Textprinzipien:** Der Text ist in Jeromes Stimme gehalten, direkt und mit einem Augenzwinkern, ohne Pathos. Er hält das Sprachprinzip ein: kein „müssen", kein „Du brauchst", kein absolutes „immer" oder „nie". Inhaltliche Aussagen über das Buch gehen nicht über das hinaus, was Jerome freigibt. Den Textentwurf oben passt Jerome an.
 
-**Textgrundlage:** Die Inhaltsangabe stützt sich auf das Manuskript (Prolog, „Worum geht's?", Teil 1–7). Das Zitat aus dem Epilog ist wörtlich geprüft. Jerome passt den Text an und gibt ihn frei (B-7).
+**Textgrundlage:** Die Inhaltsangabe stützt sich auf das Manuskript (Prolog, „Worum geht's?", Teil 1–7). Das Zitat aus dem Epilog ist wörtlich geprüft. Jerome passt den Text an und gibt ihn frei (B-7). **Freigegeben am 21.11.2026 ohne Änderungen.**
 
 **Links zu Amazon:** einfache externe Links (`target="_blank"`, `rel="noopener noreferrer"`), kein Affiliate-Tracking, kein Pixel. Die erzwingende CSP (S-08) blockiert keine ausgehenden Links. Trotzdem nach dem Deploy kurz testen.
 
@@ -255,7 +255,7 @@ Am 19.11.2026 entschieden: **kein Lesercode.** Der Status beruht auf der Selbsta
 
 ## 8. Offene Entscheidungen
 
-- **B-7 Textentwurf der Buch-Seite:** Jerome passt ihn an und gibt ihn frei. Der Link zum Taschenbuch folgt ab 27.11.
+- ✅ **B-7 Textentwurf der Buch-Seite:** von Jerome am 21.11.2026 **unverändert freigegeben** (Abschnitt 1, Aufbau der Seite). Der Link zum Taschenbuch folgt ab 27.11.
 - **B-8 Prüfung der Landkarte:** alle 58 Einträge, besonders die 8 mit ⚠
 - **B-9 Sprachprinzip bei Buchzitaten:** Einige Kernsätze des Buchs enthalten „muss" (z. B. T4-J1, ein zitierter alter Glaubenssatz). Vorschlag: Wörtliche Buchzitate sind als Zitat erkennbar und damit vom Sprachprinzip ausgenommen, der Coach formuliert drumherum ohne „müssen". Bei der Auswahl wurden solche Sätze trotzdem weitgehend vermieden.
 
@@ -263,7 +263,7 @@ Am 19.11.2026 entschieden: **kein Lesercode.** Der Status beruht auf der Selbsta
 
 1. ✅ Manuskript übergeben, Titel und E-Book-Link eingetragen, B-5 und B-6 entschieden
 2. ✅ Entwurf der Buch-Landkarte erstellt (`claude/friedensstifter-buch-landkarte-v1.md`)
-3. ⬜ **Jerome:** Landkarte prüfen (B-8), Seitentext freigeben (B-7), Taschenbuch-Link ab 27.11. nachreichen
+3. ⬜ **Jerome:** Landkarte prüfen (B-8), ~~Seitentext freigeben (B-7)~~ ✅ 21.11.2026, Taschenbuch-Link ab 27.11. nachreichen
 4. **Schnell umsetzbar, unabhängig vom Rest:** Buch-Seite `/buch` plus Profil-Karte, reines Frontend plus `book_status`-RPC. Passt zum Erscheinen am 27.11.
 5. **Danach (nach Modellwechsel und Paket C):** Handoff „Buch-Bezüge" mit `book_passages`, Seed, Auswahl in `chat`, Prompt-Block und Spiegel-Hinweis
 
