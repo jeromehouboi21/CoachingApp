@@ -1246,6 +1246,47 @@ async function testsZ(a, b) {
   }
 }
 
+// ── Paket R: Einstiegs-Rundgang (Handoff 6.2) ───────────────────────────────
+// Setzt tour_dismissed_at bei Testkonto B dauerhaft (B sieht den Rundgang danach nicht mehr).
+async function testsR(a, b) {
+  {
+    const { error } = await newClient().rpc('set_tour_dismissed');
+    record('R1', 'anon rpc set_tour_dismissed', 'Fehler', error ? PASS : FAIL, error ? errCode(error) : 'aufrufbar');
+  }
+  const readTour = async (who) => {
+    const { data, error } = await who.client.from('profiles').select('tour_dismissed_at').eq('id', who.userId).maybeSingle();
+    return { value: data?.tour_dismissed_at ?? null, error };
+  };
+  const aBefore = await readTour(a);
+  let first = null;
+  {
+    const { error } = await b.client.rpc('set_tour_dismissed');
+    const bAfter = await readTour(b);
+    const aAfter = await readTour(a);
+    first = bAfter.value;
+    const ok = !error && !!bAfter.value && !aBefore.error && !aAfter.error && aAfter.value === aBefore.value;
+    record('R2', 'rpc set_tour_dismissed (als B)', 'ok, nur B gesetzt', ok ? PASS : FAIL,
+      error ? errCode(error) : `B gesetzt=${!!bAfter.value}, A unverändert=${aAfter.value === aBefore.value}`);
+  }
+  {
+    const { data: before } = await b.client.from('profiles').select('plan').eq('id', b.userId).maybeSingle();
+    const { data, error } = await b.client.from('profiles')
+      .update({ tour_dismissed_at: new Date().toISOString(), plan: 'premium' }).eq('id', b.userId).select('id');
+    const { data: after } = await b.client.from('profiles').select('plan').eq('id', b.userId).maybeSingle();
+    const unchanged = !!before && after?.plan === before.plan;
+    record('R3', 'update profiles tour_dismissed_at + plan direkt', '42501, plan unverändert',
+      error?.code === '42501' && unchanged ? PASS : FAIL,
+      `${error ? errCode(error) : `betroffen=${data?.length ?? 0}`}, plan unverändert=${unchanged}`);
+  }
+  {
+    const { error } = await b.client.rpc('set_tour_dismissed');
+    const again = await readTour(b);
+    record('R4', 'rpc set_tour_dismissed zweimal', 'erster Zeitpunkt bleibt',
+      !error && !!first && again.value === first ? PASS : FAIL,
+      error ? errCode(error) : `gleich=${again.value === first}`);
+  }
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 (async () => {
   console.log(`Friedensstifter Angriffstest · ${new Date().toISOString()}`);
@@ -1279,6 +1320,7 @@ async function testsZ(a, b) {
   await testsK(b);       // Paket K W1 (B bekommt sein Passwort ggf. sofort zurück)
   await testsKW3(b);     // Paket K W3 (Einwilligung v2.0)
   await testsZ(a, b);    // Paket Z (Zahlung und Abo), vor den Rate-Limit-Tests
+  await testsR(a, b);    // Paket R (Einstiegs-Rundgang)
   await testsRateLimits(a, b);
   await testsRegion(b, exportResult);
   await testsMfaRun(b);   // zuletzt: beendet B's übrige aal1-Sitzungen   // nach den Rate-Limit-Tests, damit deren Zählung unberührt bleibt (auch 429 trägt den Header)

@@ -8,6 +8,7 @@
     "build": "vite build",
     "postbuild": "node scripts/security/check-build.mjs && node scripts/security/check-content.mjs && node scripts/security/check-sw.mjs",
     "preview": "vite preview",
+    "test": "node --test \"src/**/*.test.js\"",
     "security:test": "node --env-file=.env.security.local scripts/security/attack-test.mjs",
     "security:deletion-test": "node --env-file=.env.security.local scripts/security/deletion-test.mjs",
     "pwa:icons": "node scripts/pwa/build-icons.mjs",

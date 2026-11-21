@@ -10,6 +10,8 @@ import { functionHeaders, functionUrl } from '../../lib/functions'
 import { WhyMemoryBlock } from '../../components/WhyMemoryBlock'
 import { PAYMENTS_ENABLED } from '../../content/legalTexts'
 import { PLANS } from '../../content/plans'
+import { WelcomeTour } from '../../components/tour/WelcomeTour'
+import { useAccessState } from '../../lib/accessState'
 
 const OPENING = "Hast du Fragen zur App — wie sie funktioniert, was sie kostet, oder ob sie das Richtige für dich ist? Ich beantworte sie gerne."
 
@@ -20,6 +22,9 @@ export function HowItWorksScreen() {
   ])
   const [isLoading, setIsLoading] = useState(false)
   const [coachMessageCount, setCoachMessageCount] = useState(0)
+  // Paket R: Rundgang durch die App (ohne Haken, „Fertig“)
+  const [showTour, setShowTour] = useState(false)
+  const { access } = useAccessState()
   const bottomRef = useRef(null)
 
   useEffect(() => {
@@ -214,6 +219,11 @@ export function HowItWorksScreen() {
             </p>
           </div>
 
+          {/* Paket R: Rundgang durch die App */}
+          <button onClick={() => setShowTour(true)} className="self-start text-[14px] text-accent font-medium hover:underline min-h-[44px]">
+            Rundgang durch die App ansehen ›
+          </button>
+
           {/* Trenner */}
           <div className="flex items-center gap-3">
             <span className="flex-1 h-px bg-[var(--color-border)]" />
@@ -249,6 +259,14 @@ export function HowItWorksScreen() {
       <div className="flex-none">
         <ChatInput onSend={sendMessage} disabled={isLoading} />
       </div>
+
+      {showTour && (
+        <WelcomeTour
+          mode="manual"
+          onClose={() => setShowTour(false)}
+          kennenlernenLimit={access?.phase === 'kennenlernen' ? access.starts_limit : null}
+        />
+      )}
     </div>
   )
 }

@@ -3,11 +3,14 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { AgeConfirmSheet } from './AgeConfirmSheet'
 import { useAuth } from '../../hooks/useAuth'
+import { noteShellStart } from '../../hooks/useWelcomeTour'
 
 export function AppShell() {
-  const { profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  // Paket R: erste Route in der App-Shell merken (nur der erste Aufruf je Nutzer zählt)
+  noteShellStart(user?.id, location.pathname)
   // „Ich bin jünger“ → Profil (Löschweg) ohne erneutes Sheet in dieser Sitzung (S-11);
   // aus der Zustimmungs-Sperre (W3) kommt die Entscheidung über den Navigationszustand mit.
   const [ageSheetDeferred, setAgeSheetDeferred] = useState(() => !!location.state?.ageDeferred)

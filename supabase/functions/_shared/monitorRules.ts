@@ -59,6 +59,9 @@ export const RULES: Rule[] = [
   // Paket P (PWA): nur Codes aus dem Browser (origin client)
   { id: 'pwa_client_error',        codes: ['pwa_register_failed', 'pwa_update_failed', 'pwa_install_prompt_failed'], windowMin: 1440, threshold: 10, origin: 'client', label: 'Fehler bei App-Installation oder Update' },
   { id: 'pwa_usage',               codes: ['pwa_launched_standalone', 'pwa_update_applied', 'pwa_install_choice'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Installierte App: Starts, Updates, Installationen' },
+  // Paket R (Einstiegs-Rundgang): nur Codes aus dem Browser (origin client), ohne Inhalte
+  { id: 'tour_usage',              codes: ['tour_shown', 'tour_completed', 'tour_skipped', 'tour_dismissed'], windowMin: 10080, threshold: 0, infoOnly: true, origin: 'client', label: 'Rundgang: gezeigt, beendet, übersprungen, ausgeblendet' },
+  { id: 'tour_error',              codes: ['tour_dismiss_failed'],     windowMin: 1440,  threshold: 10, origin: 'client', label: 'Rundgang: „Nicht mehr anzeigen“ nicht gespeichert' },
   { id: 'account_deleted_mail_failed', codes: ['account_deleted_mail_failed'], windowMin: 10080, threshold: 0, infoOnly: true, label: 'Löschbestätigung nicht zugestellt' },
   { id: 'consent_required',        codes: ['consent_required'],        windowMin: 10080, threshold: 0, infoOnly: true, label: 'Anfragen ohne Zustimmung v2.0' },
   { id: 'user_mfa_required',       codes: ['user_mfa_required'],       windowMin: 10080, threshold: 0, infoOnly: true, label: 'Nutzer-Anfragen ohne zweiten Faktor' },

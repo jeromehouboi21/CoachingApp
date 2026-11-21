@@ -14,6 +14,8 @@ import { chooseTodayState } from '../../lib/todayState'
 import { TrialEndCard } from '../../components/today/TrialEndCard'
 import { InstallCard } from '../../components/app/InstallCard'
 import { useAccessState, seenOnce, markSeen, TRIAL_END_CARD_KEY } from '../../lib/accessState'
+import { useWelcomeTour } from '../../hooks/useWelcomeTour'
+import { WelcomeTour } from '../../components/tour/WelcomeTour'
 
 const logger = createLogger('HomeScreen')
 
@@ -25,13 +27,15 @@ function getGreeting() {
 }
 
 export function HomeScreen() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const navigate = useNavigate()
   const impulse = getDailyImpulse()
   const [today, setToday] = useState(null)   // { state, insight? }
   const [hidden, setHidden] = useState(false) // Karte per „Heute nicht“ oder Entfernen weggeschoben
   // Paket P (P-3): Gespräche mit eigener Beteiligung (gleiche Definition wie todayState: ab 3 Nachrichten)
   const [conversationCount, setConversationCount] = useState(0)
+  // Paket R: Gesprächszahl konnte nicht geladen werden → kein Rundgang (sonst sähen ihn langjährige Nutzer)
+  const [historyFailed, setHistoryFailed] = useState(false)
 
   useEffect(() => {
     if (!user) return
@@ -48,6 +52,7 @@ export function HomeScreen() {
       if (convRes.error || insRes.error) {
         // Heute bleibt nutzbar (Tagesimpuls), der Fehler wird protokolliert
         logger.error('today_load_failed', { code: convRes.error?.code ?? insRes.error?.code })
+        setHistoryFailed(true)
         setToday({ state: 'C' })
         return
       }
@@ -64,11 +69,19 @@ export function HomeScreen() {
   const state = hidden && (today?.state === 'B' || today?.state === 'C2') ? 'C' : today?.state
 
   // U4, Übergangstext 2: Ende des Kennenlernens (Standardgrenze 3), einmal pro Gerät, nicht in A/D
-  const { access } = useAccessState()
+  const { access, loading: accessLoading } = useAccessState()
   const [endCardClosed, setEndCardClosed] = useState(false)
   const showEndCard = !!user && !endCardClosed && access?.phase === 'ruhemodus' && access.starts_limit === 3
     && state && state !== 'A' && state !== 'D' && !seenOnce(TRIAL_END_CARD_KEY, user.id)
   const closeEndCard = () => { markSeen(TRIAL_END_CARD_KEY, user.id); setEndCardClosed(true) }
+
+  // Paket R: Einstiegs-Rundgang, einmal pro Sitzung, bis „Nicht mehr anzeigen“ oder 3 geführte Gespräche.
+  // Sperre über Heute ist nur das 18+-Sheet der App-Shell (A6); MFA und Zustimmung kommen vorher.
+  const tour = useWelcomeTour({
+    conversationsHeld: historyFailed ? null : conversationCount,
+    ready: !!today && !accessLoading,
+    blockingGateOpen: !!profile && !profile.age_confirmed_at,
+  })
 
   return (
     <div className="px-5 pt-12 pb-6">
@@ -175,6 +188,14 @@ export function HomeScreen() {
           <span className="flex-1 text-[13px] text-ink-3">Wie funktioniert die App?</span>
           <ChevronRight size={12} color="var(--color-ink-3)" />
         </button>
+      )}
+
+      {tour.open && (
+        <WelcomeTour
+          mode="auto"
+          onClose={tour.close}
+          kennenlernenLimit={access?.phase === 'kennenlernen' ? access.starts_limit : null}
+        />
       )}
     </div>
   )

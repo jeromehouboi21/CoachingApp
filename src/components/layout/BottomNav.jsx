@@ -3,7 +3,7 @@ import { Sun, MessageCircle, Sparkles } from 'lucide-react'
 
 // Drei Tabs nach dem Kreislauf (U1): Heute · Gespräch · Spiegel. Das Profil liegt am Avatar
 // oben rechts (ProfileButton). Bewusst ohne Zähler für Ungelesenes (CLAUDE.md, „Einladen statt drängen“).
-const NAV_ITEMS = [
+export const NAV_ITEMS = [   // auch für die Mini-Tab-Leiste im Rundgang (Paket R)
   { to: '/home', icon: Sun, label: 'Heute' },
   { to: '/coach', icon: MessageCircle, label: 'Gespräch' },
   { to: '/mirror', icon: Sparkles, label: 'Spiegel' },

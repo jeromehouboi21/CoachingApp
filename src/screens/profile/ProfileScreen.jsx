@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { Avatar } from '../../components/ui/Avatar'
 import { useAccessState } from '../../lib/accessState'
-import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound, ShieldCheck, Smartphone } from 'lucide-react'
+import { ChevronRight, LogOut, Shield, CreditCard, User, HelpCircle, MessageSquare, FileText, Trash2, Handshake, ClipboardList, Download, KeyRound, ShieldCheck, Smartphone, Compass } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { LearningConsentCard } from '../../components/profile/LearningConsentCard'
 import { DataExportSheet } from '../../components/profile/DataExportSheet'
@@ -16,6 +16,7 @@ import { InstallSheet } from '../../components/app/InstallSheet'
 import { SecurityCard } from '../../components/profile/SecurityCard'
 import { functionHeaders, functionUrl } from '../../lib/functions'
 import { createLogger } from '../../lib/logger'
+import { WelcomeTour } from '../../components/tour/WelcomeTour'
 
 const logger = createLogger('ProfileScreen')
 
@@ -60,14 +61,22 @@ function ProfileSection({ title, children }) {
 function MenuList({ items }) {
   return (
     <div className="bg-surface border border-[var(--color-border)] rounded-lg overflow-hidden">
-      {items.map(({ icon: Icon, label, action }) => (
+      {items.map(({ icon: Icon, label, hint, action }) => (
         <button
           key={label}
           onClick={action}
           className="w-full flex items-center gap-3 px-4 py-4 border-b border-[var(--color-border)] last:border-0 hover:bg-surface-2 transition-colors text-left"
         >
           <Icon size={18} color="var(--color-ink-2)" />
-          <span className="flex-1 text-[15px] text-ink">{label}</span>
+          {/* Paket R (A7): optionale zweite Zeile, nur wo ein Eintrag sie setzt */}
+          {hint ? (
+            <span className="flex-1 flex flex-col gap-0.5">
+              <span className="text-[15px] text-ink">{label}</span>
+              <span className="text-[13px] text-ink-2">{hint}</span>
+            </span>
+          ) : (
+            <span className="flex-1 text-[15px] text-ink">{label}</span>
+          )}
           <ChevronRight size={16} color="var(--color-ink-3)" />
         </button>
       ))}
@@ -89,6 +98,8 @@ export function ProfileScreen() {
   // Paket P: Eintrag „Friedensstifter auf den Startbildschirm“, solange nicht installiert
   const { mode: installMode, install } = useInstallPrompt()
   const [showInstallSheet, setShowInstallSheet] = useState(false)
+  // Paket R (R-4): Rundgang jederzeit wieder ansehen
+  const [showTour, setShowTour] = useState(false)
   const location = useLocation()
   // W4: „Konto löschen“ aus /sicherheit oder der Zustimmungs-Sperre öffnet das Modal direkt
   const [showDeleteModal, setShowDeleteModal] = useState(() => !!location.state?.openDelete)
@@ -232,6 +243,7 @@ export function ProfileScreen() {
         <MenuList items={[
           { icon: User, label: 'Profil bearbeiten', action: () => { setEditName(profile?.display_name || ''); setShowEditModal(true) } },
           { icon: HelpCircle, label: 'Wie es funktioniert', action: () => navigate('/howto') },
+          { icon: Compass, label: 'Rundgang durch die App', hint: 'Die fünf Einstiegs-Screens noch mal ansehen', action: () => setShowTour(true) },
           ...(installMode !== 'installed' && installMode !== 'unsupported' ? [{ icon: Smartphone, label: 'Friedensstifter auf den Startbildschirm', action: () => setShowInstallSheet(true) }] : []),
           ...(profile?.plan !== 'premium' ? [{ icon: CreditCard, label: 'Begleitung', action: () => navigate('/begleitung') }] : []),
           ...(profile?.plan === 'tester' ? [{ icon: MessageSquare, label: 'Beta-Feedback geben', action: () => { setBetaFeedback(''); setBetaSent(false); setBetaConsent(false); setBetaError(false); setShowBetaModal(true) } }] : []),
@@ -322,6 +334,13 @@ export function ProfileScreen() {
       {/* Datenexport (S-16) */}
       {showExportSheet && <DataExportSheet onClose={() => setShowExportSheet(false)} />}
       {showInstallSheet && <InstallSheet mode={installMode} install={install} onClose={() => setShowInstallSheet(false)} />}
+      {showTour && (
+        <WelcomeTour
+          mode="manual"
+          onClose={() => setShowTour(false)}
+          kennenlernenLimit={access?.phase === 'kennenlernen' ? access.starts_limit : null}
+        />
+      )}
 
       {/* Konto löschen Modal (Paket K W4, Konzept 6.3) */}
       {showDeleteModal && (
